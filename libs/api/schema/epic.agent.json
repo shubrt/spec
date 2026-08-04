@@ -1,0 +1,367 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "entity": {
+      "type": "string",
+      "const": "epic"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "pm.epic.v1"
+    },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["active", "paused", "archived"]
+        }
+      },
+      "required": ["title", "status"],
+      "additionalProperties": false
+    },
+    "content": {
+      "type": "object",
+      "properties": {
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000,
+          "description": "The standing business capability this epic represents. Not a deliverable and not time-boxed."
+        },
+        "business_problem": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "scope": {
+          "description": "The long-horizon scope of the capability, not the scope of any one change.",
+          "type": "object",
+          "properties": {
+            "included": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                  },
+                  "statement": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": ["id", "statement"],
+                "additionalProperties": false
+              }
+            },
+            "excluded": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                  },
+                  "statement": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": ["id", "statement"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["included", "excluded"],
+          "additionalProperties": false
+        },
+        "outcomes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+              },
+              "outcome": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "indicator": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["id", "outcome"],
+            "additionalProperties": false
+          }
+        },
+        "success_metrics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+              },
+              "metric": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "baseline": {
+                "type": "number"
+              },
+              "operator": {
+                "type": "string",
+                "enum": ["<", "<=", "=", ">=", ">"]
+              },
+              "target": {
+                "type": "number"
+              },
+              "unit": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              }
+            },
+            "required": ["id", "metric", "operator", "target", "unit"],
+            "additionalProperties": false
+          }
+        },
+        "business_rules": {
+          "description": "Rules that hold across every stream in this epic.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+              },
+              "rule": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "impact": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "consequence": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["id", "rule"],
+            "additionalProperties": false
+          }
+        },
+        "open_questions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "required": ["purpose"],
+      "additionalProperties": false
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "related_epics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target_type": {
+                "type": "string",
+                "enum": ["epic", "stream", "task"]
+              },
+              "target_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["target_type", "target_id"],
+            "additionalProperties": false
+          }
+        },
+        "supersedes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target_type": {
+                "type": "string",
+                "enum": ["epic", "stream", "task"]
+              },
+              "target_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["target_type", "target_id"],
+            "additionalProperties": false
+          }
+        },
+        "extends": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target_type": {
+                "type": "string",
+                "enum": ["epic", "stream", "task"]
+              },
+              "target_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["target_type", "target_id"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user_input",
+                  "conversation",
+                  "existing_code",
+                  "documentation",
+                  "external_reference",
+                  "inference"
+                ]
+              },
+              "reference": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "confidence": {
+                "type": "string",
+                "enum": ["explicit", "implied", "inferred", "assumed"]
+              }
+            },
+            "required": ["type", "confidence"],
+            "additionalProperties": false
+          }
+        },
+        "inferred_fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "open_questions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "created_from": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "created_by": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["user", "agent", "planner_agent", "executor_agent", "system"]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "required": ["type", "id"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "[unknowns_must_be_marked] Never write a guess as if the user had stated it. Anything unknown goes into content.open_questions, content.assumptions or provenance.inferred_fields, and provenance.sources records how firmly each source supports what was written."
+    }
+  },
+  "required": ["entity", "schema_version", "meta", "content", "links", "provenance"],
+  "additionalProperties": false
+}

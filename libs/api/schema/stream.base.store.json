@@ -1,0 +1,545 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "entity": {
+      "type": "string",
+      "const": "stream"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "pm.stream.v1"
+    },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "key": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "project_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "workspace_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 9007199254740991
+        },
+        "created_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updated_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "created_by": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["user", "agent", "planner_agent", "executor_agent", "system"]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "required": ["type", "id"],
+          "additionalProperties": false
+        },
+        "updated_by": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["user", "agent", "planner_agent", "executor_agent", "system"]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "required": ["type", "id"],
+          "additionalProperties": false
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "planned", "ready", "in_progress", "blocked", "completed", "cancelled"]
+        },
+        "stream_type": {
+          "type": "string",
+          "enum": [
+            "feature",
+            "bug",
+            "change",
+            "experiment",
+            "investigation",
+            "refactor",
+            "maintenance"
+          ]
+        }
+      },
+      "required": ["id", "key", "project_id", "revision", "title", "status", "stream_type"],
+      "additionalProperties": false
+    },
+    "content": {
+      "type": "object",
+      "properties": {
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000,
+          "description": "Why this stream exists, in business terms. The one section a stream cannot omit."
+        },
+        "scope": {
+          "type": "object",
+          "properties": {
+            "included": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                  },
+                  "statement": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": ["id", "statement"],
+                "additionalProperties": false
+              }
+            },
+            "excluded": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                  },
+                  "statement": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 2000
+                  }
+                },
+                "required": ["id", "statement"],
+                "additionalProperties": false
+              }
+            }
+          },
+          "required": ["included", "excluded"],
+          "additionalProperties": false
+        },
+        "actor": {
+          "type": "object",
+          "properties": {
+            "primary": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "secondary": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              }
+            }
+          },
+          "required": ["primary"],
+          "additionalProperties": false
+        },
+        "workflows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+              },
+              "workflow_name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200
+              },
+              "actor": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 120
+              },
+              "preconditions": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                }
+              },
+              "steps": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "string",
+                      "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                    },
+                    "action": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    },
+                    "result": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    }
+                  },
+                  "required": ["id", "action"],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": ["id", "workflow_name", "steps"],
+            "additionalProperties": false
+          }
+        },
+        "business_rules": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+              },
+              "rule": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "impact": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "consequence": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["id", "rule"],
+            "additionalProperties": false
+          }
+        },
+        "edge_cases": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+              },
+              "trigger": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "scenario": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "expected_behavior": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "severity": {
+                "type": "string",
+                "enum": ["low", "medium", "high", "critical"]
+              }
+            },
+            "required": ["id", "trigger", "expected_behavior"],
+            "additionalProperties": false
+          }
+        },
+        "vertical_slice": {
+          "type": "object",
+          "properties": {
+            "delivers_alone": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            },
+            "needs_no_other_stream": {
+              "type": "boolean"
+            },
+            "prerequisites": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            }
+          },
+          "required": ["delivers_alone"],
+          "additionalProperties": false
+        },
+        "open_questions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        }
+      },
+      "required": ["purpose"],
+      "additionalProperties": false
+    },
+    "links": {
+      "type": "object",
+      "properties": {
+        "parent_epic_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "depends_on": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target_type": {
+                "type": "string",
+                "enum": ["epic", "stream", "task"]
+              },
+              "target_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "relationship": {
+                "type": "string",
+                "enum": ["blocked_by", "related_to", "extends", "fixes", "supersedes"]
+              }
+            },
+            "required": ["target_type", "target_id", "relationship"],
+            "additionalProperties": false
+          }
+        },
+        "related_streams": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target_type": {
+                "type": "string",
+                "enum": ["epic", "stream", "task"]
+              },
+              "target_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["target_type", "target_id"],
+            "additionalProperties": false
+          }
+        },
+        "supersedes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target_type": {
+                "type": "string",
+                "enum": ["epic", "stream", "task"]
+              },
+              "target_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["target_type", "target_id"],
+            "additionalProperties": false
+          }
+        },
+        "extends": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "target_type": {
+                "type": "string",
+                "enum": ["epic", "stream", "task"]
+              },
+              "target_id": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["target_type", "target_id"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["parent_epic_id"],
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user_input",
+                  "conversation",
+                  "existing_code",
+                  "documentation",
+                  "external_reference",
+                  "inference"
+                ]
+              },
+              "reference": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "confidence": {
+                "type": "string",
+                "enum": ["explicit", "implied", "inferred", "assumed"]
+              }
+            },
+            "required": ["type", "confidence"],
+            "additionalProperties": false
+          }
+        },
+        "inferred_fields": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "open_questions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "created_from": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          }
+        },
+        "created_by": {
+          "type": "object",
+          "properties": {
+            "type": {
+              "type": "string",
+              "enum": ["user", "agent", "planner_agent", "executor_agent", "system"]
+            },
+            "id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "required": ["type", "id"],
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false,
+      "description": "[unknowns_must_be_marked] Never write a guess as if the user had stated it. Anything unknown goes into content.open_questions, content.assumptions or provenance.inferred_fields, and provenance.sources records how firmly each source supports what was written."
+    }
+  },
+  "required": ["entity", "schema_version", "meta", "content", "links", "provenance"],
+  "additionalProperties": false
+}
