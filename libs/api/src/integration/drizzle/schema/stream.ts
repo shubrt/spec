@@ -1,0 +1,56 @@
+import { sql } from "drizzle-orm";
+import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import type { StreamStatus, StreamType } from "../../../domain/enums";
+import { jsonbObject, tsvector } from "../customTypes";
+import { epic } from "./epic";
+import { project } from "./project";
+import { workspace } from "./workspace";
+
+/**
+ * A bounded change, problem or investigation inside an epic (domain spec §3.2)
+ * and the central planning unit for the business "what".
+ *
+ * The FK is single-column on the immediate parent, `epic_id → epic.id`. A
+ * three-column composite FK carrying the tenant chain was considered and
+ * rejected: `workspace_id` and `project_id` are denormalised here for indexing
+ * and search, and the invariant that a `move` cannot orphan a subtree is
+ * enforced by the change-set engine and covered by a test, not by a constraint.
+ *
+ * `stream_type` accepts all seven types from the domain spec even though only
+ * three of them get a dedicated content schema in the MVP.
+ */
+export const stream = pgTable(
+  "stream",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    workspaceId: uuid()
+      .notNull()
+      .references(() => workspace.id, { onDelete: "cascade" }),
+    projectId: uuid()
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    epicId: uuid()
+      .notNull()
+      .references(() => epic.id, { onDelete: "cascade" }),
+    /** `STR-12`, from `project.stream_counter`. Unique per project, never reused. */
+    key: text().notNull(),
+    streamType: text().$type<StreamType>().notNull(),
+    status: text().$type<StreamStatus>().notNull().default("draft"),
+    revision: integer().notNull().default(1),
+    title: text().notNull(),
+    summary: text(),
+    document: jsonbObject<Record<string, unknown>>()().notNull(),
+    /** See `schema/epic.ts` for why this is a generated column over plain text. */
+    searchVector: tsvector().generatedAlwaysAs(
+      sql`to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(summary, ''))`,
+    ),
+    createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    uniqueIndex("stream_project_key_uniq").on(t.projectId, t.key),
+    index("stream_scope_status_idx").on(t.workspaceId, t.projectId, t.status),
+    index("stream_epic_idx").on(t.workspaceId, t.epicId),
+    index("stream_search_idx").using("gin", t.searchVector),
+  ],
+);

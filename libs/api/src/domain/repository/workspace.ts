@@ -1,9 +1,11 @@
-import { eq } from "drizzle-orm";
+import { asc, eq } from "drizzle-orm";
 import { db } from "../../integration/drizzle/client";
+import { project } from "../../integration/drizzle/schema/project";
 import { workspace } from "../../integration/drizzle/schema/workspace";
 import type { WorkspaceScope } from "../auth/workspaceScope";
 
 export type Workspace = typeof workspace.$inferSelect;
+export type Project = typeof project.$inferSelect;
 
 export type EnsureWorkspaceInput = {
   clerkOrgId: string;
@@ -46,5 +48,19 @@ export const workspaceRepository = {
   async find(scope: WorkspaceScope): Promise<Workspace | null> {
     const [row] = await db.select().from(workspace).where(eq(workspace.id, scope)).limit(1);
     return row ?? null;
+  },
+
+  /**
+   * The projects the scope may see. This is the workspace aggregate's own
+   * boundary — the per-entity repositories (B11) own everything below a
+   * project — and it is what `api/handler/workspace.ts` and the web app's root
+   * loader read to decide which project to open.
+   */
+  async listProjects(scope: WorkspaceScope): Promise<Project[]> {
+    return await db
+      .select()
+      .from(project)
+      .where(eq(project.workspaceId, scope))
+      .orderBy(asc(project.name));
   },
 };
