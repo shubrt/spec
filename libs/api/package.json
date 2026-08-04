@@ -15,12 +15,15 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
+    "@t3-oss/env-core": "catalog:",
     "elysia": "^1.4.18",
+    "evlog": "^2.14.1",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@tool/tsconfig": "workspace:*",
     "bun-types": "latest",
+    "drizzle-kit": "^0.31.10",
     "typescript": "catalog:"
   }
 }
