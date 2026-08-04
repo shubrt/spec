@@ -1,0 +1,26 @@
+{
+  "name": "@zpecs/api",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/_/index.d.mts",
+      "default": "./src/_/index.ts"
+    }
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo dist node_modules",
+    "build": "vp pack",
+    "dev": "vp pack --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "elysia": "^1.4.18",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@tool/tsconfig": "workspace:*",
+    "bun-types": "latest",
+    "typescript": "catalog:"
+  }
+}
