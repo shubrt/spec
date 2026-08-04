@@ -1,9 +1,11 @@
+import { entityLink } from "./schema/entityLink";
 import { epic } from "./schema/epic";
 import { project } from "./schema/project";
 import { stream } from "./schema/stream";
 import { task } from "./schema/task";
 import { workspace } from "./schema/workspace";
 
+export { entityLink } from "./schema/entityLink";
 export { epic } from "./schema/epic";
 export { project } from "./schema/project";
 export { stream } from "./schema/stream";
@@ -16,4 +18,5 @@ export const schema = {
   epic,
   stream,
   task,
+  entityLink,
 };
