@@ -17,11 +17,18 @@ export const env = createEnv({
     // separately-configured domain can never drift from the key. Optional so
     // offline/DB tests that carry no Clerk credentials still boot; the
     // `.well-known` routes fail per-request (not at boot) when it is unset.
-    // CLERK_SECRET_KEY stays a `.env` placeholder outside this schema — A1
-    // put it there deliberately, and no route added in this task reads it.
     CLERK_PUBLISHABLE_KEY: z
       .string()
       .regex(/^pk_(test|live)_/, "must start with pk_test_ or pk_live_")
+      .optional(),
+    // Verifies the bearer token on `POST /mcp` (integration/clerk/client.ts).
+    // Optional for the same reason as the publishable key: offline and DB tests
+    // carry no Clerk credentials and must still boot. A request that needs it
+    // while it is unset answers 500 `clerk_not_configured` — never 401, which
+    // would send the client into an OAuth flow that cannot succeed.
+    CLERK_SECRET_KEY: z
+      .string()
+      .regex(/^sk_(test|live)_/, "must start with sk_test_ or sk_live_")
       .optional(),
   },
   runtimeEnv: process.env,

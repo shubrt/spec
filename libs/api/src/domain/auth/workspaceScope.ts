@@ -12,12 +12,14 @@
  * to produce one is `makeScope`. Forgetting the tenant filter therefore stops
  * being a silent cross-tenant read and becomes a compile error.
  *
- * `makeScope` has exactly three legitimate callers:
+ * `makeScope` has exactly two legitimate callers in `src/`:
  *  1. `domain/auth/resolveMcpAuth.ts`  — the `org_id` claim of an OAuth token,
  *  2. `domain/auth/resolveSessionAuth.ts` — the Clerk session of the web app,
- *  3. the DB test fixture.
- * Both resolvers get the uuid from `workspaceRepository.ensure`, never from
- * user input. If a fourth caller ever appears, that is the review question.
+ * plus the test fixtures (`test/fixtures/db/harness.ts` for DB tests,
+ * `test/fixtures/auth.ts` for the offline suites), which are the only callers
+ * outside `src/`. Both resolvers get the uuid from `workspaceRepository.ensure`,
+ * never from user input. If a third caller in `src/` ever appears, that is the
+ * review question.
  */
 declare const workspaceScopeBrand: unique symbol;
 
