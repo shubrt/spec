@@ -52,7 +52,7 @@ const ProjectListDto = z.strictObject({
   projects: z.array(ProjectDto),
 });
 
-const NotFoundDto = z.strictObject({
+const WorkspaceNotFoundDto = z.strictObject({
   error: z.literal("workspace_not_found"),
   message: z.string(),
 });
@@ -75,7 +75,7 @@ export const workspaceHandler = new Elysia({ prefix: "/workspace" })
       }
       return { id: row.id, name: row.name, slug: row.slug };
     },
-    { response: { 200: WorkspaceDto, 404: NotFoundDto } },
+    { response: { 200: WorkspaceDto, 404: WorkspaceNotFoundDto } },
   )
   .get(
     "/projects",
