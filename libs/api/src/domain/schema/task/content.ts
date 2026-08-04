@@ -136,6 +136,3 @@ export const taskExecution = z.strictObject({
   execution_context: taskExecutionContext.optional(),
   long_running: z.boolean().optional(),
 });
-
-export type TaskContent = z.infer<typeof taskContent>;
-export type TaskExecution = z.infer<typeof taskExecution>;

@@ -109,5 +109,3 @@ export const streamBaseContent = z.strictObject({
   open_questions: openQuestions.optional(),
   assumptions: assumptions.optional(),
 });
-
-export type StreamBaseContent = z.infer<typeof streamBaseContent>;

@@ -50,5 +50,3 @@ export const investigationStreamContent = streamBaseContent.extend({
       "The decision this investigation must enable. An investigation that decides nothing should not be a stream.",
   }),
 });
-
-export type InvestigationStreamContent = z.infer<typeof investigationStreamContent>;

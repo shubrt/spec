@@ -1,10 +1,5 @@
 import { z } from "zod";
-import {
-  DOCUMENT_SCHEMAS,
-  DOCUMENT_SCHEMA_TARGETS,
-  type DocumentSchemaTarget,
-  type DocumentSource,
-} from "./document";
+import { DOCUMENT_SCHEMAS, type DocumentSchemaTarget, type DocumentSource } from "./document";
 
 /**
  * Zod → JSON Schema, with the two corrections Zod 4.4.3 needs.
@@ -90,14 +85,6 @@ export const documentJsonSchema = (
   target: DocumentSchemaTarget,
   source: DocumentSource = "agent",
 ): Record<string, unknown> => toJsonSchema(DOCUMENT_SCHEMAS[target][source]);
-
-/** Every target's agent-facing schema, in `DOCUMENT_SCHEMA_TARGETS` order. */
-export const allDocumentJsonSchemas = (
-  source: DocumentSource = "agent",
-): ReadonlyMap<DocumentSchemaTarget, Record<string, unknown>> =>
-  new Map(
-    DOCUMENT_SCHEMA_TARGETS.map((target) => [target, documentJsonSchema(target, source)] as const),
-  );
 
 /**
  * The committed snapshot directory, relative to the package root.

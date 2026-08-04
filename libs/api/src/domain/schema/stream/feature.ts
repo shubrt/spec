@@ -75,5 +75,3 @@ export const featureStreamContent = streamBaseContent.extend({
     .optional()
     .meta({ description: ruleText("ready_stream_needs_success_criterion") }),
 });
-
-export type FeatureStreamContent = z.infer<typeof featureStreamContent>;

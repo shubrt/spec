@@ -1,4 +1,3 @@
-import { z } from "zod";
 import { severitySchema, statement, statementList } from "../primitives";
 import { ruleText } from "../rules";
 import { streamBaseContent } from "./base";
@@ -30,5 +29,3 @@ export const bugStreamContent = streamBaseContent.extend({
     .meta({ description: ruleText("ready_bug_needs_actual_and_expected_behavior") }),
   severity: severitySchema.optional(),
 });
-
-export type BugStreamContent = z.infer<typeof bugStreamContent>;

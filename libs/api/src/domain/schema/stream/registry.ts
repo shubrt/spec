@@ -58,14 +58,14 @@ export const STREAM_CONTENT = {
   maintenance: streamBaseContent,
 } as const satisfies Record<StreamType, z.ZodType>;
 
-/** The stream types that have their own sections beyond the invariant base. */
-export const TYPED_STREAM_TYPES = [
-  "feature",
-  "bug",
-  "investigation",
-] as const satisfies readonly StreamType[];
-export type TypedStreamType = (typeof TYPED_STREAM_TYPES)[number];
-
-/** True when the type still uses the base schema unchanged. */
+/**
+ * True when the type still uses the base schema unchanged, i.e. its
+ * type-specific sections have not been modelled yet.
+ *
+ * Derived from the map rather than from a second hand-written list, so it cannot
+ * disagree with `STREAM_CONTENT`. `get_entity_schema` uses this to tell an agent
+ * that a `refactor` stream currently has no sections of its own, instead of
+ * letting it infer that from a schema that merely looks thin.
+ */
 export const usesBaseStreamContentOnly = (streamType: StreamType): boolean =>
   STREAM_CONTENT[streamType] === streamBaseContent;

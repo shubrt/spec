@@ -69,5 +69,3 @@ export const epicContent = z.strictObject({
   open_questions: openQuestions.optional(),
   assumptions: assumptions.optional(),
 });
-
-export type EpicContent = z.infer<typeof epicContent>;
