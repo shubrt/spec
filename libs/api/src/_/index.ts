@@ -1,7 +1,8 @@
 import Elysia from "elysia";
 import { mcpRoute } from "../api/mcp/route";
+import { wellKnownRoutes } from "../api/mcp/wellKnown";
 
-export const app = new Elysia().use(mcpRoute);
+export const app = new Elysia().use(mcpRoute).use(wellKnownRoutes);
 
 export type App = typeof app;
 

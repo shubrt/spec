@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "@tool/tsconfig/lib.json",
   "compilerOptions": {
-    "types": ["bun-types"]
+    "types": ["node", "bun-types"]
   },
   "include": ["src/**/*.ts"],
   "exclude": ["node_modules", "dist"]
