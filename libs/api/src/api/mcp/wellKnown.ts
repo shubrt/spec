@@ -21,6 +21,17 @@ import { env } from "../../_/env";
 export const MCP_OAUTH_SCOPES = ["openid", "profile", "email", "user:org:read"] as const;
 
 /**
+ * Where the RFC 9728 protected-resource document lives.
+ *
+ * Exported because the 401 challenge on `POST /mcp` has to point a client at
+ * exactly this path (`WWW-Authenticate: Bearer resource_metadata="…"`), and a
+ * second literal that drifts from the route below would send every client
+ * looking for a document that answers 404 — which is indistinguishable, from
+ * the client's side, from zpecs having no OAuth support at all.
+ */
+export const PROTECTED_RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource/mcp";
+
+/**
  * Clerk's Frontend API (FAPI) URL — the issuer that signs access tokens and
  * that publishes Clerk's own OAuth metadata — is never configured as a
  * separate env var. It is encoded inside the publishable key: strip the
@@ -133,7 +144,5 @@ async function authorizationServerMetadata(): Promise<Response> {
  * first.
  */
 export const wellKnownRoutes = new Elysia()
-  .get("/.well-known/oauth-protected-resource/mcp", ({ request }) =>
-    protectedResourceMetadata(request),
-  )
+  .get(PROTECTED_RESOURCE_METADATA_PATH, ({ request }) => protectedResourceMetadata(request))
   .get("/.well-known/oauth-authorization-server", () => authorizationServerMetadata());

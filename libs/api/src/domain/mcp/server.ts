@@ -1,5 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { z } from "zod";
+import { SERVER_INSTRUCTIONS } from "./instructions";
+import { zpecsTools } from "./registry";
+import { registerZpecsResources } from "./resources";
 
 /**
  * Reported as `serverInfo.name` in the `initialize` result. The MCP client keys
@@ -9,31 +11,26 @@ export const MCP_SERVER_NAME = "zpecs";
 export const MCP_SERVER_VERSION = "0.1.0";
 
 /**
- * `z.strictObject`, not `z.object`: the SDK converts input schemas with
- * `io: "input"`, which silently strips `additionalProperties: false` from a
- * plain `z.object()`.
- */
-const pingInput = z.strictObject({
-  message: z.string().describe("Text echoed back verbatim."),
-});
-
-/**
  * A fresh server per request — the transport is stateless, so nothing may be
  * shared across POSTs.
+ *
+ * It takes no auth argument by design. The caller's identity travels as the SDK's
+ * `authInfo` through `transport.handleRequest`, which is what puts it on every
+ * tool handler's `extra`; passing it in here instead would work only because the
+ * server is per-request and would quietly break the day it is not.
  */
 export function createMcpServer(): McpServer {
-  const server = new McpServer({ name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION });
-
-  server.registerTool(
-    "ping",
-    {
-      title: "Ping",
-      description: "Liveness probe. Echoes the supplied message back.",
-      inputSchema: pingInput,
-      annotations: { readOnlyHint: true, idempotentHint: true },
-    },
-    ({ message }) => ({ content: [{ type: "text", text: `pong: ${message}` }] }),
+  const server = new McpServer(
+    { name: MCP_SERVER_NAME, version: MCP_SERVER_VERSION },
+    // Returned once in the `initialize` result and then resident for the whole
+    // session, which is why it has a character budget (`instructions.ts`).
+    { instructions: SERVER_INSTRUCTIONS },
   );
+
+  for (const tool of zpecsTools) {
+    tool.register(server);
+  }
+  registerZpecsResources(server);
 
   return server;
 }
