@@ -35,7 +35,12 @@ function enrich(fields: Record<string, unknown>): void {
 }
 
 type AuthEvent = {
-  status: "authenticated" | "invalid_token" | "not_configured" | "signed_out";
+  status:
+    | "authenticated"
+    | "invalid_token"
+    | "insufficient_scope"
+    | "not_configured"
+    | "signed_out";
   principal: "mcp" | "session";
   clerkUserId?: string;
   workspaceId?: string | null;

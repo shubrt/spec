@@ -3,10 +3,11 @@ import { recordAuthEvent } from "../../_/eventLog";
 import { authenticateOAuthToken } from "../../integration/clerk/authenticator";
 import { workspaceRepository } from "../repository/workspace";
 import { type AuthContext, toAuthInfo } from "./authContext";
+import { MCP_OAUTH_SCOPES } from "./mcpOAuth";
 import { makeScope } from "./workspaceScope";
 
 /**
- * The three states `POST /mcp` can be in before any JSON-RPC message is read.
+ * The four states `POST /mcp` can be in before any JSON-RPC message is read.
  * `api/mcp/route.ts` maps them onto HTTP; this module deliberately returns no
  * `Response`, so the wire shape of a 401 lives in the api layer next to the
  * `.well-known` document it has to point at.
@@ -14,6 +15,7 @@ import { makeScope } from "./workspaceScope";
 export type McpAuthOutcome =
   | { status: "authenticated"; auth: AuthContext; authInfo: AuthInfo }
   | { status: "invalid_token"; reason: string }
+  | { status: "insufficient_scope" }
   | { status: "not_configured" };
 
 /**
@@ -26,14 +28,23 @@ export type McpAuthOutcome =
  * token" — and telling a client that when a new token would be identical puts it
  * in an infinite OAuth loop.
  */
-export async function resolveMcpAuth(request: Request): Promise<McpAuthOutcome> {
-  const outcome = await authenticateOAuthToken(request);
+export async function resolveMcpAuth(
+  request: Request,
+  expectedAudience: string,
+): Promise<McpAuthOutcome> {
+  const outcome = await authenticateOAuthToken(request, expectedAudience);
   if (outcome.status !== "authenticated") {
     recordAuthEvent({ status: outcome.status, principal: "mcp" });
     return outcome;
   }
 
   const { identity } = outcome;
+  const grantedScopes = new Set(identity.scopes);
+  if (!MCP_OAUTH_SCOPES.every((scope) => grantedScopes.has(scope))) {
+    recordAuthEvent({ status: "insufficient_scope", principal: "mcp" });
+    return { status: "insufficient_scope" };
+  }
+
   const token = { value: identity.token, clientId: identity.clientId, scopes: identity.scopes };
 
   if (!identity.org) {

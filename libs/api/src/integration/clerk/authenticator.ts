@@ -59,8 +59,8 @@ export type AuthenticationOutcome<TIdentity> =
  *  - Clerk's own documentation on OAuth + Organizations states that once the
  *    `user:org:read` scope is granted, "an `org_id` claim is included in the
  *    access and ID tokens, and is accessible via user info and token
- *    introspection endpoints". That is a documentation claim about Clerk, not
- *    now also matches the live observation above.
+ *    introspection endpoints". That documented provider contract now also
+ *    matches the live observation above.
  *
  * The three candidate read paths the plan names, and why this one:
  *
@@ -71,10 +71,10 @@ export type AuthenticationOutcome<TIdentity> =
  *  3. *From the userinfo endpoint* — one HTTP round trip per request (or a
  *     cache to build), but it is the documented source and it also returns
  *     `org_name` and `org_slug`, which would fill the workspace row outright.
- *     **This remains the fallback if path 2 ever comes up empty**, and it is the right
- *     switch to make if Clerk issues opaque access tokens (`oat_…`) rather than
- *     JWTs for this flow — in that case `decodeJwtPayload` below returns null
- *     for every request and every user looks organization-less.
+ *     **This remains the fallback if path 2 ever comes up empty**. Opaque
+ *     access tokens cannot satisfy the strict local audience check below;
+ *     supporting them would require an introspection/userinfo path that keeps
+ *     the same audience guarantee before resolving organization claims.
  *
  * Decoding without re-verifying is safe *here specifically*: the caller only
  * ever passes the token string that `clerkClient.authenticateRequest` just
@@ -98,9 +98,9 @@ export function readOrgClaims(verifiedAccessToken: string): ClerkOrgClaims | nul
 
 /**
  * Reads the payload segment of a JWT. Returns null for anything that is not a
- * three-segment JWT with a JSON object payload — an opaque token must degrade
- * to "no organization", not throw, or a token format zpecs did not anticipate
- * turns into a 500 instead of the remediable no-workspace path.
+ * three-segment JWT with a JSON object payload. Callers decide whether that
+ * means an invalid audience-bound OAuth token or an absent optional claim;
+ * malformed input must never turn either path into a 500.
  *
  * This performs **no** signature check by design; see `readOrgClaims`.
  */
@@ -125,20 +125,44 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 }
 
 /**
+ * Clerk checks a configured audience when an `aud` claim is present, but its
+ * verifier intentionally tolerates tokens without that claim for other Clerk
+ * token types. MCP access tokens are audience-bound, so the already-verified
+ * JWT must also carry this resource explicitly.
+ */
+function hasExpectedAudience(verifiedAccessToken: string, expectedAudience: string): boolean {
+  const audience = decodeJwtPayload(verifiedAccessToken)?.["aud"];
+  if (typeof audience === "string") return audience === expectedAudience;
+  return (
+    Array.isArray(audience) &&
+    audience.every((entry) => typeof entry === "string") &&
+    audience.includes(expectedAudience)
+  );
+}
+
+/**
  * The single OAuth authentication boundary.
  *
  * `acceptsToken: "oauth_token"` is what makes a Clerk *session* cookie fail
  * here: `/mcp` is reachable only with a token issued through the OAuth flow.
+ * `audience` binds that token to the configured public MCP resource.
  */
 export async function authenticateOAuthToken(
   request: Request,
+  expectedAudience: string,
 ): Promise<AuthenticationOutcome<ClerkTokenIdentity>> {
   const clerk = getClerkClient();
   if (!clerk) return { status: "not_configured" };
 
-  const requestState = await clerk.authenticateRequest(request, { acceptsToken: "oauth_token" });
+  const requestState = await clerk.authenticateRequest(request, {
+    acceptsToken: "oauth_token",
+    audience: expectedAudience,
+  });
   if (!requestState.isAuthenticated) {
     return { status: "invalid_token", reason: requestState.reason };
+  }
+  if (!hasExpectedAudience(requestState.token, expectedAudience)) {
+    return { status: "invalid_token", reason: "token_audience_mismatch" };
   }
 
   const auth = requestState.toAuth();

@@ -3,12 +3,12 @@ import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Toolbar } from "~/components/zpecs/toolbar";
-import { connectionWorkspaceChecks } from "~/lib/connection";
+import { connectionWorkspaceChecks, mcpClientSetups, type McpClientId } from "~/lib/connection";
 import { getMcpEndpoint } from "~/server/connection";
 
 /**
- * The connection page: the line to paste into a Claude Code client, plus what
- * this app can honestly say about the state of the connection.
+ * The connection page: the commands for supported MCP clients, plus what this
+ * app can honestly say about the state of the connection.
  *
  * The honesty is the design constraint. The server has no session-level view of
  * MCP clients: `POST /mcp` is stateless, a fresh transport per request with no
@@ -27,6 +27,8 @@ function ConnectionPage() {
   const board = useLoaderData({ from: "__root__" });
   const endpoint = Route.useLoaderData();
   const { orgId } = Route.useRouteContext();
+  const clientSetups = mcpClientSetups(endpoint.url);
+  const [claudeSetup, codexSetup] = clientSetups;
 
   // Any HTTP response proves the API answered — including 401, 403 and 5xx.
   // Only an absent session that prevented a request, or an actual network
@@ -46,20 +48,36 @@ function ConnectionPage() {
       <Toolbar title="Connection" />
 
       <div className="flex max-w-3xl flex-col gap-6 px-8 pb-16 pt-6">
-        <section>
-          <h2 className="mb-1 text-sm font-semibold">Add zpecs to Claude Code</h2>
-          <p className="mb-3 text-sm text-muted-foreground">
-            Run this once. The client then discovers the authorization server and signs you in
-            through your browser.
+        {clientSetups.map((setup) => (
+          <section key={setup.id}>
+            <h2 className="mb-1 text-sm font-semibold">{setup.title}</h2>
+            <p className="mb-3 text-sm text-muted-foreground">{setup.description}</p>
+            {setup.commands.length === 1 ? (
+              <CommandLine
+                command={setup.commands[0]}
+                copyLabel={commandCopyLabel(setup.id, 0, setup.commands.length)}
+              />
+            ) : (
+              <ol className="flex list-decimal flex-col gap-2 pl-5">
+                {setup.commands.map((command, index) => (
+                  <li key={command} className="pl-1">
+                    <CommandLine
+                      command={command}
+                      copyLabel={commandCopyLabel(setup.id, index, setup.commands.length)}
+                    />
+                  </li>
+                ))}
+              </ol>
+            )}
+          </section>
+        ))}
+
+        {endpoint.isLocal ? (
+          <p className="-mt-4 text-xs text-muted-foreground">
+            This is a loopback address, so it is only reachable from this machine. A deployed
+            instance serves its own origin here.
           </p>
-          <CommandLine command={endpoint.command} />
-          {endpoint.isLocal ? (
-            <p className="mt-2 text-xs text-muted-foreground">
-              This is a loopback address, so it is only reachable from this machine. A deployed
-              instance serves its own origin here.
-            </p>
-          ) : null}
-        </section>
+        ) : null}
 
         <section>
           <h2 className="mb-3 text-sm font-semibold">What this page can see</h2>
@@ -105,11 +123,28 @@ function ConnectionPage() {
             </code>{" "}
             is the whole surface. The organization you choose during OAuth consent is written into
             the issued MCP token as <code>org_id</code>. Switching organization in the web header
-            changes this web session, but it cannot change a token the agent already holds. To move
-            the agent to another workspace, open <code>/mcp</code> in Claude Code, choose
-            <strong> Clear authentication</strong> for zpecs, reconnect, and choose the other
-            organization during consent. The equivalent CLI command is{" "}
-            <code>claude mcp logout zpecs</code>. The endpoint and add command stay the same.
+            changes this web session, but it cannot change a token an MCP client already holds.
+          </p>
+          <div className="mt-3 space-y-3">
+            <div>
+              <h3 className="text-xs font-medium">Claude Code</h3>
+              <p className="text-sm text-muted-foreground">
+                Open <code>/mcp</code>, choose <strong>Clear authentication</strong> for zpecs,
+                reconnect, and choose the other organization during consent. The equivalent CLI
+                command is <code>{claudeSetup.logoutCommand}</code>.
+              </p>
+            </div>
+            <div>
+              <h3 className="text-xs font-medium">OpenAI Codex</h3>
+              <p className="text-sm text-muted-foreground">
+                Run <code>{codexSetup.logoutCommand}</code>, followed by{" "}
+                <code>{codexSetup.loginCommand}</code>, then choose the other organization during
+                consent.
+              </p>
+            </div>
+          </div>
+          <p className="mt-3 text-sm text-muted-foreground">
+            The endpoint and add commands stay the same.
           </p>
         </section>
       </div>
@@ -117,7 +152,13 @@ function ConnectionPage() {
   );
 }
 
-function CommandLine({ command }: { command: string }) {
+function commandCopyLabel(clientId: McpClientId, commandIndex: number, commandCount: number) {
+  const clientName = clientId === "claude-code" ? "Claude Code" : "OpenAI Codex";
+  const step = commandCount === 1 ? "" : ` ${commandIndex + 1}`;
+  return `Copy ${clientName} setup command${step}`;
+}
+
+function CommandLine({ command, copyLabel }: { command: string; copyLabel: string }) {
   const [copied, setCopied] = useState(false);
 
   const copy = () => {
@@ -135,7 +176,13 @@ function CommandLine({ command }: { command: string }) {
   return (
     <div className="flex items-center gap-2 rounded-xl border bg-secondary/40 p-3">
       <code className="flex-1 overflow-x-auto whitespace-pre font-mono text-xs">{command}</code>
-      <Button variant="outline" size="sm" onClick={copy} className="flex-none">
+      <Button
+        variant="outline"
+        size="sm"
+        onClick={copy}
+        className="flex-none"
+        aria-label={copyLabel}
+      >
         {copied ? "Copied" : "Copy"}
       </Button>
     </div>

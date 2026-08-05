@@ -1,12 +1,14 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import Elysia from "elysia";
 import { recordToolEvent } from "../../_/eventLog";
+import { MCP_OAUTH_SCOPES } from "../../domain/auth/mcpOAuth";
 import { resolveMcpAuth } from "../../domain/auth/resolveMcpAuth";
 import { zpecsTools } from "../../domain/mcp/registry";
 import { createMcpServer } from "../../domain/mcp/server";
-import { PROTECTED_RESOURCE_METADATA_PATH } from "./wellKnown";
+import { MCP_RESOURCE_URL, PROTECTED_RESOURCE_METADATA_URL } from "./publicUrl";
 
 const ZPECS_TOOL_NAMES = new Set<string>(zpecsTools.map(({ name }) => name));
+const MCP_OAUTH_SCOPE = MCP_OAUTH_SCOPES.join(" ");
 
 /**
  * Seeds observability for calls the SDK may reject before a registered tool's
@@ -41,19 +43,14 @@ async function recordRequestedTool(request: Request): Promise<void> {
  * against; without it the client has nothing to go on and reports the server as
  * simply broken.
  *
- * The URL is built from the incoming request, not from a configured base URL, so
- * it stays correct under localhost, a tunnel and production alike — the same
- * choice `wellKnown.ts` makes for the `resource` field it has to match.
+ * The metadata URL is configured explicitly so proxy-controlled request headers
+ * cannot change the resource clients discover.
  *
  * `error_description` in the header is a fixed string on purpose: Clerk's
  * failure reason goes in the JSON body, where it needs no quoted-string
  * escaping and cannot break a header a client has to parse.
  */
-function unauthorized(request: Request, reason: string): Response {
-  const metadataUrl = new URL(request.url);
-  metadataUrl.pathname = PROTECTED_RESOURCE_METADATA_PATH;
-  metadataUrl.search = "";
-
+function unauthorized(reason: string): Response {
   return Response.json(
     {
       error: "invalid_token",
@@ -66,7 +63,28 @@ function unauthorized(request: Request, reason: string): Response {
         "WWW-Authenticate":
           'Bearer error="invalid_token", ' +
           'error_description="The access token is missing, expired or not valid for this resource.", ' +
-          `resource_metadata="${metadataUrl.toString()}"`,
+          `resource_metadata="${PROTECTED_RESOURCE_METADATA_URL}", ` +
+          `scope="${MCP_OAUTH_SCOPE}"`,
+      },
+    },
+  );
+}
+
+/** A valid token that needs renewed consent for zpecs' complete scope set. */
+function insufficientScope(): Response {
+  return Response.json(
+    {
+      error: "insufficient_scope",
+      error_description: "The access token does not include all scopes required by this resource.",
+    },
+    {
+      status: 403,
+      headers: {
+        "WWW-Authenticate":
+          'Bearer error="insufficient_scope", ' +
+          'error_description="The access token does not include all scopes required by this resource.", ' +
+          `resource_metadata="${PROTECTED_RESOURCE_METADATA_URL}", ` +
+          `scope="${MCP_OAUTH_SCOPE}"`,
       },
     },
   );
@@ -93,9 +111,10 @@ function clerkNotConfigured(): Response {
 
 /** Authenticates the request, then hands it to a fresh stateless server and transport. */
 export async function handleMcpRequest(request: Request): Promise<Response> {
-  const outcome = await resolveMcpAuth(request);
+  const outcome = await resolveMcpAuth(request, MCP_RESOURCE_URL);
   if (outcome.status === "not_configured") return clerkNotConfigured();
-  if (outcome.status === "invalid_token") return unauthorized(request, outcome.reason);
+  if (outcome.status === "invalid_token") return unauthorized(outcome.reason);
+  if (outcome.status === "insufficient_scope") return insufficientScope();
 
   await recordRequestedTool(request);
 
@@ -119,8 +138,8 @@ export const mcpRoute = new Elysia().post(
     const response = await handleMcpRequest(request);
     // Elysia preserves a returned Response's status on the wire but does not copy
     // it into `set.status`; evlog reads the latter in its observing after-response
-    // hook. Mirror the already-decided status so the event cannot report a 401 or
-    // 500 as 200. No body or header is inspected here.
+    // hook. Mirror the already-decided status so the event cannot report a 401,
+    // 403 or 500 as 200. No body or header is inspected here.
     set.status = response.status;
     return response;
   },

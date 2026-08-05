@@ -1,35 +1,9 @@
 import Elysia from "elysia";
 import { env } from "../../_/env";
+import { MCP_OAUTH_SCOPES } from "../../domain/auth/mcpOAuth";
+import { MCP_RESOURCE_URL, PROTECTED_RESOURCE_METADATA_URL } from "./publicUrl";
 
-/**
- * Scopes zpecs' Dynamic Client Registration (DCR) flow requests. This exact
- * array is also what `scopes_supported` below advertises, and what the Clerk
- * instance's `default_scopes` must be set to (see
- * `../../integration/clerk/SETUP.md`, runbook step 3). Keep that operator
- * configuration character-identical to this source of truth.
- *
- * `openid` must be present: Clerk's own default for scope-less DCR
- * registrations is `email offline_access profile` — no `openid` — and a
- * client that ends up without it reproduces the documented, reproducible
- * failure `invalid_scope: The OAuth 2.0 Client is not allowed to request
- * scope 'openid'` (claude-code#67714).
- *
- * `user:org:read` is what makes the Clerk consent screen present an
- * organization selector and puts the `org_id` claim on the issued access
- * token. Without it there is no workspace for zpecs to scope a request to.
- */
-export const MCP_OAUTH_SCOPES = ["openid", "profile", "email", "user:org:read"] as const;
-
-/**
- * Where the RFC 9728 protected-resource document lives.
- *
- * Exported because the 401 challenge on `POST /mcp` has to point a client at
- * exactly this path (`WWW-Authenticate: Bearer resource_metadata="…"`), and a
- * second literal that drifts from the route below would send every client
- * looking for a document that answers 404 — which is indistinguishable, from
- * the client's side, from zpecs having no OAuth support at all.
- */
-export const PROTECTED_RESOURCE_METADATA_PATH = "/.well-known/oauth-protected-resource/mcp";
+const PROTECTED_RESOURCE_METADATA_PATH = new URL(PROTECTED_RESOURCE_METADATA_URL).pathname;
 
 /**
  * Clerk's Frontend API (FAPI) URL — the issuer that signs access tokens and
@@ -71,21 +45,15 @@ function clerkNotConfigured(): Response {
  * well-known URI RFC 9728 §3.1 describes for a resource identifier with a
  * path component (`https://host/mcp` → `/.well-known/oauth-protected-resource/mcp`).
  *
- * `resource` is derived from the incoming request rather than a configured
- * base URL, so it is correct under localhost, any tunnel, and production
- * alike without another env var — the same choice Clerk's own Express helper
- * (`getResourceUrl`) makes.
+ * `resource` is the configured public identifier. Request and forwarded host
+ * headers cannot change what clients discover or what audience tokens need.
  */
-function protectedResourceMetadata(request: Request): Response {
+function protectedResourceMetadata(): Response {
   const publishableKey = env.CLERK_PUBLISHABLE_KEY;
   if (!publishableKey) return clerkNotConfigured();
 
-  const resourceUrl = new URL(request.url);
-  resourceUrl.pathname = "/mcp";
-  resourceUrl.search = "";
-
   return Response.json({
-    resource: resourceUrl.toString(),
+    resource: MCP_RESOURCE_URL,
     authorization_servers: [deriveFapiUrl(publishableKey)],
     scopes_supported: MCP_OAUTH_SCOPES,
     // "header" is the only bearer method the MCP transport ever uses
@@ -144,8 +112,8 @@ async function authorizationServerMetadata(): Promise<Response> {
  * first.
  */
 export const wellKnownRoutes = new Elysia()
-  .get(PROTECTED_RESOURCE_METADATA_PATH, ({ request, set }) => {
-    const response = protectedResourceMetadata(request);
+  .get(PROTECTED_RESOURCE_METADATA_PATH, ({ set }) => {
+    const response = protectedResourceMetadata();
     set.status = response.status;
     return response;
   })

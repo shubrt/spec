@@ -18,8 +18,8 @@ export type WorkspaceAuthContext = {
 };
 
 /**
- * An authenticated caller with no organization — either the user is in none, or
- * the `user:org:read` scope was not granted, so the token carries no `org_id`.
+ * An authenticated caller with all required scopes but no selected organization,
+ * so the token carries no `org_id`.
  *
  * This state is deliberately *not* an error at the transport level. `initialize`
  * and `tools/list` succeed; every `tools/call` is intercepted in `defineTool`

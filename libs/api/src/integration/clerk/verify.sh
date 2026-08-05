@@ -12,9 +12,9 @@
 #
 # CLERK_PUBLISHABLE_KEY is required. ZPECS_BASE_URL defaults to
 # http://localhost:3004 (apps/web's default PORT). ZPECS_ACCESS_TOKEN is
-# optional — omit it to skip section 4 (safe token-claim inspection); every
+# optional — omit it to skip section 5 (safe token-shape inspection); every
 # other section still runs. The token and its complete payload are never
-# printed.
+# printed, nor are individual claim values.
 
 set -euo pipefail
 
@@ -40,7 +40,47 @@ esac
 
 ZPECS_BASE_URL="${ZPECS_BASE_URL:-http://localhost:3004}"
 readonly EXPECTED_SCOPES_JSON='["openid","profile","email","user:org:read"]'
-export EXPECTED_SCOPES_JSON
+readonly EXPECTED_SCOPES_TEXT="openid profile email user:org:read"
+readonly EXPECTED_RESOURCE="${ZPECS_BASE_URL}/mcp"
+readonly EXPECTED_RESOURCE_METADATA="${ZPECS_BASE_URL}/.well-known/oauth-protected-resource/mcp"
+export EXPECTED_SCOPES_JSON EXPECTED_SCOPES_TEXT EXPECTED_RESOURCE EXPECTED_RESOURCE_METADATA ZPECS_BASE_URL
+
+validate_base_url() {
+  bun -e '
+    const raw = process.env.ZPECS_BASE_URL;
+    let url;
+    try {
+      url = new URL(raw);
+    } catch {
+      console.error("FAIL: ZPECS_BASE_URL is not a valid absolute URL.");
+      process.exit(1);
+    }
+
+    if (url.origin !== raw || url.username || url.password) {
+      console.error(
+        "FAIL: ZPECS_BASE_URL must be an origin only, with no credentials, path, query, fragment, or trailing slash.",
+      );
+      process.exit(1);
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      console.error("FAIL: ZPECS_BASE_URL must use HTTP or HTTPS.");
+      process.exit(1);
+    }
+
+    const hostname = url.hostname.toLowerCase();
+    const loopback =
+      hostname === "localhost" ||
+      hostname === "::1" ||
+      hostname === "[::1]" ||
+      /^127(?:\.[0-9]{1,3}){3}$/.test(hostname);
+    if (!loopback && url.protocol !== "https:") {
+      console.error("FAIL: Non-loopback ZPECS_BASE_URL values must use HTTPS.");
+      process.exit(1);
+    }
+  '
+}
+
+validate_base_url || fail "ZPECS_BASE_URL does not satisfy the canonical public-origin contract."
 
 check_authorization_server_metadata() {
   local source_name="$1"
@@ -102,6 +142,25 @@ check_protected_resource_metadata() {
       }
 
       const expectedScopes = JSON.parse(process.env.EXPECTED_SCOPES_JSON);
+      if (metadata.resource !== process.env.EXPECTED_RESOURCE) {
+        console.error(
+          `FAIL: zpecs metadata.resource must be exactly ${process.env.EXPECTED_RESOURCE}; received ${JSON.stringify(metadata.resource)}.`,
+        );
+        process.exit(1);
+      }
+
+      const resourceUrl = new URL(metadata.resource);
+      const hostname = resourceUrl.hostname.toLowerCase();
+      const loopback =
+        hostname === "localhost" ||
+        hostname === "::1" ||
+        hostname === "[::1]" ||
+        /^127(?:\.[0-9]{1,3}){3}$/.test(hostname);
+      if (!loopback && resourceUrl.protocol !== "https:") {
+        console.error("FAIL: Production protected resources must use HTTPS.");
+        process.exit(1);
+      }
+
       if (
         !Array.isArray(metadata.scopes_supported) ||
         JSON.stringify(metadata.scopes_supported) !== JSON.stringify(expectedScopes)
@@ -114,7 +173,82 @@ check_protected_resource_metadata() {
 
       console.log(JSON.stringify(metadata, null, 2));
       console.log();
+      console.log(`zpecs resource exactly matches: ${process.env.EXPECTED_RESOURCE}`);
       console.log(`zpecs advertises exactly its four required scopes: ${expectedScopes.join(" ")}`);
+    });
+  '
+}
+
+check_unauthenticated_challenge() {
+  bun -e '
+    let input = "";
+    process.stdin.on("data", (chunk) => (input += chunk));
+    process.stdin.on("end", () => {
+      const blocks = input
+        .trim()
+        .split(/\r?\n\r?\n/)
+        .filter((block) => /^HTTP\/\S+\s+\d{3}/m.test(block));
+      const block = blocks.at(-1);
+      if (!block) {
+        console.error("FAIL: POST /mcp returned no parseable HTTP response headers.");
+        process.exit(1);
+      }
+
+      const lines = block.split(/\r?\n/);
+      const statusMatch = lines[0].match(/^HTTP\/\S+\s+(\d{3})/);
+      if (!statusMatch || statusMatch[1] !== "401") {
+        console.error(
+          `FAIL: unauthenticated POST /mcp must return HTTP 401; received ${statusMatch?.[1] ?? "an unknown status"}.`,
+        );
+        process.exit(1);
+      }
+
+      const headers = new Map();
+      let currentName = null;
+      for (const line of lines.slice(1)) {
+        if (/^[ \t]/.test(line) && currentName) {
+          headers.set(currentName, `${headers.get(currentName)} ${line.trim()}`);
+          continue;
+        }
+        const separator = line.indexOf(":");
+        if (separator < 1) continue;
+        currentName = line.slice(0, separator).toLowerCase();
+        const value = line.slice(separator + 1).trim();
+        headers.set(
+          currentName,
+          headers.has(currentName) ? `${headers.get(currentName)}, ${value}` : value,
+        );
+      }
+
+      const challenge = headers.get("www-authenticate");
+      if (typeof challenge !== "string" || !/^Bearer(?:\s|$)/i.test(challenge)) {
+        console.error("FAIL: HTTP 401 has no Bearer WWW-Authenticate challenge.");
+        process.exit(1);
+      }
+
+      const quotedParameter = (name) => {
+        const match = challenge.match(new RegExp(`(?:^|[,\\s])${name}="([^"]*)"`, "i"));
+        return match?.[1] ?? null;
+      };
+      const metadataUrl = quotedParameter("resource_metadata");
+      if (metadataUrl !== process.env.EXPECTED_RESOURCE_METADATA) {
+        console.error(
+          `FAIL: challenge resource_metadata must be exactly ${process.env.EXPECTED_RESOURCE_METADATA}; received ${JSON.stringify(metadataUrl)}.`,
+        );
+        process.exit(1);
+      }
+
+      const scope = quotedParameter("scope");
+      if (scope !== process.env.EXPECTED_SCOPES_TEXT) {
+        console.error(
+          `FAIL: challenge scope must be exactly ${JSON.stringify(process.env.EXPECTED_SCOPES_TEXT)}; received ${JSON.stringify(scope)}.`,
+        );
+        process.exit(1);
+      }
+
+      console.log("Unauthenticated POST /mcp returns HTTP 401 with a Bearer challenge.");
+      console.log(`Challenge metadata URL exactly matches: ${process.env.EXPECTED_RESOURCE_METADATA}`);
+      console.log(`Challenge carries all required zpecs scopes: ${scope}`);
     });
   '
 }
@@ -144,14 +278,26 @@ curl -sS -f "${ZPECS_BASE_URL}/.well-known/oauth-protected-resource/mcp" \
   || fail "zpecs' protected-resource metadata is unavailable or its scopes differ from the required four. Is apps/web running at ${ZPECS_BASE_URL}?"
 echo
 
-echo "== 3. zpecs' authorization-server passthrough =="
+echo "== 3. zpecs' unauthenticated MCP challenge =="
+echo "POST ${EXPECTED_RESOURCE}"
+curl -sS -o /dev/null -D - \
+  -X POST \
+  -H "Accept: application/json, text/event-stream" \
+  -H "Content-Type: application/json" \
+  --data-binary '{"jsonrpc":"2.0","id":"verify-auth-challenge","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"zpecs-verify","version":"1"}}}' \
+  "${EXPECTED_RESOURCE}" \
+  | check_unauthenticated_challenge \
+  || fail "zpecs' unauthenticated MCP response did not provide the canonical 401 challenge. Is apps/web running at ${ZPECS_BASE_URL}?"
+echo
+
+echo "== 4. zpecs' authorization-server passthrough =="
 echo "GET ${ZPECS_BASE_URL}/.well-known/oauth-authorization-server"
 curl -sS -f "${ZPECS_BASE_URL}/.well-known/oauth-authorization-server" \
   | check_authorization_server_metadata "zpecs authorization-server passthrough" \
   || fail "zpecs' authorization-server passthrough did not prove DCR and all four required scopes. Is apps/web running at ${ZPECS_BASE_URL}?"
 echo
 
-echo "== 4. Safe access-token organization-claim check =="
+echo "== 5. Safe access-token organization-claim check =="
 if [ -z "${ZPECS_ACCESS_TOKEN:-}" ]; then
   echo "SKIPPED: ZPECS_ACCESS_TOKEN is not set. This step needs a real access token"
   echo "issued by completing the OAuth flow with an MCP client. Re-run with"
@@ -161,7 +307,8 @@ else
     const token = process.env.ZPECS_ACCESS_TOKEN;
     const parts = token.split(".");
     if (parts.length !== 3) {
-      console.log(JSON.stringify({ token_present: true, token_format: "opaque" }, null, 2));
+      console.log("Token present: yes");
+      console.log("Token format: opaque");
       console.error(
         "FAIL: The verified access token is opaque, so zpecs cannot read org_id through its current direct-claim path. Implement the documented userinfo fallback before accepting the live flow.",
       );
@@ -184,22 +331,10 @@ else
       typeof payload[name] === "string" && payload[name].length > 0 ? payload[name] : null;
     const orgId = stringClaim("org_id");
     const orgRole = stringClaim("org_role");
-    console.log(
-      JSON.stringify(
-        {
-          token_present: true,
-          token_format: "jwt",
-          org_id_present: orgId !== null,
-          org_id: orgId,
-          org_name: stringClaim("org_name"),
-          org_slug: stringClaim("org_slug"),
-          org_role_present: orgRole !== null,
-          org_role: orgRole,
-        },
-        null,
-        2,
-      ),
-    );
+    console.log("Token present: yes");
+    console.log("Token format: JWT");
+    console.log(`org_id present: ${orgId !== null ? "yes" : "no"}`);
+    console.log(`org_role present: ${orgRole !== null ? "yes" : "no"}`);
 
     if (orgId === null) {
       console.error(

@@ -2,6 +2,40 @@ import type { ApiFailure } from "./apiFailure";
 
 type Check = { readonly ok: boolean; readonly detail: string };
 
+export type McpClientId = "claude-code" | "codex";
+
+export type McpClientSetup = {
+  readonly id: McpClientId;
+  readonly title: string;
+  readonly description: string;
+  readonly commands: readonly string[];
+  readonly logoutCommand: string;
+  readonly loginCommand?: string;
+};
+
+/** Ordered MCP-client instructions shown on the connection page. */
+export function mcpClientSetups(endpointUrl: string) {
+  return [
+    {
+      id: "claude-code",
+      title: "Add zpecs to Claude Code",
+      description:
+        "Run this once. The client then discovers the authorization server and signs you in through your browser.",
+      commands: [`claude mcp add --transport http zpecs ${endpointUrl}`],
+      logoutCommand: "claude mcp logout zpecs",
+    },
+    {
+      id: "codex",
+      title: "Add zpecs to OpenAI Codex",
+      description:
+        "Run these commands in order. Codex adds the endpoint first, then starts browser-based sign-in.",
+      commands: [`codex mcp add zpecs --url ${endpointUrl}`, "codex mcp login zpecs"],
+      logoutCommand: "codex mcp logout zpecs",
+      loginCommand: "codex mcp login zpecs",
+    },
+  ] as const satisfies readonly McpClientSetup[];
+}
+
 export type ConnectionWorkspaceChecks = {
   readonly organization: Check;
   readonly workspace: Check;

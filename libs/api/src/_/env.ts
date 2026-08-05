@@ -1,9 +1,51 @@
 import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
+function isLoopbackHostname(hostname: string) {
+  if (hostname === "localhost" || hostname === "[::1]") return true;
+
+  const octets = hostname.split(".");
+  return (
+    octets.length === 4 &&
+    octets[0] === "127" &&
+    octets.every((octet) => /^\d{1,3}$/.test(octet) && Number(octet) <= 255)
+  );
+}
+
+function isCanonicalOrigin(value: string) {
+  try {
+    return new URL(value).origin === value;
+  } catch {
+    return false;
+  }
+}
+
+function hasAllowedPublicProtocol(value: string) {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" || (url.protocol === "http:" && isLoopbackHostname(url.hostname))
+    );
+  } catch {
+    return false;
+  }
+}
+
+const publicUrlSchema = z
+  .url()
+  .refine(isCanonicalOrigin, {
+    message: "must be a canonical origin without a trailing slash, path, query, or fragment",
+  })
+  .refine(hasAllowedPublicProtocol, {
+    message: "must use HTTPS unless the hostname is localhost, 127.0.0.0/8, or [::1]",
+  });
+
 export const env = createEnv({
   server: {
     DATABASE_URL: z.url(),
+    // The one externally visible origin used in OAuth resource identifiers and
+    // discovery URLs. It must never be inferred from proxy-controlled headers.
+    ZPECS_PUBLIC_URL: publicUrlSchema,
     // 3001 = zpecs.api, 3002 = legacy project, 3003 = web (reserved), 3004 = zpecs web service.
     // Lives here rather than in apps/web because that package is a thin
     // launcher — libs/api is "all code", including its own config schema.
