@@ -9,17 +9,18 @@ import {
 import { ScrollArea } from "~/components/ui/scroll-area";
 import { StreamDetail } from "~/components/zpecs/stream-detail";
 import { TaskDetail } from "~/components/zpecs/task-detail";
+import { EpicDetail } from "~/components/zpecs/epic-detail";
 import { resolveDrawer } from "~/lib/drawer";
 
 /**
- * The detail drawer for a stream and a task.
+ * The detail drawer for an epic, stream and task.
  *
  * It is driven entirely by the root route's search parameters, so every detail
  * view is a URL: deep-linkable, bookmarkable, and closed by the browser's back
  * button rather than by a piece of component state that the URL knows nothing
  * about. Closing navigates instead of setting state, for the same reason.
  *
- * Nothing here refetches. `loaderDeps` is keyed on `project` alone, so opening a
+ * Nothing here refetches. The drawer keys stay out of `loaderDeps`, so opening a
  * drawer re-renders from the aggregate the loader already holds — which is what
  * makes a detail view free.
  */
@@ -29,9 +30,12 @@ export function DetailDrawer() {
   const navigate = useNavigate();
 
   const close = () => {
-    // Drops `stream` and `task` and keeps `project`, so closing the drawer does
+    // Drops every detail target and keeps `project`, so closing the drawer does
     // not also throw away which project is being looked at.
-    void navigate({ to: ".", search: (prev) => ({ project: prev.project }) });
+    void navigate({
+      to: ".",
+      search: (prev) => ({ project: prev.project, workspace: prev.workspace }),
+    });
   };
 
   const epics = board.status === "ok" ? (board.aggregate?.epics ?? []) : [];
@@ -46,6 +50,12 @@ export function DetailDrawer() {
           </ScrollArea>
         ) : null}
 
+        {target.kind === "epic" ? (
+          <ScrollArea className="flex-1">
+            <EpicDetail epic={target.epic} />
+          </ScrollArea>
+        ) : null}
+
         {target.kind === "task" ? (
           <ScrollArea className="flex-1">
             <TaskDetail task={target.task} stream={target.stream} />
@@ -56,8 +66,8 @@ export function DetailDrawer() {
           <SheetHeader>
             <SheetTitle>Not in this project</SheetTitle>
             <SheetDescription>
-              The link names a stream or task that this project does not contain. It may have been
-              removed, or it may belong to another project.
+              The link names an epic, stream or task that this project does not contain. It may have
+              been removed, or it may belong to another project.
             </SheetDescription>
           </SheetHeader>
         ) : null}

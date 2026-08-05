@@ -29,7 +29,10 @@ export function AppHeader() {
   // Switching project resets any open drawer: the epic, stream or task in the URL
   // belongs to the project being navigated away from.
   const switchProject = (projectId: string) => {
-    void navigate({ to: ".", search: { project: projectId } });
+    void navigate({
+      to: ".",
+      search: (prev) => ({ project: projectId, workspace: prev.workspace }),
+    });
   };
 
   const projects = board.status === "ok" ? board.projects : [];
@@ -69,7 +72,7 @@ export function AppHeader() {
             // `project` is carried across every navigation and the drawer
             // parameters are not: which project you are looking at survives a
             // page change, an open detail view does not.
-            search={(prev) => ({ project: prev.project })}
+            search={(prev) => ({ project: prev.project, workspace: prev.workspace })}
             activeOptions={{ exact: item.exact }}
             className="rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary [&.active]:bg-secondary [&.active]:font-semibold [&.active]:text-foreground"
           >

@@ -1,7 +1,8 @@
 import type { EpicNode, StreamNode, TaskNode } from "~/server/board";
 
 /**
- * Resolving `?stream=` / `?task=` against the aggregate already in memory.
+ * Resolving `?epic=` / `?stream=` / `?task=` against the aggregate already in
+ * memory.
  *
  * The drawer is driven by the URL rather than by component state, so these ids
  * arrive from somewhere a human can edit and from links that may be weeks old.
@@ -13,10 +14,12 @@ import type { EpicNode, StreamNode, TaskNode } from "~/server/board";
 export type DrawerTarget =
   | { readonly kind: "closed" }
   | { readonly kind: "missing" }
+  | { readonly kind: "epic"; readonly epic: EpicNode }
   | { readonly kind: "stream"; readonly stream: StreamNode }
   | { readonly kind: "task"; readonly task: TaskNode; readonly stream: StreamNode | undefined };
 
 export interface DrawerParams {
+  readonly epic?: string;
   readonly stream?: string;
   readonly task?: string;
 }
@@ -31,7 +34,7 @@ export interface DrawerParams {
  * link someone deliberately followed.
  */
 export function resolveDrawer(epics: readonly EpicNode[], params: DrawerParams): DrawerTarget {
-  if (!params.task && !params.stream) return { kind: "closed" };
+  if (!params.task && !params.stream && !params.epic) return { kind: "closed" };
 
   const streams = epics.flatMap((epic) => epic.streams);
 
@@ -46,6 +49,11 @@ export function resolveDrawer(epics: readonly EpicNode[], params: DrawerParams):
     return { kind: "missing" };
   }
 
-  const stream = streams.find((candidate) => candidate.id === params.stream);
-  return stream ? { kind: "stream", stream } : { kind: "missing" };
+  if (params.stream) {
+    const stream = streams.find((candidate) => candidate.id === params.stream);
+    return stream ? { kind: "stream", stream } : { kind: "missing" };
+  }
+
+  const epic = epics.find((candidate) => candidate.id === params.epic);
+  return epic ? { kind: "epic", epic } : { kind: "missing" };
 }

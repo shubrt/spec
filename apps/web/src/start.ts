@@ -12,10 +12,17 @@ import { env } from "~/lib/env";
 // signInUrl points Clerk's own redirects at this app's sign-in route instead of
 // Clerk's hosted page.
 export const startInstance = createStart(() => ({
-  requestMiddleware: [
-    clerkMiddleware({
-      secretKey: env.CLERK_SECRET_KEY,
-      signInUrl: "/sign-in",
-    }),
-  ],
+  // `createStart` asks for these options during client hydration too. Reading a
+  // server env property in that pass is intentionally rejected by `@t3-oss/env`,
+  // so construct the request middleware only in the server runtime. The browser
+  // neither needs the middleware nor receives the secret.
+  requestMiddleware:
+    typeof window === "undefined"
+      ? [
+          clerkMiddleware({
+            secretKey: env.CLERK_SECRET_KEY,
+            signInUrl: "/sign-in",
+          }),
+        ]
+      : [],
 }));

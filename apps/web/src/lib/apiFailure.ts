@@ -9,6 +9,8 @@
 export interface ApiFailure {
   readonly status: "signed_out" | "no_workspace" | "unavailable";
   readonly message: string;
+  /** Whether an HTTP response, as opposed to a transport failure, was observed. */
+  readonly apiReachable: boolean;
 }
 
 function messageFrom(value: unknown, fallback: string): string {
@@ -35,7 +37,11 @@ export function toApiFailure(
   error: { status: number; value: unknown } | null | undefined,
 ): ApiFailure {
   if (!error) {
-    return { status: "unavailable", message: "The zpecs API did not answer." };
+    return {
+      status: "unavailable",
+      message: "The zpecs API did not answer.",
+      apiReachable: false,
+    };
   }
 
   switch (error.status) {
@@ -43,16 +49,19 @@ export function toApiFailure(
       return {
         status: "signed_out",
         message: messageFrom(error.value, "Your session has expired."),
+        apiReachable: true,
       };
     case 403:
       return {
         status: "no_workspace",
         message: messageFrom(error.value, "This session has no workspace."),
+        apiReachable: true,
       };
     default:
       return {
         status: "unavailable",
         message: messageFrom(error.value, `The zpecs API answered ${String(error.status)}.`),
+        apiReachable: true,
       };
   }
 }

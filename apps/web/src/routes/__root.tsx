@@ -36,10 +36,11 @@ export const Route = createRootRoute({
     return { isAuthenticated, orgId };
   },
   validateSearch: validateDrawerSearch,
-  // Only `project` selects what is fetched. The drawer parameters deliberately
-  // stay out of the deps so opening or closing a detail view re-renders from the
-  // aggregate already in memory instead of refetching it.
-  loaderDeps: ({ search }) => ({ project: search.project }),
+  // `project` selects what is fetched. `workspace` is only a reload discriminator
+  // changed by Clerk after an organization switch; tenant authority still comes
+  // exclusively from the session token inside getBoard. Drawer parameters stay
+  // out so opening a detail view does not refetch the aggregate.
+  loaderDeps: ({ search }) => ({ project: search.project, workspace: search.workspace }),
   loader: ({ deps }) => getBoard({ data: deps.project }),
   component: RootComponent,
 });

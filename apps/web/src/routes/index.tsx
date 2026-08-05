@@ -74,7 +74,7 @@ function OverviewPage() {
         {epics.length > 0 ? (
           <Link
             to="/epics"
-            search={(prev) => ({ project: prev.project })}
+            search={(prev) => ({ project: prev.project, workspace: prev.workspace })}
             className="text-sm font-medium text-primary hover:underline"
           >
             Browse all {epics.length} {epics.length === 1 ? "epic" : "epics"} and their streams →

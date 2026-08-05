@@ -25,8 +25,9 @@ import { epicStatus, label, streamStatus } from "~/lib/vocabulary";
  *
  * Every control on this page filters and sorts the aggregate the root loader
  * already holds. None of them refetches: the MVP deliberately does not paginate
- * or server-filter, so typing in the search box costs nothing but a re-render,
- * and `loaderDeps` is keyed on `project` alone to keep it that way.
+ * or server-filter, so typing in the search box costs nothing but a re-render.
+ * The organization-switch discriminator is the only non-project loader
+ * dependency, so a Clerk workspace change deliberately does refetch.
  */
 export const Route = createFileRoute("/epics")({
   component: EpicsPage,

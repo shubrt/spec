@@ -21,6 +21,7 @@ import { createApiClient } from "./api";
 const UNREACHABLE = {
   status: "unavailable",
   message: "The zpecs API is not reachable.",
+  apiReachable: false,
 } satisfies ApiFailure;
 
 /**
@@ -51,6 +52,7 @@ export const getBoard = createServerFn({ method: "GET" })
       return {
         status: "signed_out",
         message: "Sign in to see this workspace.",
+        apiReachable: false,
       } satisfies ApiFailure;
     }
 

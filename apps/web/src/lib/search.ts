@@ -1,13 +1,17 @@
 /**
  * Every view-selecting piece of state this app has, carried in the URL.
  *
- * `project` chooses which aggregate the root loader fetches. `epic`, `stream`
- * and `task` each open the detail drawer on that entity, which is why they are
- * search parameters rather than component state: a drawer that is open is a URL
- * you can paste to a colleague, and the back button closes it.
+ * `project` chooses which aggregate the root loader fetches. `workspace` is a
+ * reload discriminator written after Clerk changes the active organization; it
+ * is never trusted as tenant authority (the API uses the session token's
+ * `org_id`). `epic`, `stream` and `task` each open the detail drawer on that
+ * entity, which is why they are search parameters rather than component state:
+ * a drawer that is open is a URL you can paste to a colleague, and the back
+ * button closes it.
  */
 export interface DrawerSearch {
   project?: string;
+  workspace?: string;
   epic?: string;
   stream?: string;
   task?: string;
@@ -29,10 +33,21 @@ function asString(value: unknown): string | undefined {
 export function validateDrawerSearch(search: Record<string, unknown>): DrawerSearch {
   return {
     project: asString(search.project),
+    workspace: asString(search.workspace),
     epic: asString(search.epic),
     stream: asString(search.stream),
     task: asString(search.task),
   };
+}
+
+/**
+ * Clerk navigates here only after it has made the organization active. Including
+ * the id changes the root loader dependency even when the user is already on `/`,
+ * so the next read cannot keep the previous tenant's aggregate in memory. The id
+ * is a cache-buster, not an authorization input.
+ */
+export function workspaceChangedUrl(clerkOrgId: string): string {
+  return `/?workspace=${encodeURIComponent(clerkOrgId)}`;
 }
 
 /**

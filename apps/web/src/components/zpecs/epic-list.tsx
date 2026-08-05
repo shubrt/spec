@@ -14,9 +14,9 @@ import type { EpicNode, StreamNode } from "~/server/board";
  * capability and a stream is a bounded change to it, so a flat list of either
  * one loses the relationship that makes the board readable.
  *
- * A stream row opens the detail drawer through `?stream=`, which is why it is a
- * `<Link>` rather than a button: the drawer is a URL, so a row is something you
- * can middle-click, bookmark and send to someone.
+ * Epic and stream rows open the detail drawer through the URL, which is why they
+ * are links rather than buttons: a detail view is something you can middle-click,
+ * bookmark and send to someone.
  */
 
 export function EpicList({ epics }: { epics: readonly EpicNode[] }) {
@@ -45,8 +45,18 @@ function EpicCard({ epic }: { epic: EpicNode }) {
   return (
     <Card className="overflow-hidden">
       <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 border-b p-4">
-        <EntityKey>{epic.key}</EntityKey>
-        <span className="text-base font-bold tracking-tight">{epic.title}</span>
+        <Link
+          to="."
+          search={(prev) => ({
+            project: prev.project,
+            workspace: prev.workspace,
+            epic: epic.id,
+          })}
+          className="contents"
+        >
+          <EntityKey>{epic.key}</EntityKey>
+          <span className="text-base font-bold tracking-tight hover:underline">{epic.title}</span>
+        </Link>
         <StatusBadge tone={epicStatus.toneOf(epic.status)}>{label(epic.status)}</StatusBadge>
         <div className="flex-1" />
         <span className="text-xs tabular-nums text-muted-foreground">
@@ -84,7 +94,11 @@ function StreamRow({ stream }: { stream: StreamNode }) {
     <li className="border-t first:border-t-0">
       <Link
         to="."
-        search={(prev) => ({ project: prev.project, stream: stream.id })}
+        search={(prev) => ({
+          project: prev.project,
+          workspace: prev.workspace,
+          stream: stream.id,
+        })}
         className="flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-2.5 transition-colors hover:bg-secondary/50"
       >
         <StatusDot tone={streamStatus.toneOf(stream.status)} />

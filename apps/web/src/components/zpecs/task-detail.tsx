@@ -49,6 +49,17 @@ export function TaskDetail({ task, stream }: { task: TaskNode; stream: StreamNod
 
   // A sibling of `content`, so read from the envelope rather than through it.
   const execution = Object.entries(asRecord(task.document.execution));
+  const links = asRecord(task.document.links);
+  const blockedBy = asArray(links.blocked_by);
+  const blocks = asArray(links.blocks);
+  const relatedTasks = asArray(links.related_tasks);
+  const provenance = asRecord(task.document.provenance);
+  const sources = asArray(provenance.sources);
+  const inferredFields = asArray(provenance.inferred_fields).map(asText).filter(Boolean);
+  const provenanceQuestions = asArray(provenance.open_questions).map(asText).filter(Boolean);
+  const provenanceAssumptions = asArray(provenance.assumptions).map(asText).filter(Boolean);
+  const createdFrom = asArray(provenance.created_from).map(asText).filter(Boolean);
+  const createdBy = asRecord(provenance.created_by);
 
   return (
     <>
@@ -68,7 +79,11 @@ export function TaskDetail({ task, stream }: { task: TaskNode; stream: StreamNod
                 <span className="text-xs text-muted-foreground">in</span>
                 <Link
                   to="."
-                  search={(prev) => ({ project: prev.project, stream: stream.id })}
+                  search={(prev) => ({
+                    project: prev.project,
+                    workspace: prev.workspace,
+                    stream: stream.id,
+                  })}
                   className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground hover:underline"
                 >
                   {stream.key} {stream.title}
@@ -174,6 +189,69 @@ export function TaskDetail({ task, stream }: { task: TaskNode; stream: StreamNod
         <ListSection title="Artifacts" items={asArray(content.artifacts)} />
         <ListSection title="Open questions" items={asArray(content.open_questions)} />
 
+        {blockedBy.length + blocks.length + relatedTasks.length > 0 ? (
+          <Section title="Links">
+            <EntityReferences title="Blocked by" references={blockedBy} />
+            <EntityReferences title="Blocks" references={blocks} />
+            <EntityReferences title="Related tasks" references={relatedTasks} />
+          </Section>
+        ) : null}
+
+        {sources.length +
+          inferredFields.length +
+          provenanceQuestions.length +
+          provenanceAssumptions.length +
+          createdFrom.length >
+          0 || Object.keys(createdBy).length > 0 ? (
+          <Section title="Provenance">
+            {sources.length > 0 ? (
+              <div className="mb-3">
+                <div className="mb-1 text-xs font-semibold text-secondary-foreground">Sources</div>
+                {sources.map((value, index) => {
+                  const source = asRecord(value);
+                  const type = asText(source.type);
+                  const reference = asText(source.reference);
+                  const confidence = asText(source.confidence);
+                  return (
+                    <RuledBlock key={`${type}-${reference}-${index}`} label={type || undefined}>
+                      {reference ? (
+                        <div className="text-[13px] leading-relaxed">{reference}</div>
+                      ) : null}
+                      {confidence ? (
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          Confidence: {label(confidence)}
+                        </div>
+                      ) : null}
+                    </RuledBlock>
+                  );
+                })}
+              </div>
+            ) : null}
+            <ListSection title="Inferred fields" items={inferredFields} />
+            <ListSection title="Open questions" items={provenanceQuestions} />
+            <ListSection title="Assumptions" items={provenanceAssumptions} muted />
+            {createdFrom.length > 0 ? (
+              <div className="mb-3">
+                <div className="mb-1 text-xs font-semibold text-secondary-foreground">
+                  Created from
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {createdFrom.map((id) => (
+                    <SectionId key={id}>{id}</SectionId>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+            {Object.keys(createdBy).length > 0 ? (
+              <div className="rounded-xl border p-4">
+                <Field name="created by">
+                  {[asText(createdBy.type), asText(createdBy.id)].filter(Boolean).join(" · ")}
+                </Field>
+              </div>
+            ) : null}
+          </Section>
+        ) : null}
+
         {execution.length > 0 ? (
           <Section title="Execution">
             <div className="rounded-xl border p-4">
@@ -187,5 +265,26 @@ export function TaskDetail({ task, stream }: { task: TaskNode; stream: StreamNod
         ) : null}
       </div>
     </>
+  );
+}
+
+function EntityReferences({ title, references }: { title: string; references: unknown[] }) {
+  if (references.length === 0) return null;
+  return (
+    <div className="mb-3">
+      <div className="mb-1 text-xs font-semibold text-secondary-foreground">{title}</div>
+      {references.map((value, index) => {
+        const reference = asRecord(value);
+        const targetType = asText(reference.target_type);
+        const targetId = asText(reference.target_id);
+        const reason = asText(reference.reason);
+        return (
+          <RuledBlock key={`${targetType}-${targetId}-${index}`} label={targetType || undefined}>
+            <div className="font-mono text-[13px] leading-relaxed">{targetId}</div>
+            {reason ? <div className="mt-1 text-xs text-muted-foreground">{reason}</div> : null}
+          </RuledBlock>
+        );
+      })}
+    </div>
   );
 }

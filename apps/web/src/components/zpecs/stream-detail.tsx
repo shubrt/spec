@@ -70,6 +70,8 @@ export function StreamDetail({ stream }: { stream: StreamNode }) {
 
   const questions = asArray<InvestigationQuestion>(content.questions);
   const discoveryScope = asRecord(content.discovery_scope);
+  const discoveryIncluded = asArray<ScopeItem>(discoveryScope.included);
+  const discoveryExcluded = asArray<ScopeItem>(discoveryScope.excluded);
   const successCriteria = asArray<SuccessCriterion>(content.success_criteria);
 
   return (
@@ -155,6 +157,11 @@ export function StreamDetail({ stream }: { stream: StreamNode }) {
                     Actor: {asText(workflow.actor)}
                   </div>
                 ) : null}
+                {asArray(workflow.preconditions).length > 0 ? (
+                  <div className="mb-2 text-xs text-muted-foreground">
+                    Preconditions: {asArray(workflow.preconditions).map(asText).join("; ")}
+                  </div>
+                ) : null}
                 <Steps steps={asArray<WorkflowStep>(workflow.steps)} />
               </Panel>
             ))}
@@ -232,6 +239,15 @@ export function StreamDetail({ stream }: { stream: StreamNode }) {
                     Verifies {criterion.verifies.join(", ")}
                   </div>
                 ) : null}
+                {criterion.type || criterion.verification ? (
+                  <div className="mt-1 text-xs text-muted-foreground">
+                    {criterion.type ? label(asText(criterion.type)) : null}
+                    {criterion.type && criterion.verification ? " · " : null}
+                    {criterion.verification
+                      ? `Verified by ${label(asText(criterion.verification))}`
+                      : null}
+                  </div>
+                ) : null}
               </Criterion>
             ))}
           </Section>
@@ -242,6 +258,11 @@ export function StreamDetail({ stream }: { stream: StreamNode }) {
         <ListSection title="Reproduction" items={asArray(content.reproduction)} ordered />
         <ProseSection title="Actual behaviour" value={content.actual_behavior} />
         <ProseSection title="Expected behaviour" value={content.expected_behavior} />
+        {asText(content.severity) ? (
+          <Section title="Severity">
+            <TypeTag>{label(asText(content.severity))}</TypeTag>
+          </Section>
+        ) : null}
 
         {/* `investigation` streams: "we do not know yet" as a first-class state. */}
         {questions.length > 0 ? (
@@ -259,15 +280,20 @@ export function StreamDetail({ stream }: { stream: StreamNode }) {
           </Section>
         ) : null}
 
-        {asArray<ScopeItem>(discoveryScope.included).length > 0 ? (
+        {discoveryIncluded.length + discoveryExcluded.length > 0 ? (
           <Section title="Discovery scope">
-            <ScopeLines items={asArray<ScopeItem>(discoveryScope.included)} />
-            {asArray<ScopeItem>(discoveryScope.excluded).length > 0 ? (
+            {discoveryIncluded.length > 0 ? (
+              <>
+                <div className="mb-1 text-xs font-semibold text-secondary-foreground">Included</div>
+                <ScopeLines items={discoveryIncluded} />
+              </>
+            ) : null}
+            {discoveryExcluded.length > 0 ? (
               <>
                 <div className="mb-1 mt-3 text-xs font-semibold text-muted-foreground">
                   Excluded
                 </div>
-                <ScopeLines items={asArray<ScopeItem>(discoveryScope.excluded)} muted />
+                <ScopeLines items={discoveryExcluded} muted />
               </>
             ) : null}
           </Section>
@@ -305,14 +331,23 @@ export function StreamDetail({ stream }: { stream: StreamNode }) {
 
         {slice.delivers_alone ? (
           <Section title="Vertical slice">
-            <p className="text-sm leading-relaxed text-secondary-foreground">
-              {asText(slice.delivers_alone)}
-            </p>
-            {asArray(slice.prerequisites).length > 0 ? (
-              <div className="mt-2 text-xs text-muted-foreground">
-                Prerequisites: {asArray(slice.prerequisites).map(asText).join("; ")}
-              </div>
-            ) : null}
+            <div className="rounded-xl border p-4">
+              <p className="text-sm leading-relaxed text-secondary-foreground">
+                {asText(slice.delivers_alone)}
+              </p>
+              {typeof slice.needs_no_other_stream === "boolean" ? (
+                <div className="mt-3">
+                  <Field name="needs no other stream">
+                    {slice.needs_no_other_stream ? "Yes" : "No"}
+                  </Field>
+                </div>
+              ) : null}
+              {asArray(slice.prerequisites).length > 0 ? (
+                <div className="mt-2 text-xs text-muted-foreground">
+                  Prerequisites: {asArray(slice.prerequisites).map(asText).join("; ")}
+                </div>
+              ) : null}
+            </div>
           </Section>
         ) : null}
 
@@ -327,7 +362,11 @@ export function StreamDetail({ stream }: { stream: StreamNode }) {
               <Link
                 key={task.id}
                 to="."
-                search={(prev) => ({ project: prev.project, task: task.id })}
+                search={(prev) => ({
+                  project: prev.project,
+                  workspace: prev.workspace,
+                  task: task.id,
+                })}
                 className="flex items-center gap-3 border-t py-2.5 text-left first:border-t-0 hover:bg-secondary/50"
               >
                 <StatusDot tone={taskStatus.toneOf(task.status)} />

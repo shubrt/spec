@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button } from "~/components/ui/button";
 import { Card } from "~/components/ui/card";
 import { Toolbar } from "~/components/zpecs/toolbar";
+import { connectionWorkspaceChecks } from "~/lib/connection";
 import { getMcpEndpoint } from "~/server/connection";
 
 /**
@@ -25,13 +26,20 @@ export const Route = createFileRoute("/connection")({
 function ConnectionPage() {
   const board = useLoaderData({ from: "__root__" });
   const endpoint = Route.useLoaderData();
+  const { orgId } = Route.useRouteContext();
 
-  // A 403 still proves the API answered: it is the fail-closed "signed in, no
-  // organization" reply, not a transport failure. Treating it as unreachable
-  // would point the reader at the wrong problem.
-  const reachable = board.status === "ok" || board.status === "no_workspace";
+  // Any HTTP response proves the API answered — including 401, 403 and 5xx.
+  // Only an absent session that prevented a request, or an actual network
+  // failure, makes this false.
+  const reachable = board.status === "ok" || board.apiReachable;
   const workspace = board.status === "ok" ? board.workspace : null;
   const unreachableReason = board.status === "ok" ? null : board.message;
+  const workspaceChecks = connectionWorkspaceChecks({
+    orgId,
+    workspaceName: workspace?.name ?? null,
+    failureStatus: board.status === "ok" ? null : board.status,
+    failureMessage: unreachableReason,
+  });
 
   return (
     <>
@@ -66,13 +74,14 @@ function ConnectionPage() {
               }
             />
             <Check
-              ok={workspace !== null}
-              name="Workspace on this session"
-              detail={
-                workspace
-                  ? `${workspace.name} — the agent's writes land here.`
-                  : "This session carries no organization. Create or join one from the switcher in the header; until then every tool call returns a remediation message rather than data."
-              }
+              ok={workspaceChecks.organization.ok}
+              name="Clerk organization in this web session"
+              detail={workspaceChecks.organization.detail}
+            />
+            <Check
+              ok={workspaceChecks.workspace.ok}
+              name="Local zpecs workspace confirmed"
+              detail={workspaceChecks.workspace.detail}
             />
           </Card>
         </section>
@@ -94,9 +103,13 @@ function ConnectionPage() {
             <code className="rounded bg-secondary px-1 py-0.5 font-mono text-xs">
               {endpoint.url}
             </code>{" "}
-            is the whole surface. The workspace is taken from the <code>org_id</code> claim in your
-            OAuth token rather than the path, so the same line works for every workspace you belong
-            to — switch organization here and the agent follows.
+            is the whole surface. The organization you choose during OAuth consent is written into
+            the issued MCP token as <code>org_id</code>. Switching organization in the web header
+            changes this web session, but it cannot change a token the agent already holds. To move
+            the agent to another workspace, open <code>/mcp</code> in Claude Code, choose
+            <strong> Clear authentication</strong> for zpecs, reconnect, and choose the other
+            organization during consent. The equivalent CLI command is{" "}
+            <code>claude mcp logout zpecs</code>. The endpoint and add command stay the same.
           </p>
         </section>
       </div>
