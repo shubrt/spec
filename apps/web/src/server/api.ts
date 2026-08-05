@@ -23,5 +23,13 @@ import { env } from "~/lib/env";
 export function createApiClient(sessionToken: string) {
   return treaty<App>(env.ZPECS_API_URL, {
     headers: { authorization: `Bearer ${sessionToken}` },
+    // `parseDate` defaults to true, and that default is a type lie. Treaty walks
+    // the parsed body and revives anything ISO-8601-shaped into a `Date`, while
+    // the inferred type still says `string` because it comes from the API's Zod
+    // response schema. So `createdAt.slice(0, 10)` compiles and throws. Every
+    // timestamp this API returns is affected — `createdAt` and `updatedAt` on
+    // the project and on all three entity levels. Turning it off is what makes
+    // the types true; formatting a string is this app's job.
+    parseDate: false,
   });
 }
