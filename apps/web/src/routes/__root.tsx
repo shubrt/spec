@@ -1,6 +1,13 @@
-import { createRootRoute, HeadContent, Outlet, Scripts } from "@tanstack/react-router";
+import { ClerkProvider } from "@clerk/tanstack-react-start";
+import { createRootRoute, HeadContent, Outlet, redirect, Scripts } from "@tanstack/react-router";
 import type { ReactNode } from "react";
+import { WorkspaceSwitcher } from "~/components/zpecs/workspace-switcher";
+import { fetchAuthState } from "~/server/auth";
 import appCss from "../styles.css?url";
+
+// The one route tree prefix that must stay reachable without a session,
+// otherwise the guard below redirects the sign-in page to itself.
+const SIGN_IN_PREFIX = "/sign-in";
 
 export const Route = createRootRoute({
   head: () => ({
@@ -11,12 +18,33 @@ export const Route = createRootRoute({
     ],
     links: [{ rel: "stylesheet", href: appCss }],
   }),
+  beforeLoad: async ({ location }) => {
+    const { isAuthenticated, orgId } = await fetchAuthState();
+
+    if (!isAuthenticated && !location.pathname.startsWith(SIGN_IN_PREFIX)) {
+      throw redirect({ to: "/sign-in/$", params: { _splat: "" } });
+    }
+
+    // Signed in with no active organization is deliberately NOT a redirect. The
+    // identity is established; the workspace is what is missing, and the switcher
+    // in the header is how the user fixes it. Sending them back to sign-in would
+    // land them in the same session, forever. The API takes the same position,
+    // answering that state with 403 no_workspace rather than 401.
+    return { isAuthenticated, orgId };
+  },
   component: RootComponent,
 });
 
 function RootComponent() {
+  const { isAuthenticated } = Route.useRouteContext();
+
   return (
     <RootDocument>
+      {isAuthenticated ? (
+        <header className="flex h-14 flex-none items-center justify-end border-b px-4">
+          <WorkspaceSwitcher />
+        </header>
+      ) : null}
       <Outlet />
     </RootDocument>
   );
@@ -24,14 +52,16 @@ function RootComponent() {
 
 function RootDocument({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="en">
-      <head>
-        <HeadContent />
-      </head>
-      <body>
-        {children}
-        <Scripts />
-      </body>
-    </html>
+    <ClerkProvider>
+      <html lang="en">
+        <head>
+          <HeadContent />
+        </head>
+        <body>
+          {children}
+          <Scripts />
+        </body>
+      </html>
+    </ClerkProvider>
   );
 }
