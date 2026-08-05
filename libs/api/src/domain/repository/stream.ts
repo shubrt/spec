@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { DomainError } from "../../_/errors";
 import { db } from "../../integration/drizzle/client";
 import { epic } from "../../integration/drizzle/schema/epic";
@@ -101,6 +101,30 @@ async function findByKey(
     )
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Every stream in one project, in one query — **not** one query per epic.
+ *
+ * The caller (`domain/service/projectAggregate.ts`) groups them by `epicId` in
+ * memory. That is the whole reason `project_id` is denormalised onto the stream
+ * row: the naive shape of this read is one query per epic, and a project with
+ * thirty epics would pay thirty round trips to draw one board. Served by
+ * `stream_scope_status_idx` (workspace-leading).
+ *
+ * Ordering matches `epicRepository.listByProject`; see the note there on why
+ * `key` is the tiebreaker and not the sort.
+ */
+async function listByProject(
+  scope: WorkspaceScope,
+  projectId: string,
+  executor: DbExecutor = db,
+): Promise<Stream[]> {
+  return await executor
+    .select()
+    .from(stream)
+    .where(and(eq(stream.workspaceId, scope), eq(stream.projectId, projectId)))
+    .orderBy(asc(stream.createdAt), asc(stream.key));
 }
 
 async function insert(
@@ -383,6 +407,7 @@ async function writeRevision(
 export const streamRepository = {
   findById,
   findByKey,
+  listByProject,
   insert,
   bumpRevision,
   archive,

@@ -1,9 +1,14 @@
 import Elysia from "elysia";
+import { projectHandler } from "../api/handler/project";
 import { workspaceHandler } from "../api/handler/workspace";
 import { mcpRoute } from "../api/mcp/route";
 import { wellKnownRoutes } from "../api/mcp/wellKnown";
 
-export const app = new Elysia().use(mcpRoute).use(wellKnownRoutes).use(workspaceHandler);
+export const app = new Elysia()
+  .use(mcpRoute)
+  .use(wellKnownRoutes)
+  .use(workspaceHandler)
+  .use(projectHandler);
 
 export type App = typeof app;
 

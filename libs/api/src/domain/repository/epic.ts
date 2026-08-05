@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { DomainError } from "../../_/errors";
 import { db } from "../../integration/drizzle/client";
 import { epic } from "../../integration/drizzle/schema/epic";
@@ -122,6 +122,31 @@ async function findByKey(
     )
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Every epic in one project, in one query.
+ *
+ * The read-only project aggregate (`domain/service/projectAggregate.ts`) is the
+ * caller. It exists as a flat per-project list rather than a per-parent lookup
+ * because `workspace_id` and `project_id` are denormalised onto every child row,
+ * which is what lets the whole subtree cost a fixed four queries instead of one
+ * per parent. Served by `epic_scope_status_idx` (workspace-leading).
+ *
+ * Ordered by creation so the aggregate is deterministic across calls; `key` is
+ * the tiebreaker and not the sort, because keys are `EPIC-1 … EPIC-10` and sort
+ * lexicographically. The web UI re-sorts client-side anyway.
+ */
+async function listByProject(
+  scope: WorkspaceScope,
+  projectId: string,
+  executor: DbExecutor = db,
+): Promise<Epic[]> {
+  return await executor
+    .select()
+    .from(epic)
+    .where(and(eq(epic.workspaceId, scope), eq(epic.projectId, projectId)))
+    .orderBy(asc(epic.createdAt), asc(epic.key));
 }
 
 async function insert(
@@ -435,6 +460,7 @@ async function writeRevision(
 export const epicRepository = {
   findById,
   findByKey,
+  listByProject,
   insert,
   bumpRevision,
   archive,

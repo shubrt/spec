@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { DomainError } from "../../_/errors";
 import { db } from "../../integration/drizzle/client";
 import { stream } from "../../integration/drizzle/schema/stream";
@@ -102,6 +102,26 @@ async function findByKey(
     )
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * Every task in one project, in one query — **not** one query per stream.
+ *
+ * Same shape and same reason as `streamRepository.listByProject`: the read-only
+ * project aggregate groups these by `streamId` in memory so drawing a board is a
+ * fixed four queries whatever the size of the tree. Served by
+ * `task_scope_status_idx` (workspace-leading).
+ */
+async function listByProject(
+  scope: WorkspaceScope,
+  projectId: string,
+  executor: DbExecutor = db,
+): Promise<Task[]> {
+  return await executor
+    .select()
+    .from(task)
+    .where(and(eq(task.workspaceId, scope), eq(task.projectId, projectId)))
+    .orderBy(asc(task.createdAt), asc(task.key));
 }
 
 async function insert(
@@ -359,6 +379,7 @@ async function writeRevision(
 export const taskRepository = {
   findById,
   findByKey,
+  listByProject,
   insert,
   bumpRevision,
   archive,

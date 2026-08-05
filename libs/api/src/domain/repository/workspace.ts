@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { db } from "../../integration/drizzle/client";
 import { project } from "../../integration/drizzle/schema/project";
 import { workspace } from "../../integration/drizzle/schema/workspace";
@@ -62,5 +62,22 @@ export const workspaceRepository = {
       .from(project)
       .where(eq(project.workspaceId, scope))
       .orderBy(asc(project.name));
+  },
+
+  /**
+   * One project by id, inside the scope.
+   *
+   * The scope is part of the `WHERE`, not an assertion afterwards, so a project
+   * id belonging to another tenant is indistinguishable from one that does not
+   * exist — the caller gets `null` either way and cannot use the endpoint to
+   * probe which ids are real elsewhere.
+   */
+  async findProject(scope: WorkspaceScope, projectId: string): Promise<Project | null> {
+    const [row] = await db
+      .select()
+      .from(project)
+      .where(and(eq(project.workspaceId, scope), eq(project.id, projectId)))
+      .limit(1);
+    return row ?? null;
   },
 };
