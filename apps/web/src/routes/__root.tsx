@@ -2,7 +2,9 @@ import { ClerkProvider } from "@clerk/tanstack-react-start";
 import { createRootRoute, HeadContent, Outlet, redirect, Scripts } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { WorkspaceSwitcher } from "~/components/zpecs/workspace-switcher";
+import { validateDrawerSearch } from "~/lib/search";
 import { fetchAuthState } from "~/server/auth";
+import { getBoard } from "~/server/board";
 import appCss from "../styles.css?url";
 
 // The one route tree prefix that must stay reachable without a session,
@@ -32,6 +34,12 @@ export const Route = createRootRoute({
     // answering that state with 403 no_workspace rather than 401.
     return { isAuthenticated, orgId };
   },
+  validateSearch: validateDrawerSearch,
+  // Only `project` selects what is fetched. The drawer parameters deliberately
+  // stay out of the deps so opening or closing a detail view re-renders from the
+  // aggregate already in memory instead of refetching it.
+  loaderDeps: ({ search }) => ({ project: search.project }),
+  loader: ({ deps }) => getBoard({ data: deps.project }),
   component: RootComponent,
 });
 

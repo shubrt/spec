@@ -8,6 +8,12 @@ import { z } from "zod";
 // filter and the read-only guarantee live in exactly one place.
 export const env = createEnv({
   server: {
+    // Origin of @zpecs/api. Deliberately not VITE_-prefixed: keeping it off
+    // import.meta.env is what stops the browser reaching the API directly,
+    // which would put a session-authenticated multi-tenant surface behind CORS
+    // instead of behind this app's server functions.
+    // 3001 = zpecs.api, 3002 = legacy project, 3003 = web, 3004 = zpecs web service.
+    ZPECS_API_URL: z.url().default("http://localhost:3004"),
     // Clerk's request middleware and server helpers would read this straight
     // from process.env. Declaring it means a missing or malformed key fails
     // once at boot with a readable message, rather than surfacing as an opaque
