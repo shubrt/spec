@@ -142,8 +142,7 @@ async function listByProject(
  * The status filter is a parameter rather than a constant here because "which
  * statuses count as workable" is a domain decision that belongs in
  * `service/nextWork.ts`, next to the ordering it goes with — a repository that
- * hard-coded it would put half of that decision out of reach of the service's own
- * tests.
+ * hard-coded it would split one decision across two layers.
  */
 async function listByStreams(
   scope: WorkspaceScope,

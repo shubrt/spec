@@ -14,8 +14,6 @@ import { ENTITY_TYPE, RELATIONSHIP_TYPE } from "../enums";
  * different user, and it cannot claim to belong to a different workspace. Because
  * every object here is a `z.strictObject`, sending either one is not ignored, it
  * is rejected with an `unrecognized_keys` issue.
- * `test/domain/changeSet/schema.test.ts` asserts their absence on the schema's own
- * keys, not merely that a well-behaved input parses.
  *
  * ## Why the operation is one flat object and not a discriminated union
  *

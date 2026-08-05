@@ -17,8 +17,7 @@
  *  2. `domain/auth/resolveSessionAuth.ts` — the Clerk session of the web app,
  *  3. `scripts/bootstrapProject.ts` — an operator-supplied `org_id` resolved
  *     read-only to an existing local workspace row.
- * Test fixtures and focused unit tests also construct known uuid scopes. The
- * auth resolvers get the uuid from
+ * The auth resolvers get the uuid from
  * `workspaceRepository.ensure`; the bootstrap command gets it from
  * `workspaceRepository.findByClerkOrgId`. None accepts a local uuid from user
  * input. Any further caller in `src/` is a review question.

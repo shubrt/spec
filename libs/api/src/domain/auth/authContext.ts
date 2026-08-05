@@ -69,8 +69,7 @@ export function toAuthInfo(
  * Unpacks the `AuthContext` a tool handler was invoked with.
  *
  * Returns null rather than throwing when it is absent: an MCP request can reach
- * a handler with no `authInfo` at all (a transport wired without it, or the
- * in-memory transport used by tests), and `defineTool` turns that into a closed
+ * a handler with no `authInfo` at all, and `defineTool` turns that into a closed
  * `isError` result. There is no code path where a missing context means "allow".
  */
 export function readAuthContext(authInfo: AuthInfo | undefined): AuthContext | null {

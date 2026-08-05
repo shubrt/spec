@@ -11,7 +11,9 @@
     "clean": "git clean -xdf .cache .turbo dist node_modules",
     "build": "vp pack",
     "dev": "vp pack --watch",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tools.json",
+    "schema:generate": "bun scripts/generateSchemas.ts --write",
+    "schema:check": "bun scripts/generateSchemas.ts --check",
     "project:bootstrap": "bun --env-file=../../apps/web/.env scripts/bootstrapProject.ts",
     "db:push": "bun --env-file=../../apps/web/.env drizzle-kit push"
   },
@@ -24,7 +26,6 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@elysiajs/eden": "^1.4.9",
     "@tool/tsconfig": "workspace:*",
     "@types/node": "^25.6.0",
     "bun-types": "latest",

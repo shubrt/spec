@@ -32,9 +32,8 @@ import { taskContent, taskExecution } from "./task/content";
  *    domain spec §11 gate silently.
  * 3. **The meta tier is chosen here.** `source: "agent"` is the default, so a
  *    forgotten argument fails closed and server-owned fields stay unforgeable.
- *
- * `test/domain/schema/document.test.ts` asserts this module's runtime export
- * surface and scans `src/` for imports that reach past it.
+ * Callers outside `domain/schema/` must use this module rather than importing
+ * concrete schema ingredients directly.
  */
 
 export const EPIC_SCHEMA_VERSION = "pm.epic.v1";
@@ -114,7 +113,7 @@ const streamDocuments = {
  * The task document is the envelope plus one extra top-level section,
  * `execution` (domain spec §7). Measured on Zod 4.4.3: `.extend()` on a
  * `strictObject` returns a `strictObject`, so `additionalProperties: false`
- * survives — a test pins that rather than trusting it.
+ * survives in the generated contract.
  */
 const taskDocument = {
   agent: documentEnvelope({
@@ -140,7 +139,7 @@ const taskDocument = {
  * This is an **inside-the-layer** export: `jsonSchema.ts` needs the schema
  * objects to convert them, and nothing else does. No call site outside
  * `domain/schema/` may parse through this map — `parseDocument` is the entry
- * point, and `test/domain/schema/document.test.ts` scans `src/` to enforce it.
+ * point.
  */
 export const DOCUMENT_SCHEMAS = {
   epic: epicDocument,
@@ -156,7 +155,7 @@ export const DOCUMENT_SCHEMAS = {
 
 export type DocumentSchemaTarget = keyof typeof DOCUMENT_SCHEMAS;
 
-/** Stable order for snapshots, `get_entity_schema` and the schema resources. */
+/** Stable order for generated contracts, `get_entity_schema` and schema resources. */
 export const DOCUMENT_SCHEMA_TARGETS = Object.keys(
   DOCUMENT_SCHEMAS,
 ) as readonly DocumentSchemaTarget[];

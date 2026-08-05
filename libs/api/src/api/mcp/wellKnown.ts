@@ -5,8 +5,8 @@ import { env } from "../../_/env";
  * Scopes zpecs' Dynamic Client Registration (DCR) flow requests. This exact
  * array is also what `scopes_supported` below advertises, and what the Clerk
  * instance's `default_scopes` must be set to (see
- * `../../integration/clerk/SETUP.md`, runbook step 3) — a test in
- * `wellKnown.test.ts` reads that file and fails if the two ever diverge.
+ * `../../integration/clerk/SETUP.md`, runbook step 3). Keep that operator
+ * configuration character-identical to this source of truth.
  *
  * `openid` must be present: Clerk's own default for scope-less DCR
  * registrations is `email offline_access profile` — no `openid` — and a

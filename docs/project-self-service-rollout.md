@@ -106,8 +106,9 @@ duration, auth principal and the existing actor/workspace correlation fields
 are sufficient. Never emit the Project name, request or response body,
 validation input, raw query string, cookie or session token. The runtime's body
 redaction is defense in depth, not permission to add names to custom events.
-Use a sentinel Project name in the runtime logging regression test and assert
-that neither it nor the serialized body appears in the captured event.
+For an explicitly authorized, controlled runtime check, create a non-sensitive
+sentinel Project name and inspect the captured event to confirm that neither the
+sentinel nor the serialized body appears. Remove the sentinel data afterwards.
 
 During the observation window, compare `201` responses with the growth in
 Project row count and watch `5xx` closely. A rollback of API or web does not

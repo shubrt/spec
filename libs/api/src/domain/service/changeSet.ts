@@ -45,8 +45,7 @@ import { type DocumentIssue, ruleIssue, shapeIssue } from "../schema/rules";
  * model sees — `z.toJSONSchema()` silently drops `.refine()` — so the moment a dry
  * run stops predicting the real thing, the only channel that can teach an agent
  * the rules starts lying to it. Two code paths is how that happens, so there is
- * one, and `test/domain/service/changeSet.test.ts` reads this file's source and
- * fails if more than one mode decision can make the paths drift.
+ * one pipeline and exactly one mode decision.
  *
  * ## The tier follows the written status
  *

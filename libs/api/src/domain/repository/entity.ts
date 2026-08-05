@@ -26,8 +26,7 @@ import { formatKey } from "../keys";
  * first, including these helpers, and each one really does use it:
  * `issueKey` locates the project row inside the scope, `recordRevision` writes the
  * scope onto the audit row, and `stampServerOwnedMeta` stamps it into the
- * document's `meta.workspace_id`. `test/domain/repository/scope.test.ts` reflects
- * over this directory and enforces the convention.
+ * document's `meta.workspace_id`.
  */
 
 /**

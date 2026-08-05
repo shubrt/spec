@@ -47,8 +47,8 @@ import type { DbExecutor } from "./entity";
  * `fastupdate` pending list has to be scanned in full by every index scan, and
  * `gincostestimate` prices that in. One `VACUUM ANALYZE` later the same index scan
  * costs 12.91 and is chosen. The query shape was identical both times. Production
- * autovacuum handles this; a test that seeds in bulk must vacuum, or it will
- * "prove" a sequential scan that is an artefact of its own fixture.
+ * autovacuum handles this; any bulk-load analysis must vacuum first or it will
+ * report a sequential scan caused by the pending list rather than the query.
  */
 
 /** What one hit carries out of SQL. `subtype` is the stream/task type; null for an epic. */
@@ -250,9 +250,8 @@ const run = async (executor: DbExecutor, statement: SQL): Promise<readonly Searc
 };
 
 /**
- * The full-text statement, exported so `test/db/search.db.test.ts` can `EXPLAIN`
- * the query this repository actually runs. A retyped copy in the test would prove
- * that *a* query uses the index, which is not the claim being made.
+ * The full-text statement is exported so an operator can `EXPLAIN` the exact query
+ * this repository runs rather than a retyped approximation.
  */
 export function searchStatement(scope: WorkspaceScope, options: SearchQueryOptions): SQL {
   const query = tsQuery(options.query);

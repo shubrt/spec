@@ -12,8 +12,7 @@ import { z } from "zod";
  *
  * Naming is a mechanical convention so nothing can drift silently:
  * `SNAKE_UPPER` array → `camelCaseSchema` validator → `PascalCase` type.
- * `test/domain/enums.test.ts` walks the module's exports and enforces the
- * pairing, so a new set added here is covered without editing the test.
+ * Keep all three declarations adjacent whenever a value set changes.
  */
 
 /**

@@ -125,11 +125,7 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 }
 
 /**
- * The mock seam for every auth test in this package.
- *
- * Offline tests `vi.mock` this module, so no test needs a Clerk credential, a
- * network call, or a signed token — and the production path stays a single real
- * `authenticateRequest` call with nothing test-shaped in it.
+ * The single OAuth authentication boundary.
  *
  * `acceptsToken: "oauth_token"` is what makes a Clerk *session* cookie fail
  * here: `/mcp` is reachable only with a token issued through the OAuth flow.

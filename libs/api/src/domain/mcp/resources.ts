@@ -17,8 +17,8 @@ import { CONFIRM_RULE, HIERARCHY, UNKNOWN_RULE, WHAT_VS_HOW } from "./fragments"
  *
  * This is where text goes that does not fit tier 1 (`SERVER_INSTRUCTIONS`, paid
  * for on every turn) or tier 2 (a tool `description`, paid for on every
- * `tools/list`). A resource costs nothing until it is read, so the budget tests
- * failing is a signal to move prose *here*, not to raise a budget.
+ * `tools/list`). A resource costs nothing until it is read, so text that exceeds
+ * either budget belongs *here* instead of raising that budget.
  */
 
 type GuideResource = {
@@ -268,7 +268,7 @@ export function registerZpecsResources(server: McpServer): void {
   );
 }
 
-/** The URIs a test can assert against without reaching into the SDK's registry. */
+/** The stable resource URIs exposed through the SDK registry. */
 export const ZPECS_RESOURCE_URIS = {
   guides: GUIDES.map((guide) => `zpecs://guide/${guide.slug}`),
   schemas: SCHEMA_RESOURCES.map(({ uri }) => uri),

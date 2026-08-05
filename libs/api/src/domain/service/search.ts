@@ -19,8 +19,8 @@ import { type SearchHitRow, searchRepository } from "../repository/search";
  * When exact matching finds nothing the fallback returns approximate hits, and the
  * model has to be told which of the two it is looking at — otherwise "close enough
  * on the spelling" is indistinguishable from "this is what you asked for", and an
- * agent will act on a neighbouring stream. It is also what makes the fallback
- * observable from a test without reaching into the repository.
+ * agent will act on a neighbouring stream. It also keeps the fallback observable
+ * at the service boundary without exposing repository details.
  */
 
 /** One compact hit. Deliberately five short fields — see the file comment. */

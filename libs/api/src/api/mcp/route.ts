@@ -91,13 +91,7 @@ function clerkNotConfigured(): Response {
   );
 }
 
-/**
- * Authenticates the request, then hands the raw `Request` to a freshly built
- * stateless server + transport.
- *
- * Exported so the route test can mount the exact same handler behind a control
- * route that deliberately omits `{ parse: "none" }`.
- */
+/** Authenticates the request, then hands it to a fresh stateless server and transport. */
 export async function handleMcpRequest(request: Request): Promise<Response> {
   const outcome = await resolveMcpAuth(request);
   if (outcome.status === "not_configured") return clerkNotConfigured();
@@ -136,15 +130,12 @@ export const mcpRoute = new Elysia().post(
     //
     // Measured in A0 and re-measured in A4: Elysia's AOT codegen only injects body
     // parsing when something in the route reads `body`. Auth reads *headers*, so
-    // the handler below still never names `body` and removing this option still
-    // happens to keep the tests green. The moment anything on this route reads
-    // `body` — a `body` schema, a `derive`/`resolve` hook that touches it — Elysia
+    // the handler below never names `body`. The moment anything on this route
+    // reads `body` — a `body` schema, a `derive`/`resolve` hook that touches it — Elysia
     // consumes the stream and the transport answers
     //   HTTP 400 {"jsonrpc":"2.0","error":{"code":-32700,
     //             "message":"Parse error: Invalid JSON"},"id":null}
-    // The option therefore stays as a forward guard, and route.test.ts pins both
-    // halves: that this route declares it, and that the production handler behind
-    // a route which reads `body` really does produce that -32700.
+    // The option therefore stays as a forward guard against that -32700 response.
     parse: "none",
   },
 );

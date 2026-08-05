@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Captures live evidence for the canonical Clerk instance and a running
-# zpecs web service (see SETUP.md). This script deliberately stays outside `vp test`
-# and CI because it talks to live services. Every required check either proves
+# zpecs web service (see SETUP.md). Run it only as an explicit live operator check because
+# it talks to external services. Every required check either proves
 # the real configuration or fails loudly; it never substitutes fixture data.
 #
 # Usage:

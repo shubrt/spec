@@ -33,7 +33,7 @@ import { workspace } from "./workspace";
  * the audit trail as a side effect — and it costs nothing today because the MVP
  * exposes no delete path for a workspace or a project. Wiping a tenant on
  * purpose is `TRUNCATE` (not a row DELETE, so the trigger does not fire), which
- * is what the DB test harness uses.
+ * must remain an explicit operator action.
  */
 export const entityRevision = pgTable(
   "entity_revision",

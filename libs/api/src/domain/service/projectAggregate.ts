@@ -14,22 +14,17 @@ import { type Project, workspaceRepository } from "../repository/workspace";
  * shape that makes the project overview, the epic list and the stream/task
  * detail drawer all readable from a single Treaty call.
  *
- * ## The query count is the design, and it is pinned by a test
+ * ## The query count is part of the design
  *
  * **Four queries for a project that exists, one for a project that does not.**
  * Never a function of the tree's size.
  *
  * The naive version of this reads epics, then streams per epic, then tasks per
- * stream — 1 + E + E×S queries, which is a handful in a test fixture and a
+ * stream — 1 + E + E×S queries, which is a handful in a small project and a
  * hundred on a real board. It is avoided by reading each level as one flat
  * per-project list (`workspace_id`/`project_id` are denormalised onto every
  * child row precisely so that is possible) and doing the parent/child grouping
  * in memory, where it costs nothing.
- *
- * `test/db/projectAggregate.db.test.ts` counts the real SQL statements against
- * Postgres and asserts exactly that, including with a tree big enough that an
- * N+1 would show up. Growing this function by one more per-parent read is
- * therefore a failing test, not a slow page nobody notices.
  *
  * The project row is read first and on its own, so a project that does not exist
  * — or belongs to another tenant — costs one query and not four.
@@ -102,8 +97,8 @@ export async function loadProjectAggregate(
   return {
     project,
     // A child whose parent is not in this project cannot occur: `move` relocates
-    // a whole subtree in one transaction (`test/db/move.db.test.ts`), so a stream
-    // and its epic are always in the same project. The grouping is written to
+    // a whole subtree in one transaction, so a stream and its epic are always in
+    // the same project. The grouping is written to
     // drop such a row rather than invent a parent for it — an orphan is a data
     // bug, and inventing a place for it on the board would hide it.
     epics: epics.map((epicRow) => ({

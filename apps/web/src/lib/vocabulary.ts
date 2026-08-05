@@ -5,8 +5,7 @@ import type { EpicNode, StreamNode, TaskNode } from "~/server/board";
  * vocabularies, and the timestamps.
  *
  * The type-only import above is erased at compile time, so this module pulls in
- * no server code at runtime and stays safe to use from client components and
- * from the plugin-free test runner.
+ * no server code at runtime and stays safe to use from client components.
  */
 
 /**

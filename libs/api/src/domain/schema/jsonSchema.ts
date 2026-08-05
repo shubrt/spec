@@ -55,25 +55,6 @@ export const toJsonSchema = (
   z.toJSONSchema(schema, { io, override: jsonSchemaOverride }) as Record<string, unknown>;
 
 /**
- * The size of a generated schema as it goes over the wire.
- *
- * Exists as a function because it is an acceptance criterion, not a curiosity:
- * tool input schemas are re-sent on every single turn, so a schema that grows by
- * a kilobyte costs that kilobyte per turn for the life of the session. The
- * change-set tool schema has a hard budget of 3 KB, and once that schema exists
- * (a later increment) checking it is `jsonSchemaBytes(toJsonSchema(changeSet))`.
- *
- * `TextEncoder` rather than `Buffer.byteLength`: this measures UTF-8 bytes, which
- * is what the transport counts, and it is a web standard, so it needs no Node
- * globals in a package whose runtime is Bun and whose MCP transport is
- * deliberately `node:`-free.
- */
-const utf8 = new TextEncoder();
-
-export const jsonSchemaBytes = (jsonSchema: unknown): number =>
-  utf8.encode(JSON.stringify(jsonSchema)).length;
-
-/**
  * The document schema for one target, as the model sees it.
  *
  * `source` defaults to `"agent"`: `get_entity_schema` answers "what may I write",
@@ -85,19 +66,3 @@ export const documentJsonSchema = (
   target: DocumentSchemaTarget,
   source: DocumentSource = "agent",
 ): Record<string, unknown> => toJsonSchema(DOCUMENT_SCHEMAS[target][source]);
-
-/**
- * The committed snapshot directory, relative to the package root.
- *
- * The generated schemas are checked in as files and Git is their version
- * history — the plan deliberately has no `schema_definition` table, because a
- * table would need its own write path, its own migration story and its own
- * consistency check against the code, to answer a question `git log` already
- * answers. Schema generation writes these files deterministically, so an
- * unreviewed schema change shows up as a diff in a pull request.
- */
-export const SCHEMA_SNAPSHOT_DIR = "schema";
-
-/** The snapshot filename for a target, e.g. `pm.stream.feature.v1.input.json`. */
-export const schemaSnapshotFile = (target: DocumentSchemaTarget, source: DocumentSource): string =>
-  `${target}.${source}.json`;

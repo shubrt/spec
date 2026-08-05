@@ -33,9 +33,8 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- statements are idempotent so re-running is safe.
 --
 -- TRUNCATE deliberately still works: it is not a row-level DELETE, so it does
--- not fire this trigger. That is what lets the DB test suite clean up, and it is
--- also why an operator wiping the table is a conscious act rather than an
--- accident.
+-- not fire this trigger. An operator wiping the table must therefore choose
+-- TRUNCATE consciously rather than reaching it through an ordinary row delete.
 --
 -- Verified side effect, by design: once a workspace has revisions,
 -- `DELETE FROM workspace` fails. The ON DELETE CASCADE reaches entity_revision

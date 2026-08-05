@@ -12,7 +12,7 @@ import {
  * returned once in the `initialize` result and then resident in the model's
  * context for the whole conversation.
  *
- * Budget: **3000 characters**, enforced by `test/domain/mcp/text.test.ts`. It is
+ * Budget: **3000 characters**. It is
  * a real cost, paid on every turn of every session, which is why the two other
  * tiers exist — per-tool `description` for what a tool needs at call time, and
  * the `zpecs://guide/` resources for the long form. If this text no longer fits,

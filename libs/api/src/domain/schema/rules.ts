@@ -182,7 +182,7 @@ export const RULES = {
 
 export type RuleId = keyof typeof RULES;
 
-/** Stable order for tests, tool descriptions and documentation. */
+/** Stable order for tool descriptions, runtime reporting and documentation. */
 export const RULE_IDS = Object.keys(RULES) as readonly RuleId[];
 
 /**
@@ -198,8 +198,8 @@ export const rulesEnforcedBy = (enforcement: RuleEnforcement): readonly RuleId[]
 
 /**
  * The rules `parseDocument` can actually report. Anything else in the table is
- * enforced elsewhere, and a test pins this set against what the parser emits so
- * a rule can never claim schema enforcement it does not have.
+ * enforced elsewhere; deriving both groups from their declared enforcement site
+ * keeps this list aligned with the rule table.
  */
 export const PARSE_ENFORCED_RULE_IDS: readonly RuleId[] = [
   ...rulesEnforcedBy("zod"),

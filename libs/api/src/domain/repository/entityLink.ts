@@ -25,7 +25,6 @@ import type { DbExecutor } from "./entity";
  * No tombstone, no `deleted_at`. A soft delete would leave the unique index
  * holding a row the user cannot see, so re-linking the same pair would collide with
  * a relationship that does not exist as far as anyone can tell.
- * `test/db/entityLinkRepository.db.test.ts` links, unlinks and links again.
  */
 
 export type EntityLink = typeof entityLink.$inferSelect;

@@ -28,10 +28,6 @@ export const workspaceRepository = {
    * receives a `WorkspaceScope` because a tenant already exists; `ensure` runs
    * before one does, from the `org_id` claim of a verified token.
    *
-   * `test/domain/repository/scope.test.ts` names both exceptions in its
-   * `UNSCOPED` allow-list, so they are recorded explicitly and checked to still
-   * exist rather than being tolerated implicitly.
-   *
    * Just-in-time: the first authenticated request for an organization inserts
    * the row; later requests refresh `name`/`slug` from the token so a rename in
    * Clerk propagates without a webhook.

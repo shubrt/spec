@@ -35,10 +35,9 @@ import { type ZpecsDocument, parseDocument } from "../schema/document";
  *
  * The naive implementation resolves each referenced requirement id and each linked
  * criterion id with its own lookup, and each dependency endpoint with another; on a
- * real stream that is dozens of round trips inside a single tool call.
- * `test/domain/context/bundle.test.ts` counts the queries and, more importantly,
- * counts them again with every referenced list and the dependency graph enlarged,
- * so the number is pinned as constant rather than merely small.
+ * real stream that is dozens of round trips inside a single tool call. Keep this
+ * projection at two queries regardless of referenced-list or dependency-graph
+ * size.
  *
  * A stream or an epic subject costs **one** query: a stream is its own context, and
  * an epic has no stream context at all.

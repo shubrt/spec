@@ -1,7 +1,7 @@
 /**
  * The deliberately tiny bridge from core code to request observability.
  *
- * The core package must stay importable by Eden and offline tests without
+ * The core package must stay importable by consumers and offline tooling without
  * initializing evlog, opening an Axiom drain, or writing a console notice. The
  * executable runtime installs an accessor once, while the functions below only
  * ever add an allow-listed set of scalar metadata to the active request event.

@@ -17,10 +17,8 @@ import type { DbExecutor } from "./entity";
  * That repository owns writing edges and handing the raw graph to the cycle check;
  * this is a *read projection* for the context bundle, and it answers a different
  * question — "what is this one entity waiting on, and what is waiting on it, in
- * words an agent can act on". Keeping it here also keeps it inside
- * `src/domain/repository/`, which is the directory
- * `test/domain/repository/scope.test.ts` reflects over: a tenant-filtered query
- * living anywhere else would silently escape that guard.
+ * words an agent can act on". Keeping it in `src/domain/repository/` also keeps
+ * the tenant-scoping convention visible alongside every other persisted read.
  *
  * ## Both directions out of one stored direction
  *
@@ -34,8 +32,7 @@ import type { DbExecutor } from "./entity";
  *
  * The endpoints are polymorphic `(type, id)` pairs with no foreign key, so naming
  * them means looking in three tables. Doing that per edge is one round trip per
- * dependency; the three `LEFT JOIN`s here make it one round trip per entity. That
- * is the constraint `test/domain/context/bundle.test.ts` counts.
+ * dependency; the three `LEFT JOIN`s here make it one round trip per entity.
  */
 
 export type DependencyRow = {

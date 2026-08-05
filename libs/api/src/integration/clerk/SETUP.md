@@ -11,8 +11,8 @@ runbook below, then capture that evidence with `verify.sh` and the live MVP
 verification document.
 
 The scope list in this runbook must stay character-identical to
-`../../api/mcp/wellKnown.ts`'s exported `MCP_OAUTH_SCOPES`. The
-`wellKnown.test.ts` suite enforces that relationship.
+`../../api/mcp/wellKnown.ts`'s exported `MCP_OAUTH_SCOPES`; that constant is the
+source of truth for zpecs' advertised scopes.
 
 ## 1. Use the same Clerk instance in API and web
 

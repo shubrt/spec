@@ -38,7 +38,7 @@ import { type Task, taskRepository } from "../repository/task";
  * `priority` lives in `document.meta.priority`, not in a column. Ordering by it in
  * SQL means a `CASE` over a jsonb extraction, which no index can serve, so the
  * database would sort the same rows this function sorts — with the decision spread
- * across a SQL expression and a TypeScript comparator instead of in one testable
+ * across a SQL expression and a TypeScript comparator instead of in one explicit
  * place. The candidate set is one stream or one epic's worth of workable tasks,
  * which is bounded by the size of a stream, not of a workspace.
  */
@@ -49,9 +49,8 @@ import { type Task, taskRepository } from "../repository/task";
  * Declared here rather than imported from `schema/primitives.ts`, which the
  * `parseDocument` bypass guard keeps inside the schema layer — and which declares
  * the *values* without claiming an order, so the ranking is this service's decision
- * either way. `test/domain/service/nextWork.test.ts` asserts this list is exactly
- * `ENTITY_PRIORITY`, from the test side where importing it is allowed, so a value
- * added to the document schema cannot go unranked.
+ * either way. When `ENTITY_PRIORITY` changes, update this urgency order in the same
+ * change so every legal document priority remains ranked.
  */
 export const PRIORITY_RANK = ["critical", "high", "medium", "low"] as const;
 export type WorkPriority = (typeof PRIORITY_RANK)[number];
@@ -160,8 +159,7 @@ async function listNextWork(
  * The tiebreaker is the sequence and not the key string, because keys sort
  * lexicographically and `TASK-10` would come before `TASK-2` — an ordering that
  * looks arbitrary to the reader and drifts as a project grows past ten tasks.
- * Fully deterministic either way, which is what makes the DB test's expected
- * order an assertion rather than a coincidence.
+ * The resulting order is deterministic across repeated reads.
  */
 function compareWorkable(left: Task, right: Task): number {
   const byPriority = priorityRank(left.document) - priorityRank(right.document);

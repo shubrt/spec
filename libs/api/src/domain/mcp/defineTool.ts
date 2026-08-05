@@ -27,9 +27,8 @@ export type ToolContext<TInput> = {
  * once on a server.
  *
  * Deliberately narrow. Title, description, annotations and both schemas are
- * reachable through `tools/list` on a real server, which is where the tests read
- * them from, so re-exposing them here would be a second copy of the wire
- * contract that could disagree with it.
+ * reachable through `tools/list` on a real server, so re-exposing them here would
+ * be a second copy of the wire contract that could disagree with it.
  */
 export type ZpecsTool = {
   readonly name: ToolName;
@@ -39,8 +38,8 @@ export type ZpecsTool = {
 type ToolSpec<TInput extends z.ZodObject> = {
   /**
    * Keyed to `TOOL_DESCRIPTIONS`, so a tool cannot exist without a description
-   * and the description budget test covers every tool by construction. The
-   * description is deliberately *not* a field here — text lives in one file.
+   * by construction. The description is deliberately *not* a field here — text
+   * lives in one file.
    */
   name: ToolName;
   title: string;

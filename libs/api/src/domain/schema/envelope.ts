@@ -35,8 +35,8 @@ import { ruleText } from "./rules";
  * `io: "input"`, and that `additionalProperties: false` is the entire mechanism
  * behind the domain spec §14 rule "no invented fields". A single `z.object()`
  * anywhere in this tree therefore silently deletes the rule from what the model
- * sees, with no test failing and no type error. There is no case in this layer
- * where a plain `z.object()` is correct.
+ * sees, with no type error. There is no case in this layer where a plain
+ * `z.object()` is correct.
  *
  * ## Why `meta` is split in two
  *
@@ -51,9 +51,7 @@ import { ruleText } from "./rules";
  *
  * Because the input version is a `strictObject`, an agent that sends
  * `meta.revision: 9` gets an `unrecognized_keys` issue instead of a silent
- * optimistic-concurrency bypass. Revisions and keys are not forgeable, and
- * `test/domain/schema/envelope.test.ts` proves it field by field rather than
- * trusting the comment.
+ * optimistic-concurrency bypass. Revisions and keys are not forgeable.
  */
 
 /* ------------------------------------------------------------------- links */
@@ -168,8 +166,8 @@ const META_INPUT_SHAPE = {
 
 /**
  * The fields the server owns. Every one of these is rejected on input, and
- * `STORED_ONLY_META_KEYS` is derived from this object so the test cannot fall
- * behind the schema.
+ * `STORED_ONLY_META_KEYS` is derived from this object so the rejection list
+ * cannot fall behind the schema.
  */
 const META_STORED_SHAPE = {
   id: entityId,
@@ -189,9 +187,8 @@ const META_STORED_SHAPE = {
 } as const;
 
 /**
- * The keys an agent must never be able to write. Exported for the test that
- * proves each one is rejected, and for the change-set engine, which strips them
- * before validation rather than letting a well-meaning agent trip over them.
+ * The keys an agent must never be able to write. The change-set engine strips
+ * them before validation rather than letting a well-meaning agent trip over them.
  */
 export const STORED_ONLY_META_KEYS = Object.keys(META_STORED_SHAPE) as readonly string[];
 

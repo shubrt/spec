@@ -8,14 +8,12 @@
  * a stream a handful of tasks, and only a fraction of them declare a blocker. One
  * `SELECT` of the project's `blocked_by` rows costs a single index scan, and the
  * check itself is then a few hundred pointer hops. A `WITH RECURSIVE` query would
- * be the same asymptotics with none of the testability: this file has **no
- * database import at all**, which is what makes a diamond-shaped graph, a
- * self-link and an indirect cycle three-line test cases instead of fixtures.
+ * be the same asymptotics while coupling this pure graph operation to storage.
  *
  * Keep it that way. The moment this module imports `integration/drizzle`, every
- * test of it needs a live Postgres, and the pipeline's "would this change set
- * introduce a cycle?" question — which has to be answered on edges that do not
- * exist in the database yet — becomes unanswerable.
+ * caller needs a live Postgres, and the pipeline's "would this change set introduce
+ * a cycle?" question — which has to be answered on edges that do not exist in the
+ * database yet — becomes unanswerable.
  *
  * ## Why only `blocked_by`
  *

@@ -29,8 +29,8 @@ import {
  * `revision_conflict` so the agent can see what it collided with. There is no
  * place in this file where a revision is read, compared in TypeScript and then
  * written — that version has a window between the read and the write in which the
- * check has already been passed, and it would pass every test that does not run two
- * writers at once. `test/db/entityRepository.db.test.ts` runs two.
+ * check has already been passed. The revision predicate must remain part of the
+ * atomic write so two writers cannot both succeed.
  *
  * The pre-read some methods do is *not* that check: it fetches the key and project
  * id needed to stamp the document, and the concurrency decision still happens in
@@ -269,8 +269,7 @@ async function deleteEpic(
  * documents' `meta.project_id`), and the FKs are single-column, so the database
  * will **not** notice a subtree left half-moved. Nothing here is optional
  * therefore: the epic, its streams and their tasks are rewritten in one
- * transaction, and `test/db/move.db.test.ts` is what enforces it, since no
- * constraint can.
+ * transaction because no database constraint can enforce the full move.
  *
  * `workspace_id` is never rewritten. A move across tenants is not a move, and
  * every statement below is filtered by the scope, so an attempt to name another

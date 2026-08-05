@@ -9,8 +9,8 @@ import { STREAM_TYPE, TASK_TYPE } from "../enums";
  * model ends up reading two subtly contradictory versions of it.
  *
  * Each fragment is one or two whole sentences with no trailing space, so callers
- * join them with `" "` and get readable prose either way round. They are counted
- * against the budgets in `test/domain/mcp/text.test.ts`.
+ * join them with `" "` and get readable prose either way round. Keep them within
+ * the budgets documented by their callers.
  */
 
 /** Domain spec §3. The one paragraph every tool needs in order to be used at all. */

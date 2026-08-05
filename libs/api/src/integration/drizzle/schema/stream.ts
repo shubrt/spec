@@ -14,7 +14,7 @@ import { workspace } from "./workspace";
  * three-column composite FK carrying the tenant chain was considered and
  * rejected: `workspace_id` and `project_id` are denormalised here for indexing
  * and search, and the invariant that a `move` cannot orphan a subtree is
- * enforced by the change-set engine and covered by a test, not by a constraint.
+ * enforced atomically by the change-set engine, not by a constraint.
  *
  * `stream_type` accepts all seven types from the domain spec even though only
  * three of them get a dedicated content schema in the MVP.
