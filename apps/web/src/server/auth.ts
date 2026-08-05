@@ -19,7 +19,11 @@ export interface AuthState {
 // also runs in the browser. This server function is that boundary.
 export const fetchAuthState = createServerFn({ method: "GET" }).handler(
   async (): Promise<AuthState> => {
-    const { isAuthenticated, orgId } = await auth();
-    return { isAuthenticated, orgId: orgId ?? null };
+    const { userId, orgId } = await auth();
+    // Both halves are reported separately because they fail differently: no
+    // `userId` means sign in, while a `userId` with no `orgId` means the session
+    // has no workspace — a state the UI has to render as an action ("create or
+    // join an organization"), not as an error.
+    return { isAuthenticated: userId !== null, orgId: orgId ?? null };
   },
 );

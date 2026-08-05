@@ -1,7 +1,8 @@
 import { ClerkProvider } from "@clerk/tanstack-react-start";
 import { createRootRoute, HeadContent, Outlet, redirect, Scripts } from "@tanstack/react-router";
 import type { ReactNode } from "react";
-import { WorkspaceSwitcher } from "~/components/zpecs/workspace-switcher";
+import { AppHeader } from "~/components/zpecs/app-header";
+import { DetailDrawer } from "~/components/zpecs/detail-drawer";
 import { validateDrawerSearch } from "~/lib/search";
 import { fetchAuthState } from "~/server/auth";
 import { getBoard } from "~/server/board";
@@ -46,14 +47,28 @@ export const Route = createRootRoute({
 function RootComponent() {
   const { isAuthenticated } = Route.useRouteContext();
 
+  // Signed out, the only reachable route is the sign-in splat, which renders on
+  // its own — chrome and a drawer would both be furniture around a login box.
+  if (!isAuthenticated) {
+    return (
+      <RootDocument>
+        <Outlet />
+      </RootDocument>
+    );
+  }
+
   return (
     <RootDocument>
-      {isAuthenticated ? (
-        <header className="flex h-14 flex-none items-center justify-end border-b px-4">
-          <WorkspaceSwitcher />
-        </header>
-      ) : null}
-      <Outlet />
+      <div className="flex h-screen flex-col overflow-hidden">
+        <AppHeader />
+        <main className="flex flex-1 flex-col overflow-auto">
+          <Outlet />
+        </main>
+      </div>
+      {/* The drawer lives at the root, not in a page, because `?stream=` and
+          `?task=` are root search parameters: a detail view stays open across a
+          navigation between the overview and the epic list. */}
+      <DetailDrawer />
     </RootDocument>
   );
 }
