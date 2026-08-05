@@ -1,3 +1,4 @@
+import { recordAuthEvent } from "../../_/eventLog";
 import { authenticateSession } from "../../integration/clerk/authenticator";
 import { workspaceRepository } from "../repository/workspace";
 import type { AuthContext } from "./authContext";
@@ -22,13 +23,23 @@ export type SessionAuthOutcome =
  */
 export async function resolveSessionAuth(request: Request): Promise<SessionAuthOutcome> {
   const outcome = await authenticateSession(request);
-  if (outcome.status === "not_configured") return { status: "not_configured" };
+  if (outcome.status === "not_configured") {
+    recordAuthEvent({ status: "not_configured", principal: "session" });
+    return { status: "not_configured" };
+  }
   if (outcome.status === "invalid_token") {
+    recordAuthEvent({ status: "signed_out", principal: "session" });
     return { status: "signed_out", reason: outcome.reason };
   }
 
   const { identity } = outcome;
   if (!identity.org) {
+    recordAuthEvent({
+      status: "authenticated",
+      principal: "session",
+      clerkUserId: identity.userId,
+      workspaceId: null,
+    });
     return {
       status: "authenticated",
       auth: {
@@ -50,13 +61,20 @@ export async function resolveSessionAuth(request: Request): Promise<SessionAuthO
     slug: identity.org.slug,
   });
 
+  recordAuthEvent({
+    status: "authenticated",
+    principal: "session",
+    clerkUserId: identity.userId,
+    workspaceId: workspace.id,
+  });
+
   return {
     status: "authenticated",
     auth: {
       userId: identity.userId,
       workspaceId: workspace.id,
       clerkOrgId: identity.org.id,
-      // The second of the two resolver call sites makeScope's doc comment allows.
+      // The session resolver call site makeScope's doc comment allows.
       scope: makeScope(workspace.id),
       principal: "session",
     },

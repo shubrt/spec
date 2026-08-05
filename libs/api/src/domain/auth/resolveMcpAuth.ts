@@ -1,4 +1,5 @@
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
+import { recordAuthEvent } from "../../_/eventLog";
 import { authenticateOAuthToken } from "../../integration/clerk/authenticator";
 import { workspaceRepository } from "../repository/workspace";
 import { type AuthContext, toAuthInfo } from "./authContext";
@@ -27,7 +28,10 @@ export type McpAuthOutcome =
  */
 export async function resolveMcpAuth(request: Request): Promise<McpAuthOutcome> {
   const outcome = await authenticateOAuthToken(request);
-  if (outcome.status !== "authenticated") return outcome;
+  if (outcome.status !== "authenticated") {
+    recordAuthEvent({ status: outcome.status, principal: "mcp" });
+    return outcome;
+  }
 
   const { identity } = outcome;
   const token = { value: identity.token, clientId: identity.clientId, scopes: identity.scopes };
@@ -40,6 +44,12 @@ export async function resolveMcpAuth(request: Request): Promise<McpAuthOutcome> 
       scope: null,
       principal: "mcp",
     };
+    recordAuthEvent({
+      status: "authenticated",
+      principal: auth.principal,
+      clerkUserId: auth.userId,
+      workspaceId: null,
+    });
     return { status: "authenticated", auth, authInfo: toAuthInfo(auth, token) };
   }
 
@@ -57,10 +67,16 @@ export async function resolveMcpAuth(request: Request): Promise<McpAuthOutcome> 
     userId: identity.userId,
     workspaceId: workspace.id,
     clerkOrgId: identity.org.id,
-    // One of the two calls makeScope's doc comment allows. The uuid comes from
+    // One of the resolver calls makeScope's doc comment allows. The uuid comes from
     // the row above, never from the token and never from tool input.
     scope: makeScope(workspace.id),
     principal: "mcp",
   };
+  recordAuthEvent({
+    status: "authenticated",
+    principal: auth.principal,
+    clerkUserId: auth.userId,
+    workspaceId: auth.workspaceId,
+  });
   return { status: "authenticated", auth, authInfo: toAuthInfo(auth, token) };
 }

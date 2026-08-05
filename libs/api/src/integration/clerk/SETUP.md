@@ -1,113 +1,128 @@
-# Clerk instance setup — handover checklist
+# Canonical Clerk instance — setup and live verification
 
-Status as of Task A2: **no Clerk instance exists**. Every step below is
-unexecuted. This document is what the user runs by hand; nothing in it has
-been verified against a live instance, and no step's output is claimed here —
-see `verify.sh` in this directory for how to capture that evidence once the
-steps below are done.
+The Clerk tenant configured in `apps/web/.env` is zpecs' canonical
+instance. Its API key pair already makes API discovery work. Keep real keys in
+gitignored `.env` files only; this document and both committed `.env.example`
+files contain placeholders.
 
-The code that depends on the outcome of this checklist is
-`../../api/mcp/wellKnown.ts`. In particular, the scope list in step 3 below
-must stay character-identical to that file's exported `MCP_OAUTH_SCOPES`
-constant — `wellKnown.test.ts` reads this file and fails if the two diverge.
+API discovery alone does not prove Dynamic Client Registration (DCR), an
+organization-bearing access token, or the signed-in Web/MCP flow. Complete the
+runbook below, then capture that evidence with `verify.sh` and the live MVP
+verification document.
 
-## 1. Runbook
+The scope list in this runbook must stay character-identical to
+`../../api/mcp/wellKnown.ts`'s exported `MCP_OAUTH_SCOPES`. The
+`wellKnown.test.ts` suite enforces that relationship.
 
-1. **Clerk Dashboard → Organizations → enable Organizations.** Turn **"Allow
-   personal accounts" off.** zpecs has no personal-account workspace concept —
-   every request must resolve to an organization, or there is no `org_id` and
-   therefore no workspace.
+## 1. Use the same Clerk instance in API and web
 
-2. **Clerk Dashboard → OAuth applications → enable Dynamic Client
-   Registration (DCR).** Most MCP clients register themselves against the
-   authorization server at connect time; without DCR on, that registration
-   has nowhere to go.
+Copy the canonical values without committing either `.env` file:
 
-3. **Set default scopes.** This setting only appears once DCR (step 2) is
-   on, and it exists because MCP clients frequently omit the `scope`
-   parameter on registration — Clerk then falls back to its own default,
-   which is `email offline_access profile` and does **not** include `openid`.
-   Run:
+- `apps/web/.env` `CLERK_PUBLISHABLE_KEY` becomes
+  `apps/web/.env` `VITE_CLERK_PUBLISHABLE_KEY`.
+- `CLERK_SECRET_KEY` is identical in both files.
+
+The API verifies OAuth access tokens and web session tokens against this one
+issuer. Mixing tenants can make each app appear healthy in isolation while
+every authenticated API request fails.
+
+## 2. Configure Organizations and DCR
+
+1. In **Clerk Dashboard → Organizations**, enable Organizations and turn
+   **Allow personal accounts** off. zpecs scopes every request to an
+   organization; a personal account has no workspace-bearing `org_id`.
+
+2. In **Clerk Dashboard → OAuth applications**, enable **Dynamic Client
+   Registration**. MCP clients then register themselves during connection;
+   zpecs does not configure a client ID, client secret, or fixed callback port.
+
+3. Set the DCR default scopes exactly:
 
    ```bash
    npx clerk@latest api instance/oauth_application_settings -X PATCH -d '{"default_scopes":["openid","profile","email","user:org:read"]}'
    ```
 
-   That list must be character-identical to `MCP_OAUTH_SCOPES` in
-   `../../api/mcp/wellKnown.ts`. If you change one, change the other and this
-   file together.
+   `user:org:read` makes organization selection part of consent and allows the
+   issued token to carry the selected `org_id`. `openid`, `profile`, and
+   `email` are the other scopes zpecs advertises.
 
-4. **Check redirect behaviour.** MCP clients redirect back to either a
-   loopback address (`http://127.0.0.1:<port>/callback`, port chosen by the
-   client at OAuth-start time) or `https://claude.ai/api/mcp/auth_callback`.
-   Whether this Clerk instance enforces a redirect-URI allowlist is unknown
-   without checking the dashboard. If it does, both patterns need an entry —
-   the loopback one typically needs to be entered as a pattern
-   (`http://127.0.0.1:*/callback` or equivalent), not a single fixed port,
-   since the client picks the port per session.
+4. Create a test user and at least one organization, and make the user a
+   member. Also create a user with no organization and confirm that Clerk sends
+   that user to organization setup rather than issuing an organization-less
+   token or looping OAuth. With personal accounts disabled, the live provider
+   normally stops this case before zpecs; zpecs' own `no_workspace` remediation
+   remains covered at the authenticated API boundary.
 
-## 2. Env variables to fill in
+5. Remove any old statically configured OAuth client with a fixed callback port,
+   or label it as an optional manual test client. It is not part of the product
+   flow. Do not add its client ID or secret to either zpecs app.
 
-| Variable                | Where                | What it does                                                                                                                                                                                                         |
-| ----------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `CLERK_PUBLISHABLE_KEY` | `apps/web/.env` | `wellKnown.ts` derives the Clerk instance's Frontend API domain from this key (see the `deriveFapiUrl` comment in that file) — there is no separate "Clerk domain" variable to set. Starts `pk_test_` or `pk_live_`. |
-| `CLERK_SECRET_KEY`      | `apps/web/.env` | Already present as a placeholder from Task A1. Not read by any code from this task — A4 wires it into token verification. Fill it in now anyway so A4 does not block on this checklist a second time.                |
+Under DCR there are no additional zpecs OAuth environment variables. The only
+Clerk variables are the publishable and secret keys listed above; redirect URI,
+OAuth client ID, and OAuth client secret are negotiated/configured by the MCP
+client and Clerk rather than zpecs.
 
-Both currently hold the literal placeholder `..._placeholder_not_wired_in_yet`
-in `.env` and `.env.example`. Replace the value in `.env` only — `.env.example`
-must stay a placeholder since it is committed.
+## 3. Verify discovery and token claims
 
-## 3. The open question: does the access token carry `org_id` and `org_role`?
+Start `apps/web`, complete one real MCP OAuth flow, and run:
 
-This is the empirical question the plan's Task A2 exists to answer, and this
-task explicitly could not answer it — there is no live instance to call. Once
-one exists, running `verify.sh` (this directory) captures the evidence. Until
-then, this stays open.
+```bash
+CLERK_PUBLISHABLE_KEY=pk_test_... \
+ZPECS_BASE_URL=http://localhost:3004 \
+ZPECS_ACCESS_TOKEN=... \
+  libs/api/src/integration/clerk/verify.sh
+```
 
-**Why it matters:** `org_id` is what lets zpecs resolve which workspace a
-request belongs to at all (§ fail-closed auth table in
-`global-constraints.md` — a valid token with no resolvable `org_id` must
-answer 200 with every tool call `isError`, never 401, or the client loops the
-OAuth flow forever). `org_role` decides whether role-based gating is _possible_
-later — it is explicitly **not** built in the MVP either way, so a "no" answer
-here changes nothing about what ships now, only what could be added after.
+`ZPECS_ACCESS_TOKEN` is optional so discovery can be checked first. When it is
+provided, the script never prints the token or its complete payload. It reports
+only the token format and selected organization fields.
 
-**Three candidate paths, in the order the plan names them:**
+The script requires all of the following:
 
-1. **On `@clerk/backend`'s auth object directly.** This is the fast path if
-   it works — no extra network call. It is also the one we can already rule
-   partially out from the SDK's own types: `@clerk/backend@3.15.0` types the
-   `oauth_token` auth object (what you get back from an OAuth-flow-issued
-   token, as opposed to an API key) as
-   `{ userId, clientId, scopes, subject, … }` — **no `orgId` field.** Only the
-   `api_key` auth object type carries `orgId`. This is a fact about the
-   package's `.d.ts`, not a claim about runtime behavior against a live
-   instance, and it is enough to say this path likely does not carry `org_id`
-   for an OAuth-issued token — but "likely" is doing real work in that
-   sentence; verify it, don't take the types as final proof the field is
-   truly absent at runtime.
+- Clerk's authorization-server metadata has a non-empty
+  `registration_endpoint`, proving DCR is advertised.
+- Clerk supports all four zpecs scopes.
+- zpecs' protected-resource metadata advertises exactly those four scopes.
+- zpecs' authorization-server passthrough still exposes DCR and the four
+  scopes.
+- A supplied JWT has a non-empty `org_id`.
 
-2. **From the already-verified JWT's claims.** If Clerk puts `org_id` (and
-   maybe `org_role`) directly in the access token's claims, decoding the JWT
-   that `@clerk/backend` already verified gets you both fields with no extra
-   call. `verify.sh` decodes (without re-verifying) exactly this token and
-   prints its claims for this reason.
+`org_role` is reported when present, but its absence does not fail the MVP.
+Role-based destructive gates are follow-up work; `confirm: true` remains the
+only destructive confirmation in this branch.
 
-3. **From the userinfo endpoint.** A second HTTP call, but the standard OIDC
-   userinfo response for an org-scoped Clerk token is documented (by Clerk)
-   to include `org_id`, `org_name`, and `org_slug` — the last two are enough
-   to create the workspace row without a second lookup back to Clerk's
-   Backend API. If path 1 and 2 both come up empty, this is the fallback,
-   and it is the only one of the three that also hands you `org_name`/
-   `org_slug` for free.
+## 4. Direct claim path and conditional userinfo fallback
 
-## 4. What the answer changes
+`authenticator.ts` currently reads `org_id`, `org_name`, and `org_slug` from
+the payload of the access token that Clerk has already verified. This keeps the
+normal request path to one Clerk verification call.
 
-- If `org_id` is available (by any of the three paths): A3/A4 proceed as
-  planned — JIT-upsert the workspace on first sight of an `org_id` the
-  database has not seen, resolve `WorkspaceScope` from it on every request.
-- If `org_role` is available: role-based gating becomes _possible_ in a later
-  milestone. It is **not** built now regardless — `global-constraints.md`
-  states no role-based gating in the MVP, `confirm: true` is the only
-  destructive gate. An unverified `org_role` does not block anything in this
-  plan; it only forecloses a future option if it turns out to be absent.
+Do not add a userinfo request speculatively. Add the already identified
+userinfo fallback only if the live OAuth evidence shows either of these cases
+despite granted `user:org:read`:
+
+- Clerk issues an opaque access token rather than a JWT; or
+- the JWT has no `org_id` claim.
+
+`verify.sh` fails with an explicit fallback-required message in either case.
+After implementing the fallback, repeat the token check and the no-organization
+remediation scenario. A missing `org_role` by itself never triggers the
+fallback and does not block this MVP.
+
+## 5. Connect and provision
+
+The standard DCR connection has no preconfigured client credentials:
+
+```bash
+claude mcp add --transport http zpecs http://localhost:3004/mcp
+```
+
+Complete consent and choose an organization. The first authenticated request
+JIT-provisions its workspace. Only after that request should an operator run
+the idempotent `project:bootstrap` command for that Clerk organization.
+
+The chosen organization is fixed in the issued MCP token. Switching the web
+`OrganizationSwitcher` does not rewrite that token: open `/mcp` in Claude Code,
+choose **Clear authentication** for zpecs (or run `claude mcp logout zpecs`),
+reconnect, and select the other organization during consent. The endpoint and
+`claude mcp add` command remain the same.

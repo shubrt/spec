@@ -103,10 +103,10 @@ function protectedResourceMetadata(request: Request): Response {
  * "useful for older clients" (Clerk's own MCP guide, `build-mcp-server.mdx`).
  *
  * This is a live proxy, not a locally-built document: it fetches Clerk's real
- * metadata and relays it verbatim. That is deliberate — this task has no live
- * Clerk instance to verify field values against (see the controller ruling in
- * the A2 brief), so the only claim this code makes about what Clerk returns
- * is "whatever it answered at request time." The fetch target
+ * metadata and relays it verbatim. The canonical Clerk instance's discovery
+ * endpoint works, while DCR and the consent flow still need the live evidence
+ * described in `integration/clerk/verify.sh`; duplicating Clerk-owned fields
+ * locally would make that evidence stale. The fetch target
  * (`<fapi>/.well-known/oauth-authorization-server`) mirrors
  * `@clerk/mcp-tools@0.6.0`'s `fetchClerkAuthorizationServerMetadata`.
  */
@@ -144,5 +144,13 @@ async function authorizationServerMetadata(): Promise<Response> {
  * first.
  */
 export const wellKnownRoutes = new Elysia()
-  .get(PROTECTED_RESOURCE_METADATA_PATH, ({ request }) => protectedResourceMetadata(request))
-  .get("/.well-known/oauth-authorization-server", () => authorizationServerMetadata());
+  .get(PROTECTED_RESOURCE_METADATA_PATH, ({ request, set }) => {
+    const response = protectedResourceMetadata(request);
+    set.status = response.status;
+    return response;
+  })
+  .get("/.well-known/oauth-authorization-server", async ({ set }) => {
+    const response = await authorizationServerMetadata();
+    set.status = response.status;
+    return response;
+  });

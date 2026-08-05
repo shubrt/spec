@@ -42,10 +42,12 @@ import { resolveSessionAuth } from "../../domain/auth/resolveSessionAuth";
  *    file). A global error hook would flatten all three into one envelope and
  *    break at least two of them. Do not add one "for consistency".
  *
- * 2. **This is the only lifecycle hook zpecs takes.** Not the only `resolve` — the
- *    only hook. A second one re-opens the question this ADR closes; if a later
- *    task believes it needs one, it needs a new ADR and a new reason, not this
- *    precedent.
+ * 2. **This is the only zpecs-owned domain/auth lifecycle hook.** Not the only
+ *    `resolve` — the only hook allowed to affect request semantics. The
+ *    executable runtime wraps the core app with evlog, whose internal hooks are
+ *    a strictly observing exception: they may add/emit metadata but may never
+ *    parse bodies, authorize requests, or transform an error response. A second
+ *    zpecs-owned hook still needs a new ADR and a new reason.
  *
  * ──────────────────────────────────────────────────────────────────────────────
  *

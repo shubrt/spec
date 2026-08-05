@@ -39,12 +39,15 @@ export type AuthenticationOutcome<TIdentity> =
   | { status: "not_configured" };
 
 /**
- * ── THE ONE UNVERIFIED DECISION IN THIS FILE ──────────────────────────────────
+ * ── THE LIVE-VERIFIED TOKEN DECISION IN THIS FILE ─────────────────────────────
  *
- * Where `org_id` comes from. **This has not been verified against a live Clerk
- * instance — there is none, and no credential exists.** If zpecs resolves no
- * workspace for a user who *is* in an organization, this function is the first
- * and probably only place to look. Correct it here; nothing else needs to move.
+ * Where `org_id` comes from. The canonical Clerk instance's DCR consent flow was
+ * exercised with a real Claude Code client: it issued a JWT access token carrying
+ * `org_id`, and that direct claim produced the expected JIT workspace. The token
+ * was inspected locally for claim presence and was never printed or persisted.
+ * If a future Clerk configuration resolves no workspace for an organization user,
+ * this function remains the first place to look; correct the one extraction path
+ * here rather than spreading token-shape knowledge through the domain layer.
  *
  * What is known:
  *
@@ -57,7 +60,7 @@ export type AuthenticationOutcome<TIdentity> =
  *    `user:org:read` scope is granted, "an `org_id` claim is included in the
  *    access and ID tokens, and is accessible via user info and token
  *    introspection endpoints". That is a documentation claim about Clerk, not
- *    an observation of this instance.
+ *    now also matches the live observation above.
  *
  * The three candidate read paths the plan names, and why this one:
  *
@@ -68,7 +71,7 @@ export type AuthenticationOutcome<TIdentity> =
  *  3. *From the userinfo endpoint* — one HTTP round trip per request (or a
  *     cache to build), but it is the documented source and it also returns
  *     `org_name` and `org_slug`, which would fill the workspace row outright.
- *     **This is the fallback if path 2 comes up empty**, and it is the right
+ *     **This remains the fallback if path 2 ever comes up empty**, and it is the right
  *     switch to make if Clerk issues opaque access tokens (`oat_…`) rather than
  *     JWTs for this flow — in that case `decodeJwtPayload` below returns null
  *     for every request and every user looks organization-less.

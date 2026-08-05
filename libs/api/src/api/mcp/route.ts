@@ -1,8 +1,38 @@
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import Elysia from "elysia";
+import { recordToolEvent } from "../../_/eventLog";
 import { resolveMcpAuth } from "../../domain/auth/resolveMcpAuth";
+import { zpecsTools } from "../../domain/mcp/registry";
 import { createMcpServer } from "../../domain/mcp/server";
 import { PROTECTED_RESOURCE_METADATA_PATH } from "./wellKnown";
+
+const ZPECS_TOOL_NAMES = new Set<string>(zpecsTools.map(({ name }) => name));
+
+/**
+ * Seeds observability for calls the SDK may reject before a registered tool's
+ * callback runs (unknown tool or invalid arguments). A clone keeps the original
+ * stream untouched for the stateless transport. Only a known registry name is
+ * retained; arbitrary client input is collapsed to a fixed marker, and no body
+ * or arguments are attached to the event.
+ */
+async function recordRequestedTool(request: Request): Promise<void> {
+  try {
+    const message: unknown = await request.clone().json();
+    if (typeof message !== "object" || message === null || !("method" in message)) return;
+    if (message.method !== "tools/call" || !("params" in message)) return;
+    const params = message.params;
+    if (typeof params !== "object" || params === null || !("name" in params)) return;
+    const name = params.name;
+    const tool = typeof name === "string" && ZPECS_TOOL_NAMES.has(name) ? name : "unknown";
+
+    // Error is the safe default: a valid callback overwrites it with the real
+    // outcome, while SDK-level rejections never reach that callback.
+    recordToolEvent(tool, "error");
+  } catch {
+    // Malformed JSON is the transport's concern and carries no trustworthy tool
+    // name. Observability must not replace its JSON-RPC parse error.
+  }
+}
 
 /**
  * The RFC 9728 §5.1 challenge: 401 plus a `WWW-Authenticate` header naming the
@@ -73,6 +103,8 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
   if (outcome.status === "not_configured") return clerkNotConfigured();
   if (outcome.status === "invalid_token") return unauthorized(request, outcome.reason);
 
+  await recordRequestedTool(request);
+
   const transport = new WebStandardStreamableHTTPServerTransport({
     sessionIdGenerator: undefined,
     enableJsonResponse: true,
@@ -87,20 +119,32 @@ export async function handleMcpRequest(request: Request): Promise<Response> {
   return transport.handleRequest(request, { authInfo: outcome.authInfo });
 }
 
-export const mcpRoute = new Elysia().post("/mcp", ({ request }) => handleMcpRequest(request), {
-  // Load-bearing guard, not a style choice. The transport reads the body off
-  // the `Request` itself, so nothing upstream may consume the stream first.
-  //
-  // Measured in A0 and re-measured in A4: Elysia's AOT codegen only injects body
-  // parsing when something in the route reads `body`. Auth reads *headers*, so
-  // the handler below still never names `body` and removing this option still
-  // happens to keep the tests green. The moment anything on this route reads
-  // `body` — a `body` schema, a `derive`/`resolve` hook that touches it — Elysia
-  // consumes the stream and the transport answers
-  //   HTTP 400 {"jsonrpc":"2.0","error":{"code":-32700,
-  //             "message":"Parse error: Invalid JSON"},"id":null}
-  // The option therefore stays as a forward guard, and route.test.ts pins both
-  // halves: that this route declares it, and that the production handler behind
-  // a route which reads `body` really does produce that -32700.
-  parse: "none",
-});
+export const mcpRoute = new Elysia().post(
+  "/mcp",
+  async ({ request, set }) => {
+    const response = await handleMcpRequest(request);
+    // Elysia preserves a returned Response's status on the wire but does not copy
+    // it into `set.status`; evlog reads the latter in its observing after-response
+    // hook. Mirror the already-decided status so the event cannot report a 401 or
+    // 500 as 200. No body or header is inspected here.
+    set.status = response.status;
+    return response;
+  },
+  {
+    // Load-bearing guard, not a style choice. The transport reads the body off
+    // the `Request` itself, so nothing upstream may consume the stream first.
+    //
+    // Measured in A0 and re-measured in A4: Elysia's AOT codegen only injects body
+    // parsing when something in the route reads `body`. Auth reads *headers*, so
+    // the handler below still never names `body` and removing this option still
+    // happens to keep the tests green. The moment anything on this route reads
+    // `body` — a `body` schema, a `derive`/`resolve` hook that touches it — Elysia
+    // consumes the stream and the transport answers
+    //   HTTP 400 {"jsonrpc":"2.0","error":{"code":-32700,
+    //             "message":"Parse error: Invalid JSON"},"id":null}
+    // The option therefore stays as a forward guard, and route.test.ts pins both
+    // halves: that this route declares it, and that the production handler behind
+    // a route which reads `body` really does produce that -32700.
+    parse: "none",
+  },
+);

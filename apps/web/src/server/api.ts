@@ -14,11 +14,6 @@ import { env } from "~/lib/env";
  * rather than forwarding the browser's Clerk cookie is what keeps this a plain
  * server-to-server call, with no cross-origin cookie semantics to get right and
  * no CORS on the API.
- *
- * If Treaty's types ever look stale, the cause is a built `libs/api/dist`:
- * TypeScript prefers `dist/_/index.d.mts` when it exists and only falls through
- * to `src/` while it is absent. Run `clean` in libs/api and re-check. Do
- * not rewrite that package's exports map — the mapping is deliberate.
  */
 export function createApiClient(sessionToken: string) {
   return treaty<App>(env.ZPECS_API_URL, {

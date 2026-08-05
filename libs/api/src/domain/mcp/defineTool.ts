@@ -3,6 +3,7 @@ import type { McpServer, ToolCallback } from "@modelcontextprotocol/sdk/server/m
 import type { CallToolResult, ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { DomainError } from "../../_/errors";
+import { recordToolEvent } from "../../_/eventLog";
 import { type WorkspaceAuthContext, hasWorkspace, readAuthContext } from "../auth/authContext";
 import type { WorkspaceScope } from "../auth/workspaceScope";
 import { type ToolName, TOOL_DESCRIPTIONS } from "./descriptions";
@@ -102,16 +103,18 @@ export function defineTool<TInput extends z.ZodObject>(spec: ToolSpec<TInput>): 
       // `z.output<TInput>` and returns exactly `CallToolResult`. `spec.run` is
       // typed against `z.output<TInput>`, so the narrowing the cast hides is
       // re-established one line later at the only place it is read.
-      const callback = (
+      const callback = async (
         input: Record<string, unknown>,
         extra: { authInfo?: AuthInfo | undefined },
-      ): CallToolResult | Promise<CallToolResult> => {
+      ): Promise<CallToolResult> => {
+        recordToolEvent(spec.name);
         const auth = readAuthContext(extra.authInfo);
         if (!auth) {
           // Unreachable through `POST /mcp`, which always passes an authInfo.
           // A throw rather than an `isError` result on purpose: this is a
           // wiring defect, not a state a user can be in, and it must be loud
           // instead of looking like one of the three documented error surfaces.
+          recordToolEvent(spec.name, "error");
           throw new DomainError(
             "missing_auth_context",
             `Tool ${spec.name} was invoked without an AuthContext — the transport was built without authInfo.`,
@@ -119,14 +122,22 @@ export function defineTool<TInput extends z.ZodObject>(spec: ToolSpec<TInput>): 
         }
 
         if (!hasWorkspace(auth)) {
+          recordToolEvent(spec.name, "error");
           return toolError(TOOL_ERROR_CODE.noWorkspace, NO_WORKSPACE_REMEDIATION);
         }
 
-        return spec.run({
-          input: input as z.output<TInput>,
-          auth,
-          scope: auth.scope,
-        });
+        try {
+          const result = await spec.run({
+            input: input as z.output<TInput>,
+            auth,
+            scope: auth.scope,
+          });
+          recordToolEvent(spec.name, result.isError === true ? "error" : "ok");
+          return result;
+        } catch (error) {
+          recordToolEvent(spec.name, "error");
+          throw error;
+        }
       };
 
       const shared = {
