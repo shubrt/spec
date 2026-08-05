@@ -3,6 +3,7 @@
 import { parseArgs } from "node:util";
 import { z } from "zod";
 import { makeScope } from "../src/domain/auth/workspaceScope";
+import { projectNameSchema } from "../src/domain/projectName";
 import { workspaceRepository } from "../src/domain/repository/workspace";
 
 const CLERK_ORG_ID = /^org_[A-Za-z0-9]+$/;
@@ -14,11 +15,7 @@ export const bootstrapProjectInputSchema = z
       .trim()
       .min(1, "--clerk-org-id must not be empty")
       .regex(CLERK_ORG_ID, "--clerk-org-id must be a Clerk organization id such as org_2abc"),
-    name: z
-      .string({ error: "--name is required" })
-      .trim()
-      .min(1, "--name must contain at least one non-whitespace character")
-      .max(120, "--name must be at most 120 characters"),
+    name: projectNameSchema,
   })
   .strict();
 

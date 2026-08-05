@@ -118,11 +118,34 @@ claude mcp add --transport http zpecs http://localhost:3004/mcp
 ```
 
 Complete consent and choose an organization. The first authenticated request
-JIT-provisions its workspace. Only after that request should an operator run
-the idempotent `project:bootstrap` command for that Clerk organization.
+JIT-provisions its workspace. From then on, every member of the active
+organization can create a project in the web app. The corresponding
+`POST /workspace/projects` request derives its workspace only from the verified
+Clerk session; callers cannot select a tenant in the request body.
+
+The idempotent `project:bootstrap` command remains available as an operations
+tool for pre-provisioning or recovery after that JIT workspace request. It is no
+longer a prerequisite for normal users and must not be presented as the empty
+state remedy:
+
+```bash
+vp run project:bootstrap -- --clerk-org-id org_... --name "Project name"
+```
+
+Both paths trim names, enforce 1–120 characters and share the database's
+case-insensitive per-workspace uniqueness boundary. Project containers are
+unversioned and empty. All Epic, Stream and Task writes remain exclusive to MCP
+change sets.
 
 The chosen organization is fixed in the issued MCP token. Switching the web
 `OrganizationSwitcher` does not rewrite that token: open `/mcp` in Claude Code,
 choose **Clear authentication** for zpecs (or run `claude mcp logout zpecs`),
 reconnect, and select the other organization during consent. The endpoint and
 `claude mcp add` command remain the same.
+
+## 6. Roll out self-service project creation
+
+The schema change adds stricter invariants to existing project rows. Follow the
+collision preflight, deploy order and privacy-safe monitoring runbook in
+[`docs/project-self-service-rollout.md`](../../../../../docs/project-self-service-rollout.md).
+Do not push the schema until both preflight queries return no rows.

@@ -1,6 +1,6 @@
 # Projektmanagement-System – Ergebnisdokument für MCP und Datenbank
 
-**Stand:** 04.08.2026  
+**Stand:** 05.08.2026
 **Zweck:** Dieses Dokument fasst die fachlichen und konzeptionellen Entscheidungen für den Aufbau von zpecs, dem remote erreichbaren MCP-Server und der PostgreSQL-Datenbank zusammen. Es dient als Kontext für einen Implementierungsagenten, insbesondere für Claude Opus 5.
 
 ---
@@ -50,7 +50,14 @@ Es ist kein separater Gateway als zusätzliches Produktkonzept erforderlich. Der
 Claude Code → zpecs über MCP → PostgreSQL
 ```
 
-Die Datenbank wird niemals direkt vom lokalen Agenten angesprochen. Alle Lese- und Schreibvorgänge laufen durch den MCP-Server und die Geschäftslogik von zpecs.
+Die Datenbank wird niemals direkt vom lokalen Agenten angesprochen. Alle
+Agent-Operationen und alle Schreibvorgänge an den versionierten Fachobjekten
+Epic, Stream und Task laufen durch den MCP-Server, das atomare Change-Set und
+die Geschäftslogik von zpecs. Die Web-Anwendung besitzt daneben eine
+session-geschützte REST-Lesefläche und genau eine bewusst enge
+Container-Schreiboperation: Sie darf ein noch leeres, unversioniertes Project
+im Workspace der aktiven Clerk-Organisation anlegen. Diese Ausnahme öffnet
+keinen zweiten Schreibpfad für Epics, Streams oder Tasks.
 
 ---
 
@@ -64,7 +71,10 @@ Workspace
             └── Task
 ```
 
-`Workspace` und `Project` sind organisatorische beziehungsweise technische Kontexte für Zugriff, Datenisolation und Gruppierung. Die fachliche Projektmanagement-Struktur besteht aus drei Kernobjekten:
+`Workspace` und `Project` sind organisatorische beziehungsweise technische
+Kontexte für Zugriff, Datenisolation und Gruppierung. Ein Project ist ein
+unversionierter Container ohne Fachdokument, Revision oder Status. Die
+fachliche Projektmanagement-Struktur besteht aus drei Kernobjekten:
 
 ```text
 Epic → Stream → Task
@@ -833,6 +843,33 @@ Tool-Beschreibungen enthalten:
 
 Die Tool-Beschreibung ist die Anleitung für das Modell. Sie ist aber nicht die alleinige Sicherheits- oder Validierungsschicht.
 
+### 10.6 Gezielte REST-Ausnahme für Project-Container
+
+Mitglieder der aktiven Clerk-Organisation dürfen über die Web-Anwendung alle
+Projects dieses Workspace lesen und mit `POST /workspace/projects` einen leeren
+Project-Container anlegen. Der Request akzeptiert strikt nur den Body
+`{ "name": string }`. Der Name wird getrimmt, muss 1 bis 120 Zeichen lang und
+innerhalb eines Workspace ohne Beachtung der Groß-/Kleinschreibung eindeutig
+sein. Der Workspace stammt ausschließlich aus der verifizierten Clerk-Session;
+eine Workspace-ID im Body ist ungültig und kann niemals den Tenant wählen.
+Eine zusätzliche Rollenprüfung findet nicht statt: Jede gültige Membership der
+aktiven Organisation darf den Container anlegen.
+
+| Status | Ergebnis                                                 |
+| ------ | -------------------------------------------------------- |
+| `201`  | `{ "project": { "id": "<uuid>", "name": "<trimmed>" } }` |
+| `409`  | `project_name_taken`                                     |
+| `422`  | ungültiger Name oder zusätzliche Body-Felder             |
+| `401`  | fehlende oder abgelaufene Session                        |
+| `403`  | keine aktive Clerk-Organisation                          |
+
+Diese Operation ist absichtlich unversioniert: Sie erzeugt weder Epic, Stream
+noch Task und umgeht daher weder Entity-Schema, Revisionen noch Change-Set. Alle
+Writes unterhalb des Project-Containers bleiben MCP-only. Der idempotente
+Admin-Bootstrap bleibt als Betriebswerkzeug für vorbereitende Provisionierung
+und Wiederherstellung erhalten, ist aber keine Voraussetzung mehr für die
+normale Projektanlage durch Mitglieder.
+
 ---
 
 ## 11. Server-seitige Regeln
@@ -841,6 +878,11 @@ Die Applikation muss Regeln unabhängig vom Verhalten des LLM erzwingen:
 
 - Ein Stream gehört zu genau einem existierenden Epic.
 - Ein Task gehört zu genau einem existierenden Stream.
+- Ein Project-Name ist getrimmt, 1 bis 120 Zeichen lang und pro Workspace
+  case-insensitiv eindeutig.
+- Bei der REST-Projektanlage wird der Workspace ausschließlich aus der
+  verifizierten Session abgeleitet; Request-Felder dürfen den Tenant nicht
+  bestimmen.
 - `project_id` und Workspace-Kontext müssen bei jeder Operation geprüft werden.
 - Referenzierte Requirement- und Acceptance-Criteria-IDs müssen existieren.
 - Abhängigkeiten dürfen keine Zyklen erzeugen.
@@ -971,6 +1013,10 @@ Eine klare Trennung:
 
 Eine verlässliche Durchsetzung:
     MCP Tool Descriptions + JSON Schema + serverseitige Domain-Regeln
+
+Eine enge Schreibgrenze:
+    Epic/Stream/Task ausschließlich über MCP-Change-Sets
+    Project-Container ausschließlich über session-geschütztes REST oder Admin-Bootstrap
 
 Eine sichere gemeinsame Nutzung:
     PostgreSQL + Revisionen + Change Sets + Audit Log + Berechtigungen

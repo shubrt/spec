@@ -1,15 +1,17 @@
 import Elysia from "elysia";
 import { z } from "zod";
+import { projectNameSchema } from "../../domain/projectName";
 import { workspaceRepository } from "../../domain/repository/workspace";
 import { authScope } from "../plugin/authScope";
 
 /**
- * The authenticated REST surface the web UI reads. **Read-only, by design.**
+ * The authenticated REST surface the web UI uses.
  *
- * Every write in zpecs goes through an MCP change-set, which is where validation,
- * the readiness gate, the revision trail and the `confirm` prompt live. A write
- * endpoint here would be a second, unguarded door into the same rows, so there is
- * none — not "not yet", none.
+ * Epic, stream and task writes still go exclusively through an MCP change-set,
+ * which owns document validation, readiness, revision history and destructive
+ * confirmation. `POST /workspace/projects` is the one narrow exception: a
+ * project is an unversioned container with none of those fields, and the session
+ * scope is its only tenant input. It cannot write a planning entity.
  *
  * Three properties hold for every route in this file and are the reason it is
  * safe to expose at all:
@@ -52,6 +54,15 @@ const ProjectListDto = z.strictObject({
   projects: z.array(ProjectDto),
 });
 
+/** The only accepted project-create input. Unknown keys are a 422. */
+const CreateProjectBody = z.strictObject({ name: projectNameSchema });
+
+const CreatedProjectDto = z.strictObject({ project: ProjectDto });
+
+const ProjectNameTakenDto = z.strictObject({
+  error: z.literal("project_name_taken"),
+});
+
 const WorkspaceNotFoundDto = z.strictObject({
   error: z.literal("workspace_not_found"),
   message: z.string(),
@@ -84,4 +95,21 @@ export const workspaceHandler = new Elysia({ prefix: "/workspace" })
       return { projects: projects.map((row) => ({ id: row.id, name: row.name })) };
     },
     { response: { 200: ProjectListDto } },
+  )
+  .post(
+    "/projects",
+    async ({ scope, body, status }) => {
+      const result = await workspaceRepository.ensureProject(scope, body.name);
+      if (result.status === "existing") {
+        return status(409, { error: "project_name_taken" as const });
+      }
+
+      return status(201, {
+        project: { id: result.project.id, name: result.project.name },
+      });
+    },
+    {
+      body: CreateProjectBody,
+      response: { 201: CreatedProjectDto, 409: ProjectNameTakenDto },
+    },
   );

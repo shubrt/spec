@@ -1,4 +1,6 @@
 import { Link } from "@tanstack/react-router";
+import { Button } from "~/components/ui/button";
+import { CreateProjectDialog } from "~/components/zpecs/create-project-dialog";
 import type { ApiFailure } from "~/lib/apiFailure";
 
 /**
@@ -43,10 +45,9 @@ export function BoardFailure({ failure }: { failure: ApiFailure }) {
 }
 
 /**
- * A project-less workspace, which is not a failure at all: an administrator has
- * not provisioned its project container yet. Kept next to {@link BoardFailure}
- * because it occupies the same slot on the page, but worded so nobody goes
- * looking for a fault.
+ * A project-less workspace, which is not a failure at all. Any member can create
+ * its first empty project here; entity content still enters through MCP.
+ * Kept next to {@link BoardFailure} because it occupies the same page slot.
  */
 export function EmptyWorkspace({ workspaceName }: { workspaceName: string }) {
   return (
@@ -54,9 +55,12 @@ export function EmptyWorkspace({ workspaceName }: { workspaceName: string }) {
       <div className="max-w-md text-center">
         <h1 className="mb-2 text-base font-bold tracking-tight">No projects yet</h1>
         <p className="text-sm text-secondary-foreground">
-          {workspaceName} has no projects. Ask an administrator to run the project:bootstrap command
-          for this Clerk organization, then reload.
+          {workspaceName} has no projects. Create one to start with an empty project.
         </p>
+        <CreateProjectDialog
+          workspaceName={workspaceName}
+          trigger={<Button className="mt-5">Create project</Button>}
+        />
       </div>
     </div>
   );

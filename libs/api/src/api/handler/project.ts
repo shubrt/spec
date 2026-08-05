@@ -19,10 +19,10 @@ import { authScope } from "../plugin/authScope";
  * epic, and the tasks beneath each stream.
  *
  * Same three properties as `handler/workspace.ts`, and for the same reasons:
- * read-only (every write goes through an MCP change-set, so a write endpoint
- * here would be a second unguarded door), the only tenant key is the `scope`
- * `authScope` resolved from a verified session, and every row is mapped through
- * an explicit Zod v4 DTO rather than returned raw.
+ * this aggregate is read-only (epic/stream/task writes remain MCP change-set
+ * only; the separate project-container POST cannot alter them), the only tenant
+ * key is the `scope` `authScope` resolved from a verified session, and every row
+ * is mapped through an explicit Zod v4 DTO rather than returned raw.
  *
  * The DTO mapping is doing real work here, not ceremony. The entity rows carry a
  * `searchVector` column (a generated `tsvector`, meaningless to a client and

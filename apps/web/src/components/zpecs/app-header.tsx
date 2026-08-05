@@ -1,5 +1,8 @@
 import { Link, useLoaderData, useNavigate } from "@tanstack/react-router";
+import { PlusIcon } from "lucide-react";
+import { Button } from "~/components/ui/button";
 import { WorkspaceSwitcher } from "~/components/zpecs/workspace-switcher";
+import { CreateProjectDialog } from "~/components/zpecs/create-project-dialog";
 import {
   Select,
   SelectContent,
@@ -7,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { projectChangedSearch } from "~/lib/search";
 
 /**
  * The one chrome element: brand, project picker, navigation, workspace switcher.
@@ -31,7 +35,7 @@ export function AppHeader() {
   const switchProject = (projectId: string) => {
     void navigate({
       to: ".",
-      search: (prev) => ({ project: projectId, workspace: prev.workspace }),
+      search: (previous) => projectChangedSearch(previous, projectId),
     });
   };
 
@@ -39,19 +43,19 @@ export function AppHeader() {
   const selectedId = board.status === "ok" ? board.aggregate?.project.id : undefined;
 
   return (
-    <header className="flex h-14 flex-none items-center gap-4 border-b px-4">
+    <header className="flex min-h-14 flex-none flex-wrap items-center gap-2 border-b px-3 py-2 sm:h-14 sm:flex-nowrap sm:gap-4 sm:px-4 sm:py-0">
       <span className="flex items-center gap-2 text-base font-bold tracking-tight">
         <span className="flex size-[26px] items-center justify-center rounded-lg bg-primary text-sm font-bold text-primary-foreground">
           z
         </span>
-        zpecs
+        <span className="hidden sm:inline">zpecs</span>
       </span>
 
       {/* A picker for one project would only be a control that cannot change
           anything, so it appears from two upwards. */}
       {projects.length > 1 && selectedId ? (
         <Select value={selectedId} onValueChange={switchProject}>
-          <SelectTrigger className="w-56">
+          <SelectTrigger className="w-40 min-w-0 sm:w-56">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -64,7 +68,7 @@ export function AppHeader() {
         </Select>
       ) : null}
 
-      <nav className="flex items-center gap-1">
+      <nav className="order-last flex w-full items-center gap-1 border-t pt-2 sm:order-none sm:w-auto sm:border-0 sm:pt-0">
         {NAV.map((item) => (
           <Link
             key={item.to}
@@ -82,6 +86,18 @@ export function AppHeader() {
       </nav>
 
       <div className="flex-1" />
+      {board.status === "ok" ? (
+        <CreateProjectDialog
+          workspaceName={board.workspace.name}
+          trigger={
+            <Button variant="outline" size="sm" className="px-2 md:px-3">
+              <PlusIcon aria-hidden="true" />
+              <span className="hidden md:inline">New project</span>
+              <span className="sr-only md:hidden">New project</span>
+            </Button>
+          }
+        />
+      ) : null}
       <WorkspaceSwitcher />
     </header>
   );

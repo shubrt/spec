@@ -1,8 +1,9 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { db } from "../../integration/drizzle/client";
 import { project } from "../../integration/drizzle/schema/project";
 import { workspace } from "../../integration/drizzle/schema/workspace";
 import type { WorkspaceScope } from "../auth/workspaceScope";
+import { projectNameSchema } from "../projectName";
 import type { DbTransaction } from "./entity";
 
 export type Workspace = typeof workspace.$inferSelect;
@@ -115,15 +116,20 @@ export const workspaceRepository = {
    *
    * Projects are not change-set entities: they have no document or revision,
    * and exist only to contain the versioned epic/stream/task tree. The unique
-   * `(workspace_id, name)` index is the concurrency boundary. A losing insert
-   * waits for the winner and then reads that same scoped row, so parallel
-   * bootstrap commands return one id rather than creating duplicates.
+   * case-insensitive `(workspace_id, lower(name))` index is the concurrency
+   * boundary. A losing insert waits for the winner and then reads that same
+   * scoped row, so parallel browser/API or bootstrap calls return one id rather
+   * than creating duplicates.
    */
   async ensureProject(scope: WorkspaceScope, name: string): Promise<EnsureProjectResult> {
+    const normalizedName = projectNameSchema.parse(name);
     const [inserted] = await db
       .insert(project)
-      .values({ workspaceId: scope, name })
-      .onConflictDoNothing({ target: [project.workspaceId, project.name] })
+      .values({ workspaceId: scope, name: normalizedName })
+      // No explicit target: both the retained exact index and the new lower(name)
+      // expression index are legitimate conflicts. Naming either one would let
+      // the other surface as a 500 under concurrency.
+      .onConflictDoNothing()
       .returning();
     if (inserted) {
       return { status: "created", project: inserted };
@@ -132,7 +138,9 @@ export const workspaceRepository = {
     const [existing] = await db
       .select()
       .from(project)
-      .where(and(eq(project.workspaceId, scope), eq(project.name, name)))
+      .where(
+        and(eq(project.workspaceId, scope), sql`lower(${project.name}) = lower(${normalizedName})`),
+      )
       .limit(1);
     if (!existing) {
       throw new Error("project insert conflicted but the existing scoped row was not found");

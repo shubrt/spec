@@ -4,8 +4,9 @@ import { z } from "zod";
 // Server-only environment, imported only from src/start.ts and src/server/*.
 //
 // There is deliberately no DATABASE_URL here, unlike apps/legacy project: this app owns
-// no database connection. Every read goes to @zpecs/api over HTTP, so the tenant
-// filter and the read-only guarantee live in exactly one place.
+// no database connection. Aggregate reads and the one project-container write go
+// to @zpecs/api over HTTP, so tenant scoping lives in exactly one place. Epic,
+// stream and task writes remain MCP-only.
 export const env = createEnv({
   server: {
     // Origin of @zpecs/api. Deliberately not VITE_-prefixed: keeping it off

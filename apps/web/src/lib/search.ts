@@ -51,6 +51,20 @@ export function workspaceChangedUrl(clerkOrgId: string): string {
 }
 
 /**
+ * The complete search state for opening a project.
+ *
+ * Both the picker and a successful create use this projection. Only the Clerk
+ * workspace reload discriminator survives: detail ids belong to the project
+ * being left and must not open a stale drawer in the next one.
+ */
+export function projectChangedSearch(
+  previous: Pick<DrawerSearch, "workspace">,
+  projectId: string,
+): Pick<DrawerSearch, "project" | "workspace"> {
+  return { project: projectId, workspace: previous.workspace };
+}
+
+/**
  * Resolves `?project=` against the workspace's projects, falling back to the
  * first of the list.
  *
