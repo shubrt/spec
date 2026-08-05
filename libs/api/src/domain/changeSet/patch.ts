@@ -55,7 +55,6 @@ import { type DocumentIssue, ruleIssue, shapeIssue } from "../schema/rules";
  * a patch naming it on an epic produces a document `parseDocument` rejects.
  */
 export const PATCHABLE_GROUPS = ["meta", "content", "links", "provenance", "execution"] as const;
-export type PatchableGroup = (typeof PATCHABLE_GROUPS)[number];
 
 export type PatchResult =
   | { readonly ok: true; readonly document: Record<string, unknown> }

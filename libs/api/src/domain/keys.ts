@@ -42,8 +42,6 @@ export const KEY_PREFIX = {
   task: "TASK",
 } as const satisfies Record<EntityType, string>;
 
-export type KeyPrefix = (typeof KEY_PREFIX)[EntityType];
-
 /** Prefix → entity, derived so the two directions cannot drift apart. */
 const ENTITY_BY_PREFIX = new Map<string, EntityType>(
   ENTITY_TYPE.map((entity) => [KEY_PREFIX[entity], entity]),
