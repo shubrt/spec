@@ -1,4 +1,4 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, or } from "drizzle-orm";
 import { DomainError } from "../../_/errors";
 import { db } from "../../integration/drizzle/client";
 import { entityLink } from "../../integration/drizzle/schema/entityLink";
@@ -170,6 +170,43 @@ async function unlink(
 }
 
 /**
+ * Deletes every relationship an entity takes part in, from **either** end, and
+ * returns how many rows went away.
+ *
+ * `entity_link`'s endpoints are polymorphic, so they carry no foreign key and the
+ * database cannot cascade them: deleting an entity leaves its edges behind unless
+ * something removes them. A left-behind `blocked_by` edge is not inert — it makes
+ * `findDependencyCycle` report a cycle through an entity nobody can look up, and
+ * it re-appears the moment a new entity is created, because nothing else has ever
+ * claimed those endpoint values.
+ *
+ * Both directions in one statement rather than two calls: an edge has no
+ * preferred end, and the entity being deleted is as likely to be the blocker as
+ * the blocked. The change-set pipeline calls this inside the same transaction as
+ * the delete, which is what makes "a deleted entity has no edges" true rather
+ * than likely.
+ */
+async function unlinkAll(
+  scope: WorkspaceScope,
+  endpoint: LinkEndpoint,
+  executor: DbExecutor = db,
+): Promise<number> {
+  const deleted = await executor
+    .delete(entityLink)
+    .where(
+      and(
+        eq(entityLink.workspaceId, scope),
+        or(
+          and(eq(entityLink.sourceType, endpoint.type), eq(entityLink.sourceId, endpoint.id)),
+          and(eq(entityLink.targetType, endpoint.type), eq(entityLink.targetId, endpoint.id)),
+        ),
+      ),
+    )
+    .returning({ id: entityLink.id });
+  return deleted.length;
+}
+
+/**
  * Every `blocked_by` edge of one project.
  *
  * Only `blocked_by`: it is the one relationship that claims an order, so it is the
@@ -229,5 +266,6 @@ const matches = (normalized: NormalizedLink) =>
 export const entityLinkRepository = {
   link,
   unlink,
+  unlinkAll,
   edgesForProject,
 };

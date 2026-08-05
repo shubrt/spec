@@ -31,13 +31,17 @@ import { ENTITY_TYPE, RELATIONSHIP_TYPE } from "../enums";
  * `changeSet/plan.ts`, which reports them as issues an agent can act on, and in
  * the field descriptions below, which is the only channel the model reads.
  *
- * ## Where `confirm` is
+ * ## Why `confirm` is per operation and not per call
  *
- * Not here. `mcp/defineTool.ts` adds `confirm` to every tool marked
- * `destructiveHint` and refuses the call when it is not `true`, so the flag has
- * exactly one spelling and one enforcement point for the whole server. Declaring a
- * second `confirm` per operation would create a gate that can be satisfied in two
- * places and a change set that is half approved — meaningless for an atomic write.
+ * `mcp/defineTool.ts` adds a `confirm` flag to every tool marked
+ * `destructiveHint`, and `apply_change_set` is always destructive. A gate at that
+ * level would therefore demand `confirm: true` on *every* apply, including a change
+ * set that only creates — which trains an agent to send the flag reflexively and
+ * destroys the signal the gate exists to carry. The flag belongs on the operation
+ * that is actually destructive: `archive`, `delete` and `move` carry it, nothing
+ * else accepts it, and `service/changeSet.ts` refuses the whole change set when one
+ * of the three arrives without it. A change set is applied atomically, so a partly
+ * confirmed set is never half applied — it is not applied at all.
  */
 
 /** The seven operations. Order is the order they are listed to the model. */
@@ -117,6 +121,18 @@ const changeSetOperation = z.strictObject({
         "Each section you send replaces that whole section — arrays are not merged, so send " +
         "the complete list. Shape from get_entity_schema.",
     ),
+  // Optional rather than `z.literal(true)`: a required `true` would appear in the
+  // generated JSON Schema as a value the model must supply, so it would supply it
+  // mechanically on the first attempt and the user would never be asked. Optional
+  // in the schema plus a refusal in the pipeline is what forces the round trip
+  // through a human.
+  confirm: z
+    .boolean()
+    .optional()
+    .describe(
+      "archive, delete, move: true only after the user approved this exact operation. " +
+        "Without it the whole change set is refused and nothing is written.",
+    ),
   source: z.string().min(1).max(128).optional().describe("link, unlink: key or temp id."),
   target: z.string().min(1).max(128).optional().describe("link, unlink: key or temp id."),
   relationship: z.enum(LINK_INPUT_RELATIONSHIP).optional().describe("link, unlink."),
@@ -136,9 +152,9 @@ export const OPERATION_FIELDS = {
   update: ["key", "expected_revision", "data"],
   link: ["source", "target", "relationship"],
   unlink: ["source", "target", "relationship"],
-  archive: ["key", "expected_revision"],
-  delete: ["key", "expected_revision"],
-  move: ["key", "expected_revision", "parent"],
+  archive: ["key", "expected_revision", "confirm"],
+  delete: ["key", "expected_revision", "confirm"],
+  move: ["key", "expected_revision", "parent", "confirm"],
 } as const satisfies Record<ChangeSetOperationKind, readonly OperationField[]>;
 
 /** Every field an operation can carry, `operation` itself excluded. */

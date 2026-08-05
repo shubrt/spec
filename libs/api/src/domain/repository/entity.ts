@@ -1,8 +1,12 @@
-import { and, eq } from "drizzle-orm";
+import { type SQL, and, eq, sql } from "drizzle-orm";
+import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { DomainError } from "../../_/errors";
 import type { Db } from "../../integration/drizzle/client";
 import { entityRevision } from "../../integration/drizzle/schema/entityRevision";
+import { epic } from "../../integration/drizzle/schema/epic";
 import { project } from "../../integration/drizzle/schema/project";
+import { stream } from "../../integration/drizzle/schema/stream";
+import { task } from "../../integration/drizzle/schema/task";
 import type { WorkspaceScope } from "../auth/workspaceScope";
 import type { EntityType } from "../enums";
 import { formatKey } from "../keys";
@@ -143,6 +147,63 @@ async function incrementCounter(
       return;
     }
   }
+}
+
+/**
+ * The highest sequence number any key in one project's `table` carries, or `0`.
+ *
+ * `split_part(key, '-', 2)::int` is safe because every key in these tables was
+ * produced by `formatKey`, which is the only writer of the column and always emits
+ * `PREFIX-<positive integer>`.
+ */
+const highestIssuedSequence = (
+  scope: WorkspaceScope,
+  projectId: string,
+  table: PgTable,
+  keyColumn: PgColumn,
+  workspaceColumn: PgColumn,
+  projectColumn: PgColumn,
+): SQL =>
+  sql`coalesce((select max(split_part(${keyColumn}, '-', 2)::int) from ${table} where ${workspaceColumn} = ${scope} and ${projectColumn} = ${projectId}), 0)`;
+
+/**
+ * Raises a project's three key counters to the highest key each table actually
+ * holds for it. Never lowers one.
+ *
+ * This exists because of `move`. Keys are unique per project and are never
+ * rewritten, so moving a subtree into another project imports keys that project's
+ * counters have never heard of: move `STR-1..STR-3` into a project whose
+ * `stream_counter` is `0` and the next stream created there is issued `STR-1`,
+ * which collides with a row that is already sitting in the table. The change set
+ * fails loudly on `stream_project_key_uniq` rather than corrupting anything, but
+ * the target project's stream creation stays wedged until someone notices.
+ *
+ * One statement, and it reads the tables rather than accepting the moved
+ * sequences as a parameter: a caller that computed them could compute them wrong,
+ * and `GREATEST` over what is actually stored is idempotent — running it on a
+ * project that never received a move changes nothing. The change-set pipeline
+ * calls it inside the move's own transaction, so the counters and the moved rows
+ * commit together.
+ *
+ * It does **not** take `SELECT … FOR UPDATE` of its own: it is an `UPDATE` of the
+ * project row, which takes the same row lock `issueKey` waits on, so a concurrent
+ * create in the target project either blocks until this commits or has already
+ * committed its own increment before this reads.
+ */
+export async function raiseKeyCounters(
+  scope: WorkspaceScope,
+  tx: DbTransaction,
+  projectId: string,
+): Promise<void> {
+  await tx
+    .update(project)
+    .set({
+      epicCounter: sql`greatest(${project.epicCounter}, ${highestIssuedSequence(scope, projectId, epic, epic.key, epic.workspaceId, epic.projectId)})`,
+      streamCounter: sql`greatest(${project.streamCounter}, ${highestIssuedSequence(scope, projectId, stream, stream.key, stream.workspaceId, stream.projectId)})`,
+      taskCounter: sql`greatest(${project.taskCounter}, ${highestIssuedSequence(scope, projectId, task, task.key, task.workspaceId, task.projectId)})`,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(project.workspaceId, scope), eq(project.id, projectId)));
 }
 
 /**
