@@ -91,6 +91,10 @@ export type NextWorkTask = {
 
 export type NextWorkResult = {
   readonly tasks: readonly NextWorkTask[];
+  /** Workable, task-unblocked tasks before applying the response limit. */
+  readonly availableCount: number;
+  /** Whether `tasks` is only the most urgent prefix of `availableCount`. */
+  readonly truncated: boolean;
   /** How many workable tasks were hidden because something still blocks them. */
   readonly blockedCount: number;
   /** How many streams were searched — `1` for a stream subject. */
@@ -116,7 +120,7 @@ async function listNextWork(
   }
   const streamCount = streamKeys.size;
   if (streamCount === 0) {
-    return { tasks: [], blockedCount: 0, streamCount };
+    return { tasks: [], availableCount: 0, truncated: false, blockedCount: 0, streamCount };
   }
 
   const candidates = await taskRepository.listByStreams(
@@ -125,7 +129,7 @@ async function listNextWork(
     executor,
   );
   if (candidates.length === 0) {
-    return { tasks: [], blockedCount: 0, streamCount };
+    return { tasks: [], availableCount: 0, truncated: false, blockedCount: 0, streamCount };
   }
 
   const blocked = await dependencyRepository.blockedTaskIds(
@@ -134,13 +138,20 @@ async function listNextWork(
     executor,
   );
   const open = candidates.filter((row) => !blocked.has(row.id));
+  const availableCount = open.length;
 
   const ordered = [...open]
     .sort(compareWorkable)
     .slice(0, clampLimit(options.limit))
     .map((row) => toNextWorkTask(row, streamKeys));
 
-  return { tasks: ordered, blockedCount: candidates.length - open.length, streamCount };
+  return {
+    tasks: ordered,
+    availableCount,
+    truncated: ordered.length < availableCount,
+    blockedCount: candidates.length - open.length,
+    streamCount,
+  };
 }
 
 /**

@@ -36,6 +36,11 @@ import {
 
 export type Task = typeof task.$inferSelect;
 
+const objectOf = (value: unknown): Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+
 export type InsertTaskInput = RevisionAuthor & {
   readonly projectId: string;
   readonly streamId: string;
@@ -66,6 +71,8 @@ export type MoveTaskInput = RevisionAuthor & {
   readonly expectedRevision: number;
   /** The stream the task moves under; its project comes with it. */
   readonly streamId: string;
+  /** A service-validated document adjusted for the new stream. */
+  readonly document?: Record<string, unknown>;
 };
 
 /** A task that is not being done is `cancelled`; `done` means it was finished. */
@@ -287,7 +294,19 @@ async function move(
   }
 
   const revision = input.expectedRevision + 1;
-  const stamped = stampServerOwnedMeta(scope, current.document, {
+  const content = objectOf((input.document ?? current.document).content);
+  const implementation = objectOf(content.implements);
+  const document =
+    Object.keys(implementation).length === 0
+      ? (input.document ?? current.document)
+      : {
+          ...(input.document ?? current.document),
+          content: {
+            ...content,
+            implements: { ...implementation, stream_id: target.id },
+          },
+        };
+  const stamped = stampServerOwnedMeta(scope, document, {
     id: current.id,
     key: current.key,
     projectId: target.projectId,

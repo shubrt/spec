@@ -3,6 +3,7 @@ import { db } from "../../integration/drizzle/client";
 import { project } from "../../integration/drizzle/schema/project";
 import { workspace } from "../../integration/drizzle/schema/workspace";
 import type { WorkspaceScope } from "../auth/workspaceScope";
+import type { DbTransaction } from "./entity";
 
 export type Workspace = typeof workspace.$inferSelect;
 export type Project = typeof project.$inferSelect;
@@ -13,17 +14,22 @@ export type EnsureWorkspaceInput = {
   slug: string | null;
 };
 
+export type EnsureProjectResult = {
+  status: "created" | "existing";
+  project: Project;
+};
+
 export const workspaceRepository = {
   /**
-   * The one repository function that deliberately takes no `scope` first: it is
-   * what *creates* the scope. Everything else in this layer receives a
-   * `WorkspaceScope` because a tenant already exists; `ensure` runs before one
-   * does, from the `org_id` claim of a verified token, which is why it is safe
-   * for it to be unscoped and why nothing else may be.
+   * One of two repository functions that deliberately take no `scope` first:
+   * this one *creates* the scope. The other is the read-only Clerk-id lookup
+   * used only by the admin bootstrap command. Everything else in this layer
+   * receives a `WorkspaceScope` because a tenant already exists; `ensure` runs
+   * before one does, from the `org_id` claim of a verified token.
    *
-   * `test/domain/repository/scope.test.ts` names this function in its
-   * `UNSCOPED` allow-list, so the exception is recorded once and is checked to
-   * still exist rather than being tolerated implicitly.
+   * `test/domain/repository/scope.test.ts` names both exceptions in its
+   * `UNSCOPED` allow-list, so they are recorded explicitly and checked to still
+   * exist rather than being tolerated implicitly.
    *
    * Just-in-time: the first authenticated request for an organization inserts
    * the row; later requests refresh `name`/`slug` from the token so a rename in
@@ -44,10 +50,50 @@ export const workspaceRepository = {
     return row;
   },
 
+  /**
+   * Resolves the local row for the admin bootstrap command.
+   *
+   * This is deliberately the repository's second unscoped operation: the
+   * operator only has Clerk's organization id until this lookup produces the
+   * local uuid from which a {@link WorkspaceScope} can be made. It is read-only
+   * and is not exposed through an API handler.
+   */
+  async findByClerkOrgId(clerkOrgId: string): Promise<Workspace | null> {
+    const [row] = await db
+      .select()
+      .from(workspace)
+      .where(eq(workspace.clerkOrgId, clerkOrgId))
+      .limit(1);
+    return row ?? null;
+  },
+
   /** The scope's own row. Returns null only if the workspace was deleted mid-session. */
   async find(scope: WorkspaceScope): Promise<Workspace | null> {
     const [row] = await db.select().from(workspace).where(eq(workspace.id, scope)).limit(1);
     return row ?? null;
+  },
+
+  /**
+   * Serializes all entity change sets inside one workspace.
+   *
+   * Cross-project moves rewrite descendants without bumping their revisions,
+   * and relationship endpoints have no FK row all writers could lock. Taking
+   * the workspace row before any resolution is therefore the common boundary:
+   * a create/update cannot retain a pre-move parent projection, and a concurrent
+   * link/delete/move cannot create a stale polymorphic edge. Every change set
+   * takes this as its first database lock, avoiding lock-order inversions with
+   * the per-project key counters acquired later.
+   */
+  async lockForChangeSet(scope: WorkspaceScope, tx: DbTransaction): Promise<void> {
+    const [row] = await tx
+      .select({ id: workspace.id })
+      .from(workspace)
+      .where(eq(workspace.id, scope))
+      .for("update")
+      .limit(1);
+    if (!row) {
+      throw new Error("the scoped workspace disappeared before the change set could run");
+    }
   },
 
   /**
@@ -62,6 +108,36 @@ export const workspaceRepository = {
       .from(project)
       .where(eq(project.workspaceId, scope))
       .orderBy(asc(project.name));
+  },
+
+  /**
+   * Provisions the workspace's unversioned project container idempotently.
+   *
+   * Projects are not change-set entities: they have no document or revision,
+   * and exist only to contain the versioned epic/stream/task tree. The unique
+   * `(workspace_id, name)` index is the concurrency boundary. A losing insert
+   * waits for the winner and then reads that same scoped row, so parallel
+   * bootstrap commands return one id rather than creating duplicates.
+   */
+  async ensureProject(scope: WorkspaceScope, name: string): Promise<EnsureProjectResult> {
+    const [inserted] = await db
+      .insert(project)
+      .values({ workspaceId: scope, name })
+      .onConflictDoNothing({ target: [project.workspaceId, project.name] })
+      .returning();
+    if (inserted) {
+      return { status: "created", project: inserted };
+    }
+
+    const [existing] = await db
+      .select()
+      .from(project)
+      .where(and(eq(project.workspaceId, scope), eq(project.name, name)))
+      .limit(1);
+    if (!existing) {
+      throw new Error("project insert conflicted but the existing scoped row was not found");
+    }
+    return { status: "existing", project: existing };
   },
 
   /**

@@ -28,15 +28,7 @@
         },
         "stream_type": {
           "type": "string",
-          "enum": [
-            "feature",
-            "bug",
-            "change",
-            "experiment",
-            "investigation",
-            "refactor",
-            "maintenance"
-          ]
+          "const": "investigation"
         }
       },
       "required": ["title", "status", "stream_type"],
@@ -384,106 +376,6 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128
-        },
-        "depends_on": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "target_type": {
-                "type": "string",
-                "enum": ["epic", "stream", "task"]
-              },
-              "target_id": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 128
-              },
-              "reason": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 2000
-              },
-              "relationship": {
-                "type": "string",
-                "enum": ["blocked_by", "related_to", "extends", "fixes", "supersedes"]
-              }
-            },
-            "required": ["target_type", "target_id", "relationship"],
-            "additionalProperties": false
-          }
-        },
-        "related_streams": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "target_type": {
-                "type": "string",
-                "enum": ["epic", "stream", "task"]
-              },
-              "target_id": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 128
-              },
-              "reason": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 2000
-              }
-            },
-            "required": ["target_type", "target_id"],
-            "additionalProperties": false
-          }
-        },
-        "supersedes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "target_type": {
-                "type": "string",
-                "enum": ["epic", "stream", "task"]
-              },
-              "target_id": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 128
-              },
-              "reason": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 2000
-              }
-            },
-            "required": ["target_type", "target_id"],
-            "additionalProperties": false
-          }
-        },
-        "extends": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "properties": {
-              "target_type": {
-                "type": "string",
-                "enum": ["epic", "stream", "task"]
-              },
-              "target_id": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 128
-              },
-              "reason": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 2000
-              }
-            },
-            "required": ["target_type", "target_id"],
-            "additionalProperties": false
-          }
         }
       },
       "required": ["parent_epic_id"],

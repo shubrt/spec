@@ -53,7 +53,8 @@ export const SERVER_INSTRUCTIONS = [
 
   "Working order: search_context to find what exists, get_context to load it, " +
     "get_entity_schema for the exact document shape, validate_change_set on your proposal, " +
-    "apply_change_set with confirm: true once the user approves. get_next_work answers 'what " +
+    "apply_change_set once the user approves; put confirm: true on each destructive operation. " +
+    "get_next_work answers 'what " +
     "should I do next' for a stream or epic. Prefer extending an existing stream under the " +
     "right epic over creating a duplicate.",
 ].join("\n\n");

@@ -54,6 +54,10 @@ export type LinkInput = {
 
 export type UnlinkInput = Omit<LinkInput, "reason">;
 
+export type SubtreeLinkMoveResult =
+  | { readonly ok: true; readonly moved: number }
+  | { readonly ok: false; readonly boundary: EntityLink };
+
 /**
  * A `blocked_by` edge of one project, in the shape `graph/cycle.ts` consumes
  * directly — no second transformation between the query and the check.
@@ -207,6 +211,54 @@ async function unlinkAll(
 }
 
 /**
+ * Keeps relationship ownership aligned when an entity subtree changes project.
+ *
+ * A link whose two endpoints move with the subtree remains valid and follows it
+ * to the destination project. A link with exactly one endpoint in the subtree
+ * would become a cross-project relationship, a state the normal `link` path
+ * refuses to create, so it is reported to the caller and nothing is changed.
+ * Calling this before the entity move, inside the same transaction, also means
+ * an explicit `unlink` earlier in the same change set is already visible here.
+ */
+async function moveSubtreeLinks(
+  scope: WorkspaceScope,
+  endpoints: readonly LinkEndpoint[],
+  targetProjectId: string,
+  executor: DbExecutor = db,
+): Promise<SubtreeLinkMoveResult> {
+  const subtree = new Set(endpoints.map(({ type, id }) => `${type}:${id}`));
+  if (subtree.size === 0) {
+    return { ok: true, moved: 0 };
+  }
+
+  // `entity_link` endpoints are polymorphic and therefore have no FK to join
+  // through. One workspace-scoped read is the only way to find both incoming
+  // and outgoing edges without issuing one query per descendant.
+  const rows = await executor.select().from(entityLink).where(eq(entityLink.workspaceId, scope));
+  const internal: string[] = [];
+  for (const row of rows) {
+    const sourceInside = subtree.has(`${row.sourceType}:${row.sourceId}`);
+    const targetInside = subtree.has(`${row.targetType}:${row.targetId}`);
+    if (sourceInside !== targetInside) {
+      return { ok: false, boundary: row };
+    }
+    if (sourceInside && targetInside) {
+      internal.push(row.id);
+    }
+  }
+
+  if (internal.length > 0) {
+    await executor
+      .update(entityLink)
+      .set({ projectId: targetProjectId })
+      .where(
+        and(eq(entityLink.workspaceId, scope), or(...internal.map((id) => eq(entityLink.id, id)))),
+      );
+  }
+  return { ok: true, moved: internal.length };
+}
+
+/**
  * Every `blocked_by` edge of one project.
  *
  * Only `blocked_by`: it is the one relationship that claims an order, so it is the
@@ -267,5 +319,6 @@ export const entityLinkRepository = {
   link,
   unlink,
   unlinkAll,
+  moveSubtreeLinks,
   edgesForProject,
 };

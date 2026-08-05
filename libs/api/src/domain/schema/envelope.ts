@@ -79,40 +79,42 @@ export const dependencyRef = entityRef.extend({
 });
 
 /**
- * Epic links. An epic has no `parent_*` link: its parent is the project, which
- * is a relational column and not a document relationship (the controller ruling
- * that `project` is a container, not a versioned entity).
+ * Graph relationships are writable only through change-set `link`/`unlink`
+ * operations. `entity_link` is the operational source used by cycle checks,
+ * context and next-work queries; accepting the same relation in document JSON
+ * would create two stores that can disagree. The stored tier still accepts the
+ * canonical legacy snapshot shape, while every new agent write exposes only the
+ * server-controlled parent link.
  */
-export const epicLinks = z.strictObject({
-  related_epics: z.array(entityRef).optional(),
-  supersedes: z.array(entityRef).optional(),
-  extends: z.array(entityRef).optional(),
-});
+export const epicLinks = {
+  input: z.strictObject({}),
+  stored: z.strictObject({
+    related_epics: z.array(entityRef).optional(),
+    supersedes: z.array(entityRef).optional(),
+    extends: z.array(entityRef).optional(),
+  }),
+} as const;
 
-/** Stream links, exactly the keys the canonical §6 example uses. */
-export const streamLinks = z.strictObject({
-  parent_epic_id: entityId,
-  depends_on: z.array(dependencyRef).optional(),
-  related_streams: z.array(entityRef).optional(),
-  supersedes: z.array(entityRef).optional(),
-  extends: z.array(entityRef).optional(),
-});
+export const streamLinks = {
+  input: z.strictObject({ parent_epic_id: entityId }),
+  stored: z.strictObject({
+    parent_epic_id: entityId,
+    depends_on: z.array(dependencyRef).optional(),
+    related_streams: z.array(entityRef).optional(),
+    supersedes: z.array(entityRef).optional(),
+    extends: z.array(entityRef).optional(),
+  }),
+} as const;
 
-/**
- * Task links, exactly the keys the canonical §7 example uses.
- *
- * `blocks` appears here even though `domain/enums.ts` deliberately omits it from
- * `RELATIONSHIP_TYPE`: the document is what an agent writes, and "A blocks B" is
- * the natural way to say it, while the `entity_link` table stores only
- * `blocked_by` so that a cycle check never has to reconcile two directions. The
- * change-set engine owns that normalisation.
- */
-export const taskLinks = z.strictObject({
-  parent_stream_id: entityId,
-  blocks: z.array(entityRef).optional(),
-  blocked_by: z.array(entityRef).optional(),
-  related_tasks: z.array(entityRef).optional(),
-});
+export const taskLinks = {
+  input: z.strictObject({ parent_stream_id: entityId }),
+  stored: z.strictObject({
+    parent_stream_id: entityId,
+    blocks: z.array(entityRef).optional(),
+    blocked_by: z.array(entityRef).optional(),
+    related_tasks: z.array(entityRef).optional(),
+  }),
+} as const;
 
 /* -------------------------------------------------------------- provenance */
 

@@ -54,7 +54,7 @@ const getNextWorkInput = z.strictObject({
  * everything is waiting on something — and a model that cannot tell them apart
  * will either invent work or report the stream finished.
  */
-const render = (subject: NextWorkSubject, result: NextWorkResult): string => {
+export const renderNextWork = (subject: NextWorkSubject, result: NextWorkResult): string => {
   const scopeLine =
     subject.entity === "epic"
       ? `${subject.key} (epic, ${String(result.streamCount)} stream(s))`
@@ -64,7 +64,7 @@ const render = (subject: NextWorkSubject, result: NextWorkResult): string => {
     const reason =
       result.blockedCount > 0
         ? `${String(result.blockedCount)} workable task(s) exist but every one of them is blocked by a task that is not done. Read their dependencies with get_context before starting anything.`
-        : "No task is ready or in progress. Either the work is finished, or the tasks are still drafts that have not passed their definition-of-done gate.";
+        : "No task is currently ready or in progress. Remaining tasks, if any, are in another non-workable state: draft, explicitly blocked, in review, done, or cancelled.";
     return [`No available work in ${scopeLine}.`, reason].join("\n");
   }
 
@@ -75,14 +75,19 @@ const render = (subject: NextWorkSubject, result: NextWorkResult): string => {
 
   const footer =
     result.blockedCount > 0
-      ? `${String(result.blockedCount)} further workable task(s) are hidden because something still blocks them.`
-      : "Nothing else is blocked.";
+      ? `${String(result.blockedCount)} further ready or in-progress task(s) are hidden by an unfinished task dependency.`
+      : "No additional ready or in-progress task is hidden by an unfinished task dependency.";
 
   return [
-    `${String(result.tasks.length)} available task(s) in ${scopeLine}, most urgent first.`,
+    result.truncated
+      ? `Showing ${String(result.tasks.length)} of ${String(result.availableCount)} available task(s) in ${scopeLine}, most urgent first.`
+      : `${String(result.availableCount)} available task(s) in ${scopeLine}, most urgent first.`,
     ...lines,
+    ...(result.truncated
+      ? ["Only the most urgent prefix is shown because of the requested limit (maximum 20)."]
+      : []),
     footer,
-    "Take one by applying a change set that updates its status to in_progress with expected_revision from get_context.",
+    "For a ready task, start it with a change set that updates status to in_progress using expected_revision from get_context. An in-progress task is already started.",
   ].join("\n");
 };
 
@@ -118,6 +123,6 @@ export const getNextWorkTool = defineTool({
     };
     const result = await nextWorkService.listNextWork(scope, subject, { limit: input.limit });
 
-    return textResult(render(subject, result));
+    return textResult(renderNextWork(subject, result));
   },
 });

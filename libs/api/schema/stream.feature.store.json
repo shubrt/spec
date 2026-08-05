@@ -93,15 +93,7 @@
         },
         "stream_type": {
           "type": "string",
-          "enum": [
-            "feature",
-            "bug",
-            "change",
-            "experiment",
-            "investigation",
-            "refactor",
-            "maintenance"
-          ]
+          "const": "feature"
         }
       },
       "required": ["id", "key", "project_id", "revision", "title", "status", "stream_type"],

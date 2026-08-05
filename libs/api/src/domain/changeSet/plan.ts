@@ -191,6 +191,42 @@ function reportUnusedFields({ index, operation, issues }: OperationContext): voi
       ),
     );
   }
+
+  // These qualifiers are part of a shared, deliberately flat operation schema,
+  // but two shapes cannot use them. An epic already names its project directly
+  // in `parent`; and a temp id is unique inside this set, so it cannot be
+  // ambiguous across projects. Refuse both instead of accepting a field the
+  // executor would silently ignore.
+  if (
+    operation.operation === "create" &&
+    operation.project !== undefined &&
+    (operation.entity === "epic" || (operation.parent !== undefined && isTempId(operation.parent)))
+  ) {
+    issues.push(
+      shapeIssue(
+        `operations[${index}].project`,
+        operation.entity === "epic"
+          ? "project is not used when creating an epic: parent already is the project name."
+          : "project is not used when the create parent is a temp id: temp ids are unique within this change set.",
+      ),
+    );
+  }
+
+  if (
+    operation.operation === "move" &&
+    operation.parent_project !== undefined &&
+    ((operation.key !== undefined && parseKey(operation.key)?.entity === "epic") ||
+      (operation.parent !== undefined && isTempId(operation.parent)))
+  ) {
+    issues.push(
+      shapeIssue(
+        `operations[${index}].parent_project`,
+        operation.key !== undefined && parseKey(operation.key)?.entity === "epic"
+          ? "parent_project is not used when moving an epic: parent already is the new project name."
+          : "parent_project is not used when the new parent is a temp id: temp ids are unique within this change set.",
+      ),
+    );
+  }
 }
 
 function buildOperation(context: OperationContext): PlannedOperation | null {

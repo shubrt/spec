@@ -51,9 +51,9 @@ import { ENTITY_TYPE, RELATIONSHIP_TYPE } from "../enums";
  *
  * A key is unique per project, so a bare key is resolved by asking every project in
  * the workspace, and two answers is a refusal rather than a guess. `project` is how
- * a caller says which one it means; without it a workspace with two projects cannot
- * address `EPIC-1` at all. `create` has no `project` because an epic's `parent`
- * already names one and a stream's or task's project comes with its parent.
+ * a caller qualifies an existing target (or a create's parent). A cross-project
+ * move may need a second qualifier, `parent_project`, because target and new parent
+ * can deliberately live in different projects.
  */
 
 /** The seven operations. Order is the order they are listed to the model. */
@@ -117,19 +117,23 @@ const changeSetOperation = z.strictObject({
       "create, move: the parent's key or temp id — an epic for a stream, a stream for a task. " +
         "An epic's parent is the project.",
     ),
-  // Keys are unique per *project*, so a bare key is resolved by asking every
-  // project in the workspace and two answers is a refusal. Without this field a
-  // two-project workspace could not address EPIC-1 at all. Terse because it is
-  // paid for twice on every listing; the refusal's own message says how to use it.
+  // Keys are unique per project. Terse because this is paid for twice in
+  // tools/list; an ambiguity refusal names the projects and the right qualifier.
   project: z
     .string()
     .min(1)
     .max(200)
     .optional()
     .describe(
-      "All but create: which project the keys belong to, by name. " +
-        "Needed only when two projects use the same key.",
+      "Project of an existing target, link endpoints, or a create's parent. " +
+        "Use only to disambiguate a key.",
     ),
+  parent_project: z
+    .string()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe("Move only: project of the new parent, when that parent key is ambiguous."),
   expected_revision: z
     .int()
     .min(1)
@@ -142,9 +146,9 @@ const changeSetOperation = z.strictObject({
     .record(z.string(), z.unknown())
     .optional()
     .describe(
-      "create, update: document sections (meta, content, links, provenance, execution). " +
-        "Each section you send replaces that whole section — arrays are not merged, so send " +
-        "the complete list. Shape from get_entity_schema.",
+      "create, update: meta, content, provenance, execution. Sent sections replace whole " +
+        "sections; arrays do not merge. Relationships use link/unlink; parents use parent/move. " +
+        "Shape from get_entity_schema.",
     ),
   // Optional rather than `z.literal(true)`: a required `true` would appear in the
   // generated JSON Schema as a value the model must supply, so it would supply it
@@ -173,13 +177,13 @@ const changeSetOperation = z.strictObject({
  * required fields would be a second thing to keep in step.
  */
 export const OPERATION_FIELDS = {
-  create: ["entity", "key", "parent", "data"],
+  create: ["entity", "key", "parent", "project", "data"],
   update: ["key", "project", "expected_revision", "data"],
   link: ["source", "target", "project", "relationship"],
   unlink: ["source", "target", "project", "relationship"],
   archive: ["key", "project", "expected_revision", "confirm"],
   delete: ["key", "project", "expected_revision", "confirm"],
-  move: ["key", "project", "expected_revision", "parent", "confirm"],
+  move: ["key", "project", "expected_revision", "parent", "parent_project", "confirm"],
 } as const satisfies Record<ChangeSetOperationKind, readonly OperationField[]>;
 
 /** Every field an operation can carry, `operation` itself excluded. */
@@ -190,7 +194,7 @@ export const changeSetSchema = z.strictObject({
     .string()
     .min(1)
     .max(500)
-    .describe("Why this change set exists, in the user's terms. Recorded on every revision."),
+    .describe("Why this change set exists. Recorded on entity revisions and new links."),
   operations: z
     .array(changeSetOperation)
     .min(1)

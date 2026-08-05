@@ -36,15 +36,17 @@ import { type DocumentIssue, ruleIssue, shapeIssue } from "../schema/rules";
  * ## One function, one `mode`
  *
  * `validate_change_set` and `apply_change_set` are the *same* run. There is one
- * pipeline, and the dry run differs from the real one in exactly one expression,
- * at the transaction boundary: the transaction is rolled back instead of
- * committed. That is not tidiness. `validate_change_set` is the plan's designated
+ * pipeline and one `shouldCommit` decision. It controls the only two observable
+ * differences: validation does not enforce user consent for a destructive
+ * operation it cannot persist, and its transaction is rolled back instead of
+ * committed. Every schema, reference, document, readiness, cycle, OCC and write
+ * simulation stage remains shared. That is not tidiness. `validate_change_set` is the designated
  * feedback channel for every domain rule that is invisible in the JSON Schema a
  * model sees — `z.toJSONSchema()` silently drops `.refine()` — so the moment a dry
  * run stops predicting the real thing, the only channel that can teach an agent
  * the rules starts lying to it. Two code paths is how that happens, so there is
  * one, and `test/domain/service/changeSet.test.ts` reads this file's source and
- * fails if the decision is made anywhere but at the boundary.
+ * fails if more than one mode decision can make the paths drift.
  *
  * ## The tier follows the written status
  *
@@ -59,7 +61,7 @@ import { type DocumentIssue, ruleIssue, shapeIssue } from "../schema/rules";
  *
  * 1. schema parse · 2. temp-id plan · 3. reference resolution · 4. document parse
  * in the right tier · 5. readiness (inside `parseDocument`) · 6. cycle check ·
- * 7. the `confirm` gate · 8. the write, under OCC.
+ * 7. the apply-only `confirm` gate · 8. the write, under OCC.
  *
  * Stages 3–5, 7 and 8 run **per operation** rather than as whole-set passes, and
  * that is forced rather than chosen: a temp id resolves to a real id only once the
@@ -174,6 +176,11 @@ export async function runChangeSet(
     return { ok: false, code: "invalid_change_set", issues: planned.issues };
   }
 
+  // One decision feeds both places where validation must differ: simulating an
+  // unconfirmed destructive operation is safe inside a rollback-only transaction,
+  // while apply must refuse it before the write and then commit only on success.
+  const shouldCommit = mode === "apply";
+
   // 3–8, in one transaction. `TransactionRollback` is how a refusal — and a dry
   // run — leaves the transaction: Drizzle rolls back on any throw, so carrying
   // the outcome out through the exception is what lets the decision be made in
@@ -187,6 +194,7 @@ export async function runChangeSet(
           actor: request.auth.userId,
           reason: parsed.data.reason,
           changeSet: parsed.data,
+          enforceConfirmation: shouldCommit,
           resolvedByTemp: new Map(),
           resolvedByKey: new Map(),
           linkedProjects: new Set(),
@@ -195,7 +203,7 @@ export async function runChangeSet(
         },
         planned.plan,
       );
-      if (!outcome.ok || mode === "validate") {
+      if (!outcome.ok || !shouldCommit) {
         throw new TransactionRollback(outcome);
       }
       return outcome;
@@ -243,6 +251,8 @@ type Execution = {
   /** The change set's own reason, recorded as `change_reason` on every revision. */
   readonly reason: string;
   readonly changeSet: ChangeSet;
+  /** Consent gates mutation only; validate simulates the operation and rolls it back. */
+  readonly enforceConfirmation: boolean;
   /** Temp id → the entity its `create` produced. Filled as creates execute. */
   readonly resolvedByTemp: Map<string, ResolvedEntity>;
   /** Key → the entity it named, so one key costs one lookup per change set. */
@@ -269,6 +279,10 @@ async function executePlan(
   run: Execution,
   plan: readonly PlannedOperation[],
 ): Promise<ChangeSetOutcome> {
+  // The fixed first lock for every mutation. Creates and updates need it too:
+  // otherwise they can resolve a child in the old project while a concurrent
+  // ancestor move bulk-reprojects that child without changing its revision.
+  await workspaceRepository.lockForChangeSet(run.scope, run.tx);
   for (const operation of plan) {
     const refusal = await executeOperation(run, operation);
     if (refusal) {
@@ -319,8 +333,8 @@ async function listProjects(run: Execution): Promise<readonly Project[]> {
 /**
  * The projects one operation's keys may be resolved in.
  *
- * All of them, unless the operation named a `project` — the qualifier that lets a
- * caller say which of two projects answering to `EPIC-1` it means. Read from the
+ * All of them, unless the operation named the requested qualifier — `project` for
+ * a target or create parent, `parent_project` for a move's new parent. Read from the
  * **submitted** operation rather than from the plan, the same way `confirm` is: the
  * plan models what an operation does, and which project a key lives in is a fact
  * about the workspace, not part of the operation's meaning.
@@ -332,11 +346,12 @@ async function listProjects(run: Execution): Promise<readonly Project[]> {
 async function candidateProjects(
   run: Execution,
   index: number,
+  qualifier: "project" | "parent_project",
 ): Promise<
   | { readonly ok: true; readonly projects: readonly Project[] }
   | { readonly ok: false; readonly refusal: Refusal }
 > {
-  const named = run.changeSet.operations[index]?.project;
+  const named = run.changeSet.operations[index]?.[qualifier];
   const projects = await listProjects(run);
   if (named === undefined) {
     return { ok: true, projects };
@@ -347,7 +362,7 @@ async function candidateProjects(
       ok: false,
       refusal: invalid(
         shapeIssue(
-          `operations[${String(index)}].project`,
+          `operations[${String(index)}].${qualifier}`,
           `No project of this workspace is called ${named}. The projects are: ${projects.map((project) => project.name).join(", ")}.`,
         ),
       ),
@@ -362,15 +377,16 @@ async function candidateProjects(
  * A temp id is already resolved — the plan guarantees its `create` ran earlier —
  * so it costs nothing. A key costs one lookup per candidate project, because a key
  * is unique *per project*: `STR-12` exists in every project that has twelve
- * streams. `project` on the operation narrows the candidates to one; without it
- * every project is asked, and two answers is a refusal that names the projects and
- * says how to disambiguate rather than guessing.
+ * streams. The selected qualifier narrows the candidates to one; without it every
+ * project is asked, and two answers is a refusal that names the projects and says
+ * how to disambiguate rather than guessing.
  */
 async function resolveRef(
   run: Execution,
   ref: PlanRef,
   path: string,
   index: number,
+  qualifier: "project" | "parent_project" = "project",
 ): Promise<Resolution> {
   if (ref.kind === "project") {
     return {
@@ -383,28 +399,28 @@ async function resolveRef(
   if (ref.kind === "temp") {
     const created = run.resolvedByTemp.get(ref.ref);
     if (!created) {
-      // Unreachable through `planChangeSet`, which orders every reference after
-      // the create that declares it. Kept because "the plan is ordered" is an
-      // invariant of another module, and silently reading `undefined` here would
-      // surface as a null id in the database.
-      throw new DomainError(
-        "temp_id_unresolved",
-        `${ref.ref} was referenced before the create that declares it ran.`,
-      );
+      // The plan guarantees the create ran first, but a later delete of an
+      // existing ancestor may have cascade-deleted that created descendant. It
+      // is now an ordinary missing reference, not a server invariant failure.
+      return { ok: false, refusal: invalid(ruleIssue("referenced_ids_must_exist", path)) };
     }
     return { ok: true, value: created };
   }
 
-  const candidates = await candidateProjects(run, index);
+  const candidates = await candidateProjects(run, index, qualifier);
   if (!candidates.ok) {
     return candidates;
   }
-  // The cache is keyed by key alone, so it is only usable when the cached row is in
-  // a project this operation is willing to accept. Without that check, an operation
-  // qualified with `project: "b"` would be served the `EPIC-1` a previous
-  // unqualified operation happened to find in project `a`.
+  // The cache is keyed by key alone, so it is safe only after a qualifier narrowed
+  // this resolution to one project. With several candidates we must query every
+  // one even when a cached row matches one of them; otherwise a qualified first
+  // operation could make a later bare key silently skip an ambiguity.
   const cached = run.resolvedByKey.get(ref.key);
-  if (cached && candidates.projects.some((project) => project.id === cached.projectId)) {
+  if (
+    cached &&
+    candidates.projects.length === 1 &&
+    candidates.projects[0]?.id === cached.projectId
+  ) {
     return { ok: true, value: cached };
   }
   const hits: { project: Project; row: ResolvedEntity }[] = [];
@@ -424,7 +440,7 @@ async function resolveRef(
       refusal: invalid(
         shapeIssue(
           path,
-          `${ref.key} exists in ${String(hits.length)} projects of this workspace, so it does not name one entity. Keys are unique per project. Send this operation again with project set to one of: ${hits.map((hit) => hit.project.name).join(", ")}.`,
+          `${ref.key} exists in ${String(hits.length)} projects of this workspace, so it does not name one entity. Keys are unique per project. Send this operation again with ${qualifier} set to one of: ${hits.map((hit) => hit.project.name).join(", ")}.`,
         ),
       ),
     };
@@ -513,6 +529,34 @@ function summaryOf(entity: EntityType, document: Record<string, unknown>): strin
 }
 
 /**
+ * `content.implements.stream_id` is a denormalised parent reference, not a
+ * caller-selected relationship. Canonicalise it from the resolved parent on
+ * create, update and move so temp ids, keys and stale stream ids cannot survive
+ * in a stored task document.
+ */
+function withTaskImplementationStream(
+  document: Record<string, unknown>,
+  streamId: string,
+): Record<string, unknown> {
+  const content = asRecord(document.content);
+  const implementation = content.implements;
+  if (
+    typeof implementation !== "object" ||
+    implementation === null ||
+    Array.isArray(implementation)
+  ) {
+    return document;
+  }
+  return {
+    ...document,
+    content: {
+      ...content,
+      implements: { ...(implementation as Record<string, unknown>), stream_id: streamId },
+    },
+  };
+}
+
+/**
  * Builds the document a `create` will store and parses it at the agent tier.
  *
  * The envelope's `entity` and `schema_version` literals are added here because
@@ -544,7 +588,13 @@ function buildCreateDocument(
     },
     provenance: asRecord(patched.document.provenance),
   };
-  return { ok: true, document };
+  return {
+    ok: true,
+    document:
+      entity === "task" && parentId !== null
+        ? withTaskImplementationStream(document, parentId)
+        : document,
+  };
 }
 
 /**
@@ -585,13 +635,19 @@ function implementedIdIssues(
   path: string,
 ): readonly DocumentIssue[] {
   const section = asRecord(asRecord(document.content).implements);
-  const known = new Set(
-    [
-      ...idsOf(asRecord(asRecord(parentDocument.content).requirements).functional),
-      ...idsOf(asRecord(asRecord(parentDocument.content).requirements).non_functional),
-      ...idsOf(asRecord(parentDocument.content).acceptance_criteria),
-    ].filter((id) => id !== null),
-  );
+  const known = {
+    requirement_ids: new Set(
+      [
+        ...idsOf(asRecord(asRecord(parentDocument.content).requirements).functional),
+        ...idsOf(asRecord(asRecord(parentDocument.content).requirements).non_functional),
+      ].filter((id): id is string => id !== null),
+    ),
+    acceptance_criteria_ids: new Set(
+      idsOf(asRecord(parentDocument.content).acceptance_criteria).filter(
+        (id): id is string => id !== null,
+      ),
+    ),
+  } as const;
   const issues: DocumentIssue[] = [];
   for (const field of ["requirement_ids", "acceptance_criteria_ids"] as const) {
     const ids = section[field];
@@ -599,7 +655,7 @@ function implementedIdIssues(
       continue;
     }
     ids.forEach((id, position) => {
-      if (typeof id === "string" && !known.has(id)) {
+      if (typeof id === "string" && !known[field].has(id)) {
         issues.push(
           ruleIssue(
             "referenced_ids_must_exist",
@@ -656,7 +712,7 @@ function confirmationRefusal(
   run: Execution,
   operation: Extract<PlannedOperation, { kind: "archive" | "delete" | "move" }>,
 ): Refusal | null {
-  if (run.changeSet.operations[operation.index]?.confirm === true) {
+  if (!run.enforceConfirmation || run.changeSet.operations[operation.index]?.confirm === true) {
     return null;
   }
   return {
@@ -787,6 +843,15 @@ async function applyUpdate(
     return target.refusal;
   }
 
+  if (Object.hasOwn(operation.data, "links")) {
+    return invalid(
+      shapeIssue(
+        `${path}.links`,
+        "Document links are server-controlled. Use link or unlink for relationships, and move to change a parent.",
+      ),
+    );
+  }
+
   // Section-level replace, not an array deep-merge: what an author sent is what
   // that section now says. `patch.ts` carries the argument.
   const patched = applySectionPatch(target.value.document, operation.data);
@@ -796,7 +861,15 @@ async function applyUpdate(
   // The store tier, because the merged document carries the `meta` the server
   // stamped on it. The five server-owned fields are re-stamped by the repository
   // afterwards, so a patch that names one is overwritten rather than honoured.
-  const parsedDocument = parseAt(patched.document, "store", path);
+  const parentStreamId =
+    target.value.entity === "task"
+      ? asRecord(target.value.document.links).parent_stream_id
+      : undefined;
+  const candidate =
+    target.value.entity === "task" && typeof parentStreamId === "string"
+      ? withTaskImplementationStream(patched.document, parentStreamId)
+      : patched.document;
+  const parsedDocument = parseAt(candidate, "store", path);
   if (!parsedDocument.ok) {
     return parsedDocument.refusal;
   }
@@ -891,7 +964,7 @@ async function applyRetirement(
     for (const endpoint of [{ type: target.value.entity, id: target.value.id }, ...subtree]) {
       await entityLinkRepository.unlinkAll(run.scope, endpoint, run.tx);
     }
-    run.resolvedByKey.delete(target.value.key);
+    evictDeletedSubtree(run, [{ type: target.value.entity, id: target.value.id }, ...subtree]);
   } else {
     refresh(run, target.value, written.row);
   }
@@ -903,6 +976,25 @@ async function applyRetirement(
     null,
   );
   return null;
+}
+
+/** Removes every cache entry a cascading delete took with its root. */
+function evictDeletedSubtree(
+  run: Execution,
+  endpoints: readonly { readonly type: EntityType; readonly id: string }[],
+): void {
+  const deleted = new Set(endpoints.map(({ type, id }) => `${type}:${id}`));
+  const wasDeleted = (entity: ResolvedEntity) => deleted.has(`${entity.entity}:${entity.id}`);
+  for (const [key, entity] of run.resolvedByKey) {
+    if (wasDeleted(entity)) {
+      run.resolvedByKey.delete(key);
+    }
+  }
+  for (const [ref, entity] of run.resolvedByTemp) {
+    if (wasDeleted(entity)) {
+      run.resolvedByTemp.delete(ref);
+    }
+  }
 }
 
 async function archiveEntity(
@@ -969,6 +1061,10 @@ async function applyMove(
     if (unconfirmed) {
       return unconfirmed;
     }
+    const linkRefusal = await prepareCrossProjectMove(run, target.value, project.id, parentPath);
+    if (linkRefusal) {
+      return linkRefusal;
+    }
     written = await epicRepository.move(
       run.scope,
       {
@@ -981,7 +1077,13 @@ async function applyMove(
       run.tx,
     );
   } else {
-    const parent = await resolveRef(run, operation.parent, parentPath, operation.index);
+    const parent = await resolveRef(
+      run,
+      operation.parent,
+      parentPath,
+      operation.index,
+      "parent_project",
+    );
     if (!parent.ok) {
       return parent.refusal;
     }
@@ -989,16 +1091,46 @@ async function applyMove(
     if (unconfirmed) {
       return unconfirmed;
     }
+    const linkRefusal = await prepareCrossProjectMove(
+      run,
+      target.value,
+      parent.value.projectId,
+      parentPath,
+    );
+    if (linkRefusal) {
+      return linkRefusal;
+    }
     const common = {
       id: target.value.id,
       expectedRevision: operation.expectedRevision,
       changedBy: run.actor,
       changeReason: run.reason,
     };
+    let taskDocument: Record<string, unknown> | undefined;
+    if (target.value.entity === "task") {
+      taskDocument = withTaskImplementationStream(target.value.document, parent.value.id);
+      const parsed = parseAt(taskDocument, "store", `operations[${String(operation.index)}]`);
+      if (!parsed.ok) {
+        return parsed.refusal;
+      }
+      taskDocument = parsed.document;
+      const issues = implementedIdIssues(
+        taskDocument,
+        parent.value.document,
+        `operations[${String(operation.index)}]`,
+      );
+      if (issues.length > 0) {
+        return invalid(...issues);
+      }
+    }
     written =
       target.value.entity === "stream"
         ? await streamRepository.move(run.scope, { ...common, epicId: parent.value.id }, run.tx)
-        : await taskRepository.move(run.scope, { ...common, streamId: parent.value.id }, run.tx);
+        : await taskRepository.move(
+            run.scope,
+            { ...common, streamId: parent.value.id, document: taskDocument },
+            run.tx,
+          );
   }
 
   if (!written.ok) {
@@ -1008,10 +1140,59 @@ async function applyMove(
     // The moved subtree brought keys the target project's counters have never
     // issued, so its next create would hand out a key that is already taken.
     await raiseKeyCounters(run.scope, run.tx, written.row.projectId);
+    // Existing dependency edges that moved with the subtree now belong to the
+    // destination graph. Check both sides: links added earlier in this same set
+    // may have marked only the source before being reprojected above.
+    run.linkedProjects.add(target.value.projectId);
+    run.linkedProjects.add(written.row.projectId);
+    // An ancestor move rewrites descendants in bulk. Both caches may therefore
+    // carry a correct id with a stale project/document; reload them before a
+    // later qualified lookup, temp-parent create or link can consume that state.
+    await refreshResolutionCaches(run);
+  } else {
+    refresh(run, target.value, written.row);
   }
-  refresh(run, target.value, written.row);
   record(run, operation.index, "move", { ...written.row, entity: target.value.entity }, null);
   return null;
+}
+
+/**
+ * Reprojects links wholly contained in a cross-project move and refuses a move
+ * that would strand either endpoint in the old project.
+ *
+ * The repository move changes the whole entity subtree, so relationship
+ * handling must use that same subtree rather than only the explicit target.
+ * Running before the entity write is safe because every caller is already in
+ * the change-set transaction: any later refusal rolls both parts back.
+ */
+async function prepareCrossProjectMove(
+  run: Execution,
+  target: ResolvedEntity,
+  targetProjectId: string,
+  path: string,
+): Promise<Refusal | null> {
+  if (target.projectId === targetProjectId) {
+    return null;
+  }
+  const descendants = await listDescendants(run.scope, run.tx, {
+    type: target.entity,
+    id: target.id,
+  });
+  const links = await entityLinkRepository.moveSubtreeLinks(
+    run.scope,
+    [{ type: target.entity, id: target.id }, ...descendants],
+    targetProjectId,
+    run.tx,
+  );
+  if (links.ok) {
+    return null;
+  }
+  return invalid(
+    shapeIssue(
+      path,
+      `This subtree has an existing ${links.boundary.relationshipType} relationship to an entity that is not moving with it. A relationship cannot cross projects. Unlink that boundary relationship in an earlier operation, then move the subtree.`,
+    ),
+  );
 }
 
 async function applyLink(
@@ -1175,7 +1356,60 @@ function writeRefusal(
 
 /** Keeps the key cache pointing at the row as it stands after a write. */
 function refresh(run: Execution, target: ResolvedEntity, row: StoredEntity): void {
-  run.resolvedByKey.set(target.key, { ...row, entity: target.entity });
+  const refreshed: ResolvedEntity = { ...row, entity: target.entity };
+  // A created entity is addressable through both its temp ref and its issued
+  // real key later in the same set. Updating through either alias must refresh
+  // every alias; otherwise a later temp-parent create validates against the
+  // pre-update document/revision while a key lookup sees the new one.
+  const sameIdentity = (entity: ResolvedEntity) =>
+    entity.entity === target.entity && entity.id === target.id;
+  for (const [key, entity] of run.resolvedByKey) {
+    if (sameIdentity(entity)) {
+      run.resolvedByKey.set(key, refreshed);
+    }
+  }
+  for (const [ref, entity] of run.resolvedByTemp) {
+    if (sameIdentity(entity)) {
+      run.resolvedByTemp.set(ref, refreshed);
+    }
+  }
+  run.resolvedByKey.set(target.key, refreshed);
+}
+
+/**
+ * Reloads every resolved entity after a bulk subtree re-projection.
+ *
+ * A move of an epic or stream changes descendant rows without visiting them one
+ * by one in this service. Key refs and temp refs are both allowed later in the
+ * same atomic set, so retaining either old value would let the old project
+ * qualifier through or create a child/link with mismatched project ownership.
+ */
+async function refreshResolutionCaches(run: Execution): Promise<void> {
+  const loaded = new Map<string, ResolvedEntity>();
+  const current = async (cached: ResolvedEntity): Promise<ResolvedEntity> => {
+    const identity = `${cached.entity}:${cached.id}`;
+    const already = loaded.get(identity);
+    if (already) {
+      return already;
+    }
+    const row = await findById(run, cached.entity, cached.id);
+    if (!row) {
+      throw new DomainError(
+        "resolved_entity_disappeared",
+        `${cached.key} disappeared while refreshing the resolution cache after a move.`,
+      );
+    }
+    const refreshed = { ...row, entity: cached.entity };
+    loaded.set(identity, refreshed);
+    return refreshed;
+  };
+
+  for (const [key, cached] of run.resolvedByKey) {
+    run.resolvedByKey.set(key, await current(cached));
+  }
+  for (const [ref, cached] of run.resolvedByTemp) {
+    run.resolvedByTemp.set(ref, await current(cached));
+  }
 }
 
 function record(

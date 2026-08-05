@@ -13,7 +13,6 @@ import {
 } from "./envelope";
 import { streamReadinessIssues, taskReadinessIssues } from "./readiness";
 import { ruleIssue, shapeIssue, type DocumentIssue } from "./rules";
-import { streamBaseContent } from "./stream/base";
 import { STREAM_CONTENT } from "./stream/registry";
 import { taskContent, taskExecution } from "./task/content";
 
@@ -60,51 +59,55 @@ const epicDocument = {
     schemaVersion: EPIC_SCHEMA_VERSION,
     meta: epicMeta.input,
     content: epicContent,
-    links: epicLinks,
+    links: epicLinks.input,
   }),
   store: documentEnvelope({
     entity: "epic",
     schemaVersion: EPIC_SCHEMA_VERSION,
     meta: epicMeta.stored,
     content: epicContent,
-    links: epicLinks,
+    links: epicLinks.stored,
   }),
 } as const;
 
-const streamDocument = <Meta extends z.ZodType, Content extends z.ZodType>(
+const streamDocument = <Meta extends z.ZodType, Content extends z.ZodType, Links extends z.ZodType>(
   meta: Meta,
   content: Content,
+  links: Links,
 ) =>
   documentEnvelope({
     entity: "stream",
     schemaVersion: STREAM_SCHEMA_VERSION,
     meta,
     content,
-    links: streamLinks,
+    links,
   });
 
 /**
- * One document schema per *distinct* content schema, not per stream type: the
- * four types that still use the base share one schema instance.
- *
- * `test/domain/schema/registry.test.ts` asserts that `STREAM_CONTENT` contains
- * exactly these four distinct content schemas, so adding an `experiment` content
- * schema to the registry without wiring it up here fails a test rather than
- * quietly validating experiments against the base.
+ * One envelope per stream type, even when several types share the same base
+ * content. Narrowing `meta.stream_type` to a literal is what makes each public
+ * schema exact: a feature schema must reject a bug document before content is
+ * considered, just as `parseDocument` selects by that discriminator at runtime.
  */
+const streamDocumentPair = <const Type extends StreamType, Content extends z.ZodType>(
+  streamType: Type,
+  content: Content,
+) => {
+  const discriminator = { stream_type: z.literal(streamType) };
+  return {
+    agent: streamDocument(streamMeta.input.extend(discriminator), content, streamLinks.input),
+    store: streamDocument(streamMeta.stored.extend(discriminator), content, streamLinks.stored),
+  };
+};
+
 const streamDocuments = {
-  agent: {
-    feature: streamDocument(streamMeta.input, STREAM_CONTENT.feature),
-    bug: streamDocument(streamMeta.input, STREAM_CONTENT.bug),
-    investigation: streamDocument(streamMeta.input, STREAM_CONTENT.investigation),
-    base: streamDocument(streamMeta.input, streamBaseContent),
-  },
-  store: {
-    feature: streamDocument(streamMeta.stored, STREAM_CONTENT.feature),
-    bug: streamDocument(streamMeta.stored, STREAM_CONTENT.bug),
-    investigation: streamDocument(streamMeta.stored, STREAM_CONTENT.investigation),
-    base: streamDocument(streamMeta.stored, streamBaseContent),
-  },
+  feature: streamDocumentPair("feature", STREAM_CONTENT.feature),
+  bug: streamDocumentPair("bug", STREAM_CONTENT.bug),
+  investigation: streamDocumentPair("investigation", STREAM_CONTENT.investigation),
+  change: streamDocumentPair("change", STREAM_CONTENT.change),
+  experiment: streamDocumentPair("experiment", STREAM_CONTENT.experiment),
+  refactor: streamDocumentPair("refactor", STREAM_CONTENT.refactor),
+  maintenance: streamDocumentPair("maintenance", STREAM_CONTENT.maintenance),
 } as const;
 
 /**
@@ -119,14 +122,14 @@ const taskDocument = {
     schemaVersion: TASK_SCHEMA_VERSION,
     meta: taskMeta.input,
     content: taskContent,
-    links: taskLinks,
+    links: taskLinks.input,
   }).extend({ execution: taskExecution.optional() }),
   store: documentEnvelope({
     entity: "task",
     schemaVersion: TASK_SCHEMA_VERSION,
     meta: taskMeta.stored,
     content: taskContent,
-    links: taskLinks,
+    links: taskLinks.stored,
   }).extend({ execution: taskExecution.optional() }),
 } as const;
 
@@ -141,14 +144,13 @@ const taskDocument = {
  */
 export const DOCUMENT_SCHEMAS = {
   epic: epicDocument,
-  "stream.feature": { agent: streamDocuments.agent.feature, store: streamDocuments.store.feature },
-  "stream.bug": { agent: streamDocuments.agent.bug, store: streamDocuments.store.bug },
-  "stream.investigation": {
-    agent: streamDocuments.agent.investigation,
-    store: streamDocuments.store.investigation,
-  },
-  /** The schema the four not-yet-modelled stream types validate against. */
-  "stream.base": { agent: streamDocuments.agent.base, store: streamDocuments.store.base },
+  "stream.feature": streamDocuments.feature,
+  "stream.bug": streamDocuments.bug,
+  "stream.investigation": streamDocuments.investigation,
+  "stream.change": streamDocuments.change,
+  "stream.experiment": streamDocuments.experiment,
+  "stream.refactor": streamDocuments.refactor,
+  "stream.maintenance": streamDocuments.maintenance,
   task: taskDocument,
 } as const satisfies Record<string, Record<DocumentSource, z.ZodType>>;
 
@@ -172,16 +174,8 @@ export const DOCUMENT_SCHEMA_TARGETS = Object.keys(
 export type EpicDocumentInput = z.infer<typeof epicDocument.agent>;
 export type EpicDocument = z.infer<typeof epicDocument.store>;
 
-export type StreamDocumentInput =
-  | z.infer<typeof streamDocuments.agent.feature>
-  | z.infer<typeof streamDocuments.agent.bug>
-  | z.infer<typeof streamDocuments.agent.investigation>
-  | z.infer<typeof streamDocuments.agent.base>;
-export type StreamDocument =
-  | z.infer<typeof streamDocuments.store.feature>
-  | z.infer<typeof streamDocuments.store.bug>
-  | z.infer<typeof streamDocuments.store.investigation>
-  | z.infer<typeof streamDocuments.store.base>;
+export type StreamDocumentInput = z.infer<(typeof streamDocuments)[StreamType]["agent"]>;
+export type StreamDocument = z.infer<(typeof streamDocuments)[StreamType]["store"]>;
 
 export type TaskDocumentInput = z.infer<typeof taskDocument.agent>;
 export type TaskDocument = z.infer<typeof taskDocument.store>;
@@ -210,17 +204,13 @@ const property = (value: unknown, key: string): unknown =>
 /**
  * Picks the stream document schema for a type.
  *
- * Written as explicit cases rather than a lookup table because the table would
- * be a second copy of the type → content mapping that `stream/registry.ts`
- * already owns, and two copies drift. The `base` fallback is guarded by the
- * registry test named above.
+ * The type-indexed envelope narrows the discriminator and takes its content from
+ * the one total registry, so runtime parsing and public schema generation cannot
+ * choose different variants.
  */
 const streamSchemaFor = (source: DocumentSource, streamType: StreamType) => {
-  const set = streamDocuments[source];
-  if (streamType === "feature") return set.feature;
-  if (streamType === "bug") return set.bug;
-  if (streamType === "investigation") return set.investigation;
-  return set.base;
+  const pair = streamDocuments[streamType];
+  return source === "agent" ? pair.agent : pair.store;
 };
 
 /* -------------------------------------------------------------- reporting */

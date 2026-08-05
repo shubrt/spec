@@ -140,7 +140,7 @@ export const RULES = {
     spec: "§11, §12",
     enforcement: "db",
     message:
-      "Every write is snapshotted into entity_revision with author, timestamp and revision. Revisions are append-only and cannot be edited or deleted.",
+      "Every versioned document create, update, archive or move appends an entity_revision snapshot with author and revision; hard delete preserves prior snapshots. Link/unlink audit is not part of this MVP.",
   },
 
   /* ------------------------------------------------------------- service */
@@ -176,7 +176,7 @@ export const RULES = {
     spec: "§11",
     enforcement: "service",
     message:
-      "Deleting, archiving or moving an entity requires confirm: true on the call. Without it the operation is refused and nothing is written.",
+      "Deleting, archiving or moving an entity requires confirm: true on that operation. Without it the whole change set is refused and nothing is written.",
   },
 } as const satisfies Record<string, Rule>;
 

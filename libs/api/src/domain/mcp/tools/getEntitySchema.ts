@@ -2,6 +2,7 @@ import { z } from "zod";
 import { ENTITY_TYPE, STREAM_TYPE, type StreamType } from "../../enums";
 import type { DocumentSchemaTarget } from "../../schema/document";
 import { documentJsonSchema } from "../../schema/jsonSchema";
+import { resolveDocumentSchemaTarget, usesBaseStreamContentOnly } from "../../schema/target";
 import { defineTool } from "../defineTool";
 import { TOOL_ERROR_CODE, textResult, toolError } from "../results";
 
@@ -26,25 +27,6 @@ const getEntitySchemaInput = z.strictObject({
     }),
 });
 
-/**
- * Which schema each stream type resolves to. Total over the enum, so an eighth
- * stream type is a type error here until it is mapped.
- *
- * Four types point at `stream.base` because they have no sections of their own in
- * the MVP. Listed explicitly rather than behind a `?? "stream.base"` fallback, so
- * which types are provisional is visible in the source — the same shape
- * `schema/stream/registry.ts` uses for the same reason.
- */
-const STREAM_TARGET = {
-  feature: "stream.feature",
-  bug: "stream.bug",
-  investigation: "stream.investigation",
-  change: "stream.base",
-  experiment: "stream.base",
-  refactor: "stream.base",
-  maintenance: "stream.base",
-} as const satisfies Record<StreamType, DocumentSchemaTarget>;
-
 export const getEntitySchemaTool = defineTool({
   name: "get_entity_schema",
   title: "Get entity schema",
@@ -64,7 +46,10 @@ export const getEntitySchemaTool = defineTool({
           `Each stream type has its own content schema, so stream_type is required for a stream. One of: ${STREAM_TYPE.join(", ")}.`,
         );
       }
-      return renderSchema(STREAM_TARGET[input.stream_type], input.stream_type);
+      return renderSchema(
+        resolveDocumentSchemaTarget({ entity: "stream", streamType: input.stream_type }),
+        input.stream_type,
+      );
     }
 
     if (input.stream_type !== undefined) {
@@ -74,7 +59,7 @@ export const getEntitySchemaTool = defineTool({
       );
     }
 
-    return renderSchema(input.entity, undefined);
+    return renderSchema(resolveDocumentSchemaTarget({ entity: input.entity }), undefined);
   },
 });
 
@@ -88,13 +73,14 @@ export const getEntitySchemaTool = defineTool({
 function renderSchema(target: DocumentSchemaTarget, streamType: StreamType | undefined) {
   const schema = documentJsonSchema(target);
   const note =
-    target === "stream.base"
+    streamType !== undefined && usesBaseStreamContentOnly(streamType)
       ? `This is the base stream schema: ${streamType ?? ""} has no sections of its own yet, so only the invariant ones apply.`
       : `Schema target: ${target}.`;
 
   return textResult(
     [
       note,
+      "This schema describes the composed agent document. In create/update data omit entity, schema_version and links: create derives them from operation.entity and operation.parent, while update accepts only the sections to replace.",
       "Cross-field rules that JSON Schema cannot express are in the field descriptions, and validate_change_set is what enforces them.",
       JSON.stringify(schema),
     ].join("\n"),

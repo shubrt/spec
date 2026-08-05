@@ -1,11 +1,4 @@
-import {
-  COMPACT_FIRST,
-  CONFIRM_RULE,
-  PROJECTED_CONTEXT,
-  SCHEMA_ON_DEMAND,
-  STREAM_TYPES_LINE,
-  VALIDATE_FIRST,
-} from "./fragments";
+import { CONFIRM_RULE } from "./fragments";
 
 /**
  * Tier 2 of three (domain spec §10.5): what each tool needs the model to know at
@@ -18,9 +11,8 @@ import {
  * `tools/list`. A description that will not fit belongs in a `zpecs://guide/`
  * resource with a pointer from here.
  *
- * Composed from `fragments.ts` rather than written out, so a rule that changes is
- * edited once. Keyed by tool name so `descriptions.ts` and the registry cannot
- * silently disagree about which tools exist.
+ * Shared cross-tool policy still comes from `fragments.ts`; tool-specific prose
+ * stays compact here. Keyed by tool name so the registry cannot silently drift.
  *
  * **What deliberately is not here:** the hierarchy glossary and the
  * do-not-invent rule. Both are tier 1 — `SERVER_INSTRUCTIONS`, delivered once at
@@ -33,50 +25,41 @@ import {
 export const TOOL_DESCRIPTIONS = {
   search_context: [
     "Full-text and fuzzy-title search over this workspace's epics, streams and tasks. Start here.",
-    COMPACT_FIRST,
-    "Search before you create: an existing stream under the right epic is almost always the " +
-      "right home for a new requirement, and a duplicate stream is the costliest mistake here.",
+    "Returns compact hits; load a chosen key with get_context.",
+    "Search before create so a new requirement does not duplicate an existing stream.",
   ].join(" "),
 
   get_context: [
-    "One epic, stream or task by key, with what is needed to act on it: the parent stream's " +
-      "purpose, referenced requirements, linked acceptance criteria, applicable business rules " +
-      "and edge cases, dependencies.",
-    PROJECTED_CONTEXT,
+    "One epic, stream or task by key, with its document and projected parent context, rules, " +
+      "acceptance criteria and dependencies.",
     "For 'implement TASK-123', call this on the task — the stream context comes with it.",
   ].join(" "),
 
   get_entity_schema: [
-    "The exact JSON Schema a document must satisfy, per entity kind (epic, stream, task) and, " +
-      "for a stream, its stream_type — each type has its own content schema.",
-    SCHEMA_ON_DEMAND,
-    "Satisfying this schema is not sufficient: the cross-field rules live in the field " +
-      "descriptions and validate_change_set enforces them.",
-    STREAM_TYPES_LINE,
+    "The exact composed agent-document JSON Schema for an epic, task or concrete stream_type.",
+    "For change-set data omit entity, schema_version and links: create derives them from entity " +
+      "and parent, while update accepts section patches. Field descriptions carry rules that " +
+      "validate_change_set enforces.",
   ].join(" "),
 
   validate_change_set: [
-    "Dry-run a change set on the identical path apply_change_set uses: schema, relationships, " +
-      "cycles, business rules. Nothing is written.",
-    VALIDATE_FIRST,
-    "Fix what it reports by correcting the change set, never by working around the rule. If a " +
-      "report shows the user's intent was ambiguous, ask them rather than choosing.",
+    "Rollback-only dry run of apply's schema, references, readiness, cycle and OCC path. Nothing " +
+      "is written; unconfirmed destructive operations may be simulated safely.",
+    "Correct reported issues in the proposal; ask rather than guessing when intent is ambiguous.",
   ].join(" "),
 
   apply_change_set: [
-    "Apply a change set atomically — create, update, link, archive, delete, move. All operations " +
-      "land or none do. Returns ids, keys, new revisions.",
+    "Apply a change set atomically — create, update, link, unlink, archive, delete, move. All " +
+      "operations land or none do. Returns ids, keys, new revisions.",
     CONFIRM_RULE,
     "A stale expected_revision is rejected, never overwritten: re-read with get_context and " +
       "rebuild instead of retrying.",
   ].join(" "),
 
   get_next_work: [
-    "The open, unblocked tasks of a stream or epic in priority order — what to work on next.",
-    "A task appears only when its own status is workable and nothing it is blocked_by is still " +
-      "open, so the list is safe to start at the top of.",
-    "If it comes back empty, say so and ask what should happen next. Never invent tasks to fill " +
-      "it: an empty list usually means the stream needs planning, which is the user's decision.",
+    "Ready or in-progress tasks of a stream or epic, most urgent first.",
+    "Hides tasks blocked by an unfinished task; stream or epic dependencies remain in get_context.",
+    "If empty, say so and ask what comes next — never invent work.",
   ].join(" "),
 } as const;
 

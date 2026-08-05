@@ -59,6 +59,25 @@ export const STREAM_CONTENT = {
 } as const satisfies Record<StreamType, z.ZodType>;
 
 /**
+ * The JSON-Schema target exposed for each stream type.
+ *
+ * This lives next to `STREAM_CONTENT` so parsing, `get_entity_schema` and the
+ * schema resources cannot grow independent ideas of which stream variants are
+ * fully modelled. Like the content registry, it is total over `StreamType`: a
+ * newly added type must make an explicit schema decision here.
+ */
+export const STREAM_SCHEMA_TARGET = {
+  feature: "stream.feature",
+  bug: "stream.bug",
+  investigation: "stream.investigation",
+  // These four share base content but keep a concrete discriminator schema.
+  change: "stream.change",
+  experiment: "stream.experiment",
+  refactor: "stream.refactor",
+  maintenance: "stream.maintenance",
+} as const satisfies Record<StreamType, string>;
+
+/**
  * True when the type still uses the base schema unchanged, i.e. its
  * type-specific sections have not been modelled yet.
  *

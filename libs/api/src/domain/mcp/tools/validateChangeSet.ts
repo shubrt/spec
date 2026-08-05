@@ -7,10 +7,11 @@ import { TOOL_ERROR_CODE, formatIssues, textResult, toolError } from "../results
 import { defineTool } from "../defineTool";
 
 /**
- * The dry run. Same input, same pipeline, same everything as `apply_change_set`
- * except that the transaction is rolled back — which is why both tools are built
- * from this one file's helpers rather than from two copies of them. A dry run that
- * accepted what the real call would reject is worse than no dry run at all.
+ * The dry run. Same input and domain pipeline as `apply_change_set`, with a
+ * rollback-only transaction. The one deliberate policy exception is consent:
+ * validate may simulate an unconfirmed destructive operation because it cannot
+ * persist it; apply refuses that operation until its own `confirm: true` is
+ * present. That lets the user inspect a fully validated proposal before approval.
  *
  * `changeSetSchema` is the real schema from `changeSet/schema.ts`; the local
  * stand-in agent δ declared here is gone. Note the consequence: an input the schema
@@ -44,7 +45,7 @@ function renderOutcome(mode: ChangeSetMode, outcome: ChangeSetOutcome): CallTool
   }
   const header =
     mode === "validate"
-      ? `Valid. ${String(outcome.applied.length)} operation(s) would be applied, and nothing was written. The keys below are the ones apply_change_set will issue.`
+      ? `Valid. ${String(outcome.applied.length)} operation(s) would be applied, and nothing was written. Created keys below are provisional: a concurrent writer can advance the counters, so the apply_change_set result is authoritative.`
       : `Applied ${String(outcome.applied.length)} operation(s).`;
   const lines = outcome.applied.map((applied) => {
     const parts = [`operations[${String(applied.index)}] ${applied.operation}`];
@@ -57,6 +58,12 @@ function renderOutcome(mode: ChangeSetMode, outcome: ChangeSetOutcome): CallTool
     if (applied.ref !== null) {
       parts.push(`(${applied.ref})`);
     }
+    // A validate run creates rows only inside a transaction that is deliberately
+    // rolled back. Its UUIDs never become public entity ids and must not be
+    // presented as predictions; apply's committed ids are authoritative.
+    if (mode === "apply" && applied.id !== null) {
+      parts.push(`id ${applied.id}`);
+    }
     if (applied.revision !== null) {
       parts.push(`revision ${String(applied.revision)}`);
     }
@@ -64,8 +71,8 @@ function renderOutcome(mode: ChangeSetMode, outcome: ChangeSetOutcome): CallTool
   });
   const footer =
     mode === "validate"
-      ? "Call apply_change_set with the identical change set to write it."
-      : "Report the keys to the user. Use the revisions above as expected_revision on your next update.";
+      ? "To write it, call apply_change_set with this proposal; add confirm: true to every archive, delete or move the user explicitly approves. Then use apply's committed ids, keys and revisions."
+      : "Report the ids and keys to the user. Use the revisions above as expected_revision on your next update.";
   return textResult([header, ...lines, footer].join("\n"));
 }
 
