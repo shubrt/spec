@@ -33,31 +33,36 @@ export const UNKNOWN_RULE =
   "the field or record it as an open question or assumption. An incomplete draft is a correct " +
   "result; a confident guess is a defect that outlives the conversation.";
 
-/** The MVP's only gate on destructive operations (global constraints: no role gating). */
+/**
+ * The MVP's only gate on destructive operations (global constraints: no role
+ * gating). **Per operation, not per call:** a flag on the tool would be demanded
+ * even by a change set that only creates, and a reflexive confirmation is not
+ * consent.
+ */
 export const CONFIRM_RULE =
-  "Writing is gated: pass confirm: true. Show the user exactly what will change, get explicit " +
-  "approval, then repeat the identical call with confirm: true.";
+  "archive, delete and move need confirm: true on the operation itself. Show the user exactly " +
+  "what will be removed or moved, get explicit approval, then repeat the identical call with " +
+  "confirm set.";
 
 /** Why read tools return summaries. */
 export const COMPACT_FIRST =
-  "Results are compact on purpose — key, title, type, status, snippet — so a search costs a " +
-  "fraction of a document. Load full detail with get_context, only for the keys you need.";
+  "Hits are compact — key, title, type, status, snippet. Load full detail with get_context, " +
+  "only for the keys you need.";
 
 /** Domain spec §7: the context bundle is a projection. */
 export const PROJECTED_CONTEXT =
-  "Related entities are projected, not duplicated: you get the fields needed to act, not a " +
-  "second copy of a document that can be loaded in its own right.";
+  "Related entities are projected, not duplicated: the fields needed to act, not a second copy " +
+  "of a document you could load in its own right.";
 
 /** Why the dry run exists at all (Zod → JSON Schema drops cross-field rules). */
 export const VALIDATE_FIRST =
-  "Validate before applying. validate_change_set runs the same schema, relationship and " +
-  "cycle checks apply_change_set runs and writes nothing, and it is the only channel that " +
-  "reports the cross-field rules a JSON Schema cannot express.";
+  "Validate first: it is the only channel that reports the cross-field rules a JSON Schema " +
+  "cannot express.";
 
 /** Why guessing a document shape is never necessary. */
 export const SCHEMA_ON_DEMAND =
-  "Do not write a document from memory of these descriptions: call get_entity_schema for the " +
-  "exact current JSON Schema, or read the zpecs://schema/ resources.";
+  "Never write a document from memory of these descriptions — call get_entity_schema, or read " +
+  "the zpecs://schema/ resources.";
 
 /** Both lists derive from domain/enums.ts, so a new value cannot go unmentioned. */
 export const STREAM_TYPES_LINE = `Stream types: ${STREAM_TYPE.join(", ")}.`;

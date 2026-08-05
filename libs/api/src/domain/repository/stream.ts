@@ -127,6 +127,26 @@ async function listByProject(
     .orderBy(asc(stream.createdAt), asc(stream.key));
 }
 
+/**
+ * The streams of one epic.
+ *
+ * `get_next_work`'s first read when it is pointed at an epic: an epic spans all of
+ * its streams, so the tasks it can offer are the tasks of these. Served by
+ * `stream_epic_idx`. `listByProject` is the wrong tool for it — it would read
+ * every stream of the project and throw most of them away.
+ */
+async function listByEpic(
+  scope: WorkspaceScope,
+  epicId: string,
+  executor: DbExecutor = db,
+): Promise<Stream[]> {
+  return await executor
+    .select()
+    .from(stream)
+    .where(and(eq(stream.workspaceId, scope), eq(stream.epicId, epicId)))
+    .orderBy(asc(stream.createdAt), asc(stream.key));
+}
+
 async function insert(
   scope: WorkspaceScope,
   input: InsertStreamInput,
@@ -408,6 +428,7 @@ export const streamRepository = {
   findById,
   findByKey,
   listByProject,
+  listByEpic,
   insert,
   bumpRevision,
   archive,

@@ -1,14 +1,24 @@
 import { z } from "zod";
 import { ENTITY_TYPE } from "../../enums";
+import { referenceService } from "../../service/reference";
+import {
+  DEFAULT_SEARCH_LIMIT,
+  MAX_SEARCH_LIMIT,
+  type SearchContextResult,
+  searchService,
+} from "../../service/search";
 import { defineTool } from "../defineTool";
-import { notImplemented } from "../results";
+import { TOOL_ERROR_CODE, structuredResult, toolError } from "../results";
 
 /**
- * Local, temporary input schema. **Replaced by task B15** (the `search_context`
- * repository and service), which owns the real query options. It is defined here
- * rather than imported from `domain/schema/` on purpose: the shared content
- * schemas describe *documents*, not tool arguments, and a tool's arguments must
- * stay small enough to read in a `tools/list` payload.
+ * The scan tool: five short fields per hit, so a model can look at twenty of them
+ * and then spend its context on the one it wants through `get_context`.
+ *
+ * `project` is resolved by **name** (an id is accepted too). A project row has no
+ * key and no slug — only a `name`, unique per workspace — so the name is the one
+ * identifier an agent can ever be told. An unknown project is refused rather than
+ * ignored: silently searching the whole workspace after a typo would answer a
+ * question nobody asked.
  */
 const searchContextInput = z.strictObject({
   query: z
@@ -22,16 +32,25 @@ const searchContextInput = z.strictObject({
     .describe("Restrict to one entity kind. Omit to search epics, streams and tasks together."),
   project: z
     .string()
+    .min(1)
+    .max(200)
     .optional()
-    .describe("Restrict to one project by key or slug. Omit to search the whole workspace."),
-  limit: z.number().int().min(1).max(50).default(20).describe("Maximum number of hits."),
+    .describe("Restrict to one project, by its name. Omit to search the whole workspace."),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_SEARCH_LIMIT)
+    .default(DEFAULT_SEARCH_LIMIT)
+    .describe("Maximum number of hits."),
 });
 
 /**
- * The compact hit shape from the plan's tool table. This is the one tool the plan
- * specifies `structuredContent` for, which is why it is the one tool here with an
- * `outputSchema` — the others return text until workstream B gives them a real
- * result shape.
+ * The compact hit shape, plus `matching`.
+ *
+ * `matching` is not decoration: when nothing contains the words the service falls
+ * back to trigram similarity on titles, and a model that cannot tell the two apart
+ * will act on a neighbouring stream believing it found the right one.
  */
 const searchContextOutput = z.strictObject({
   hits: z.array(
@@ -40,10 +59,31 @@ const searchContextOutput = z.strictObject({
       title: z.string(),
       type: z.string().describe("Entity kind, plus the stream type for a stream."),
       status: z.string(),
-      snippet: z.string().describe("Matching text, trimmed. Not the whole document."),
+      snippet: z.string().describe("Matching text, matched words in **bold**."),
     }),
   ),
+  matching: z
+    .enum(["exact", "fuzzy"])
+    .describe("fuzzy: nothing contained your words, so these are the closest names."),
 });
+
+const summarise = (result: SearchContextResult): string => {
+  if (result.hits.length === 0) {
+    return (
+      "No epic, stream or task in this workspace matches that. Widen the words, or ask the " +
+      "user whether this work exists yet — do not create anything on the strength of an " +
+      "empty search."
+    );
+  }
+  const header =
+    result.matching === "fuzzy"
+      ? `${String(result.hits.length)} approximate hit(s): no document contains those words, so these are the closest names. Confirm one is what you meant before acting on it.`
+      : `${String(result.hits.length)} hit(s):`;
+  const lines = result.hits.map(
+    (hit) => `${hit.key} [${hit.type}, ${hit.status}] ${hit.title} — ${hit.snippet}`,
+  );
+  return [header, ...lines].join("\n");
+};
 
 export const searchContextTool = defineTool({
   name: "search_context",
@@ -51,5 +91,29 @@ export const searchContextTool = defineTool({
   annotations: { readOnlyHint: true },
   input: searchContextInput,
   output: searchContextOutput,
-  run: () => notImplemented("search_context"),
+  run: async ({ input, scope }) => {
+    let projectId: string | undefined;
+    if (input.project !== undefined) {
+      const resolved = await referenceService.resolveProject(scope, input.project);
+      if (!resolved.ok) {
+        return toolError(
+          TOOL_ERROR_CODE.notFound,
+          `No project of this workspace is called ${resolved.ref}. Call search_context without project to search all of them.`,
+        );
+      }
+      projectId = resolved.project.id;
+    }
+
+    const result = await searchService.searchContext(scope, {
+      query: input.query,
+      entity: input.entity,
+      projectId,
+      limit: input.limit,
+    });
+
+    return structuredResult(summarise(result), {
+      hits: result.hits,
+      matching: result.matching,
+    });
+  },
 });

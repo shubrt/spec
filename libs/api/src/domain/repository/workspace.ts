@@ -80,4 +80,37 @@ export const workspaceRepository = {
       .limit(1);
     return row ?? null;
   },
+
+  /**
+   * One project by the only two things an agent can know about it.
+   *
+   * A project row has no key and no slug — it has `id`, and a `name` that is
+   * unique per workspace via `project_workspace_name_uniq`. So the name *is* the
+   * human-facing identifier, and it is the one an agent has: it read it out of a
+   * `get_context` result or the user said it. An id is accepted too, because the
+   * web UI has one and a tool argument should not have to be translated first.
+   *
+   * The discriminator is the shape of the value, not a second argument: a uuid is
+   * an id, anything else is a name. That cannot be ambiguous, because a project
+   * whose *name* is a uuid would still be found by that uuid — the id lookup is
+   * scoped, so it returns null and the name lookup is not reached only when the
+   * uuid really is an id in this workspace.
+   */
+  async findProjectByRef(scope: WorkspaceScope, ref: string): Promise<Project | null> {
+    if (UUID_PATTERN.test(ref)) {
+      const byId = await workspaceRepository.findProject(scope, ref);
+      if (byId) {
+        return byId;
+      }
+    }
+    const [row] = await db
+      .select()
+      .from(project)
+      .where(and(eq(project.workspaceId, scope), eq(project.name, ref)))
+      .limit(1);
+    return row ?? null;
+  },
 };
+
+/** Same shape `makeScope` checks. A non-uuid reaching a `uuid` column throws. */
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

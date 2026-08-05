@@ -36,7 +36,10 @@ import { formatKey } from "../keys";
  * Structural rather than `PgTransaction<…>`: naming that type means repeating the
  * client's four generic parameters here, and they change whenever the schema does.
  */
-export type DbExecutor = Pick<Db, "select" | "insert" | "update" | "delete" | "execute">;
+export type DbExecutor = Pick<
+  Db,
+  "select" | "selectDistinct" | "insert" | "update" | "delete" | "execute"
+>;
 
 /**
  * A real transaction, required by every write.
@@ -147,6 +150,69 @@ async function incrementCounter(
       return;
     }
   }
+}
+
+/** One entity, in the polymorphic form `entity_link` addresses an endpoint by. */
+export type EntityEndpoint = {
+  readonly type: EntityType;
+  readonly id: string;
+};
+
+/**
+ * Everything the database will cascade-delete along with one entity.
+ *
+ * This exists because `entity_link`'s endpoints are polymorphic `(type, id)`
+ * pairs, so they carry no foreign key and the database cannot cascade them.
+ * Deleting an epic therefore deletes its streams and tasks through their real FKs
+ * and leaves *their* edges behind — a dangling `blocked_by` the cycle check would
+ * still walk through, pointing at an entity nobody can look up. The change-set
+ * pipeline unlinks this whole list, which is the only way that cleanup can be
+ * complete.
+ *
+ * It must be called **before** the delete: afterwards the descendants are gone and
+ * there is nothing left to enumerate. That is one or two extra `SELECT`s on a
+ * delete, which is the right trade against an unbounded number of orphan rows.
+ *
+ * Returns the descendants only, never the entity itself — the caller already holds
+ * that endpoint, and including it would make "unlink the subtree" and "unlink the
+ * entity" two spellings of one thing.
+ */
+export async function listDescendants(
+  scope: WorkspaceScope,
+  tx: DbTransaction,
+  endpoint: EntityEndpoint,
+): Promise<readonly EntityEndpoint[]> {
+  if (endpoint.type === "task") {
+    return [];
+  }
+  if (endpoint.type === "stream") {
+    const tasks = await tx
+      .select({ id: task.id })
+      .from(task)
+      .where(and(eq(task.workspaceId, scope), eq(task.streamId, endpoint.id)));
+    return tasks.map((row) => ({ type: "task", id: row.id }));
+  }
+
+  const streams = await tx
+    .select({ id: stream.id })
+    .from(stream)
+    .where(and(eq(stream.workspaceId, scope), eq(stream.epicId, endpoint.id)));
+  const descendants: EntityEndpoint[] = streams.map((row) => ({ type: "stream", id: row.id }));
+  if (streams.length === 0) {
+    return descendants;
+  }
+  // One statement for every task under the epic, joined through the stream rather
+  // than one query per stream: an epic with thirty streams would otherwise cost
+  // thirty round trips inside the delete's transaction.
+  const tasks = await tx
+    .select({ id: task.id })
+    .from(task)
+    .innerJoin(stream, eq(task.streamId, stream.id))
+    .where(and(eq(task.workspaceId, scope), eq(stream.epicId, endpoint.id)));
+  for (const row of tasks) {
+    descendants.push({ type: "task", id: row.id });
+  }
+  return descendants;
 }
 
 /**

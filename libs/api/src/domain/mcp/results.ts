@@ -1,4 +1,5 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import type { DocumentIssue } from "../schema/rules";
 
 /**
  * The machine-readable codes a `tools/call` can fail with at this layer.
@@ -7,14 +8,26 @@ import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
  * errors. The three boundaries zpecs renders an error across (JSON-RPC error,
  * `isError` tool result, HTTP JSON body) stay deliberately distinct, so nothing
  * here leaks into the other two.
+ *
+ * The last five mirror `service/changeSet.ts`'s outcome codes and the two ways a
+ * key lookup can fail, so a model sees the same word for the same condition
+ * whichever tool it called.
  */
 export const TOOL_ERROR_CODE = {
   /** Authenticated, but the token resolved to no workspace. */
   noWorkspace: "no_workspace",
-  /** A `destructiveHint` tool was called without `confirm: true`. */
+  /** A destructive change-set operation arrived without `confirm: true`. */
   destructiveRequiresConfirm: "destructive_requires_confirm",
-  /** The tool exists with its final name, schema and annotations; the body does not. */
-  notImplemented: "not_implemented",
+  /** The arguments parsed but violate a rule JSON Schema cannot express. */
+  invalidArguments: "invalid_arguments",
+  /** The change set cannot be applied. Carries `DocumentIssue`s with rule ids. */
+  invalidChangeSet: "invalid_change_set",
+  /** Someone else wrote the entity first. Carries the current document. */
+  revisionConflict: "revision_conflict",
+  /** Nothing in this workspace answers to that key or that project. */
+  notFound: "not_found",
+  /** Two projects of this workspace answer to that key. */
+  ambiguousKey: "ambiguous_key",
 } as const;
 
 export type ToolErrorCode = (typeof TOOL_ERROR_CODE)[keyof typeof TOOL_ERROR_CODE];
@@ -35,12 +48,6 @@ export const NO_WORKSPACE_REMEDIATION =
   "issued that carries the organization. Until then no zpecs tool can return data. Do not " +
   "retry — every retry with this token fails the same way.";
 
-/** What a model is told when it called a destructive tool without confirmation. */
-export const CONFIRM_REMEDIATION =
-  "This tool writes. Nothing was changed. Show the user exactly what you are about to " +
-  "change, get their explicit approval, then call this tool again with `confirm: true` and " +
-  "otherwise identical arguments.";
-
 /**
  * A failed tool call.
  *
@@ -59,22 +66,88 @@ export function toolError(code: ToolErrorCode, message: string): CallToolResult 
   };
 }
 
-// There is deliberately no success builder here yet. Every tool body returns
-// `notImplemented`, so one would be dead code — and the tool that gets a real
-// result first (search_context, B15) also has the only `outputSchema`, which
-// makes `structuredContent` mandatory rather than optional. Whoever writes that
-// body writes the builder its contract actually needs.
+/**
+ * A successful tool call whose result the tool declares an `outputSchema` for.
+ *
+ * Both halves are supplied on purpose. `structuredContent` is what a client that
+ * listed the output schema reads and validates against it — the SDK *refuses* a
+ * result that has an output schema and no structured content
+ * (`server/mcp.js`, `validateToolOutput`). The `content` text is what a model
+ * without structured-output support reads, and the SDK never fills it in, so
+ * omitting it would make the result invisible to exactly those clients.
+ */
+export function structuredResult(
+  text: string,
+  structuredContent: Record<string, unknown>,
+): CallToolResult {
+  return {
+    content: [{ type: "text", text }],
+    structuredContent,
+  };
+}
+
+/** A successful tool call whose result is prose or JSON the model reads directly. */
+export function textResult(text: string): CallToolResult {
+  return {
+    content: [{ type: "text", text }],
+  };
+}
 
 /**
- * The body every tool ships with until workstream B fills it in. Names the tool
- * so a model that receives one can say which capability is missing, and states
- * the shape is final so it does not try a different tool name.
+ * The one rendering of a failed key lookup, shared by `get_context` and
+ * `get_next_work`.
+ *
+ * Both tools take a key and an optional project, so both can fail the same four
+ * ways, and each message has to be actionable on its own — a model does not get to
+ * ask a follow-up question. `ambiguous` is the important one: it names the projects
+ * that answered and the argument that resolves it, because a workspace with two
+ * projects is otherwise unable to address `EPIC-1` at all.
  */
-export function notImplemented(toolName: string): CallToolResult {
-  return toolError(
-    TOOL_ERROR_CODE.notImplemented,
-    `The tool \`${toolName}\` is registered with its final name, input schema and ` +
-      "annotations, but its implementation is not deployed yet. Report this to the user as a " +
-      "server-side gap and do not attempt a workaround.",
-  );
+export function keyLookupError(resolution: {
+  reason: "not_a_key" | "unknown_project" | "not_found" | "ambiguous";
+  key?: string;
+  ref?: string;
+  projectNames?: readonly string[];
+}): CallToolResult {
+  switch (resolution.reason) {
+    case "not_a_key": {
+      return toolError(
+        TOOL_ERROR_CODE.invalidArguments,
+        `${resolution.key ?? ""} is not an entity key. Keys look like EPIC-1, STR-12 or TASK-45, and search_context returns them. Do not guess one.`,
+      );
+    }
+    case "unknown_project": {
+      return toolError(
+        TOOL_ERROR_CODE.notFound,
+        `No project of this workspace is called ${resolution.ref ?? ""}. Omit project to search all of them.`,
+      );
+    }
+    case "not_found": {
+      return toolError(
+        TOOL_ERROR_CODE.notFound,
+        `Nothing in this workspace has the key ${resolution.key ?? ""}. Find it with search_context rather than trying neighbouring numbers.`,
+      );
+    }
+    case "ambiguous": {
+      const names = (resolution.projectNames ?? []).join(", ");
+      return toolError(
+        TOOL_ERROR_CODE.ambiguousKey,
+        `${resolution.key ?? ""} exists in more than one project of this workspace, so it does not name one entity — keys are unique per project, not per workspace. Call this tool again with project set to one of: ${names}.`,
+      );
+    }
+  }
+}
+
+/**
+ * `DocumentIssue`s rendered as the one feedback channel the model acts on.
+ *
+ * One line per issue, path first, because the path is what tells an agent which
+ * of fifty operations to fix. `issue.message` already carries the rule id in
+ * brackets when there is a rule (`ruleText`); a shape failure has no rule and is
+ * printed without one rather than with an invented id.
+ */
+export function formatIssues(issues: readonly DocumentIssue[]): string {
+  return issues
+    .map((issue) => `- ${issue.path.length === 0 ? "(change set)" : issue.path}: ${issue.message}`)
+    .join("\n");
 }

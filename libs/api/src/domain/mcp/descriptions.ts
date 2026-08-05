@@ -1,11 +1,9 @@
 import {
   COMPACT_FIRST,
   CONFIRM_RULE,
-  HIERARCHY,
   PROJECTED_CONTEXT,
   SCHEMA_ON_DEMAND,
   STREAM_TYPES_LINE,
-  UNKNOWN_RULE,
   VALIDATE_FIRST,
 } from "./fragments";
 
@@ -23,70 +21,62 @@ import {
  * Composed from `fragments.ts` rather than written out, so a rule that changes is
  * edited once. Keyed by tool name so `descriptions.ts` and the registry cannot
  * silently disagree about which tools exist.
+ *
+ * **What deliberately is not here:** the hierarchy glossary and the
+ * do-not-invent rule. Both are tier 1 — `SERVER_INSTRUCTIONS`, delivered once at
+ * `initialize` — and repeating them per tool paid for them six times on every
+ * `tools/list` while risking two subtly different versions of the same rule.
+ * Measured: with them, the payload was 14497 bytes against a 12288 budget; the
+ * two change-set tools alone carry 2456 bytes of schema each, and that schema is
+ * where the rules JSON Schema *can* express already live.
  */
 export const TOOL_DESCRIPTIONS = {
   search_context: [
-    "Search the epics, streams and tasks of this workspace by full text and by fuzzy title " +
-      "match. Start here.",
+    "Full-text and fuzzy-title search over this workspace's epics, streams and tasks. Start here.",
     COMPACT_FIRST,
     "Search before you create: an existing stream under the right epic is almost always the " +
-      "right home for a new requirement, and a duplicate stream is the most expensive mistake " +
-      "available in this system.",
-    HIERARCHY,
+      "right home for a new requirement, and a duplicate stream is the costliest mistake here.",
   ].join(" "),
 
   get_context: [
-    "Load one epic, stream or task by key, together with the context needed to act on it: the " +
-      "parent stream's purpose, the referenced requirements, the linked acceptance criteria, " +
-      "the business rules and edge cases that apply, and the dependencies.",
+    "One epic, stream or task by key, with what is needed to act on it: the parent stream's " +
+      "purpose, referenced requirements, linked acceptance criteria, applicable business rules " +
+      "and edge cases, dependencies.",
     PROJECTED_CONTEXT,
-    "For a request like 'implement TASK-123', call this on the task — the stream context " +
-      "arrives with it, so no second call is needed to learn what the task is for.",
+    "For 'implement TASK-123', call this on the task — the stream context comes with it.",
   ].join(" "),
 
   get_entity_schema: [
-    "Return the exact JSON Schema a document must satisfy, for one entity kind (epic, stream " +
-      "or task) and, for a stream, its stream_type — each stream type has its own content " +
-      "schema, so the type is required there.",
+    "The exact JSON Schema a document must satisfy, per entity kind (epic, stream, task) and, " +
+      "for a stream, its stream_type — each type has its own content schema.",
     SCHEMA_ON_DEMAND,
-    "Cross-field rules that JSON Schema cannot express are stated in the field descriptions " +
-      "and enforced by validate_change_set, so a document that satisfies this schema can still " +
-      "be rejected for a reason the schema could not carry.",
+    "Satisfying this schema is not sufficient: the cross-field rules live in the field " +
+      "descriptions and validate_change_set enforces them.",
     STREAM_TYPES_LINE,
   ].join(" "),
 
   validate_change_set: [
-    "Dry-run a change set: schema validation, relationship and cycle checks, and the business " +
-      "rules, on the identical code path apply_change_set uses. Nothing is written and no " +
-      "confirmation is needed.",
+    "Dry-run a change set on the identical path apply_change_set uses: schema, relationships, " +
+      "cycles, business rules. Nothing is written.",
     VALIDATE_FIRST,
     "Fix what it reports by correcting the change set, never by working around the rule. If a " +
-      "report reveals the user's intent was ambiguous, ask them rather than choosing for them.",
-    UNKNOWN_RULE,
+      "report shows the user's intent was ambiguous, ask them rather than choosing.",
   ].join(" "),
 
   apply_change_set: [
-    "Apply a change set atomically: create and update epics, streams and tasks, and link them " +
-      "to each other. Either every operation lands or none does. Returns the ids, keys and new " +
-      "revisions of everything it touched.",
+    "Apply a change set atomically — create, update, link, archive, delete, move. All operations " +
+      "land or none do. Returns ids, keys, new revisions.",
     CONFIRM_RULE,
-    VALIDATE_FIRST,
-    "Each update carries the revision it was based on; a stale revision is rejected rather " +
-      "than overwritten, so re-read with get_context and rebuild the change set instead of " +
-      "retrying it unchanged.",
-    "Business content belongs on epics and streams, technical content on tasks — read " +
-      "zpecs://guide/separation for both lists in full.",
+    "A stale expected_revision is rejected, never overwritten: re-read with get_context and " +
+      "rebuild instead of retrying.",
   ].join(" "),
 
   get_next_work: [
-    "List the open, unblocked tasks of a stream or epic in priority order — the answer to " +
-      "'what should I work on next'.",
+    "The open, unblocked tasks of a stream or epic in priority order — what to work on next.",
     "A task appears only when its own status is workable and nothing it is blocked_by is still " +
       "open, so the list is safe to start at the top of.",
-    "If it comes back empty, report that and ask what should happen next. Do not invent tasks " +
-      "to fill it: an empty list usually means the stream needs planning, which is a decision " +
-      "for the user.",
-    UNKNOWN_RULE,
+    "If it comes back empty, say so and ask what should happen next. Never invent tasks to fill " +
+      "it: an empty list usually means the stream needs planning, which is the user's decision.",
   ].join(" "),
 } as const;
 

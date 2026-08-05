@@ -1,11 +1,11 @@
-import { type SQL, sql } from "drizzle-orm";
+import { type SQL, and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "../../integration/drizzle/client";
 import { entityLink } from "../../integration/drizzle/schema/entityLink";
 import { epic } from "../../integration/drizzle/schema/epic";
 import { stream } from "../../integration/drizzle/schema/stream";
 import { task } from "../../integration/drizzle/schema/task";
 import type { WorkspaceScope } from "../auth/workspaceScope";
-import { ENTITY_TYPE, type EntityType } from "../enums";
+import { ENTITY_TYPE, type EntityType, type TaskStatus } from "../enums";
 import type { DbExecutor } from "./entity";
 
 /**
@@ -148,4 +148,51 @@ async function forEntity(
   return [...rows].map(toDependencyRow);
 }
 
-export const dependencyRepository = { forEntity };
+/**
+ * Which of `taskIds` are still blocked by a task that is not `done`.
+ *
+ * `get_next_work`'s definition of "unblocked", answered in one statement for the
+ * whole candidate list rather than one per task. `entity_link` stores only
+ * `blocked_by`, source-is-blocked, so "what blocks me" is the rows where I am the
+ * source — and the blocker's own status has to be read, which is the join.
+ *
+ * The tenant filter is on **both** tables. The edge table's filter alone would let
+ * a blocker row from another workspace decide whether this workspace's task is
+ * workable, and a foreign blocker that happened not to be `done` would silently
+ * hide work.
+ *
+ * Only *task* blockers count, because only a task has a `done`. A stream or an
+ * epic on the far end of a `blocked_by` edge does not hold work up here — see the
+ * note in `service/nextWork.ts`.
+ */
+async function blockedTaskIds(
+  scope: WorkspaceScope,
+  taskIds: readonly string[],
+  executor: DbExecutor = db,
+): Promise<ReadonlySet<string>> {
+  if (taskIds.length === 0) {
+    return new Set();
+  }
+  const rows = await executor
+    .selectDistinct({ id: entityLink.sourceId })
+    .from(entityLink)
+    .innerJoin(
+      task,
+      and(eq(task.id, entityLink.targetId), eq(task.workspaceId, scope), ne(task.status, DONE)),
+    )
+    .where(
+      and(
+        eq(entityLink.workspaceId, scope),
+        eq(entityLink.relationshipType, BLOCKED_BY),
+        eq(entityLink.sourceType, "task"),
+        inArray(entityLink.sourceId, [...taskIds]),
+        eq(entityLink.targetType, "task"),
+      ),
+    );
+  return new Set(rows.map((row) => row.id));
+}
+
+/** The one task status that clears a `blocked_by` edge. */
+const DONE: TaskStatus = "done";
+
+export const dependencyRepository = { forEntity, blockedTaskIds };

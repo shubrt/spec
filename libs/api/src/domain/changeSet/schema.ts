@@ -33,15 +33,27 @@ import { ENTITY_TYPE, RELATIONSHIP_TYPE } from "../enums";
  *
  * ## Why `confirm` is per operation and not per call
  *
- * `mcp/defineTool.ts` adds a `confirm` flag to every tool marked
- * `destructiveHint`, and `apply_change_set` is always destructive. A gate at that
- * level would therefore demand `confirm: true` on *every* apply, including a change
- * set that only creates — which trains an agent to send the flag reflexively and
+ * `apply_change_set` is annotated `destructiveHint`, and an annotation cannot tell
+ * whether a *particular* change set destroys anything. A gate at the tool boundary
+ * would therefore demand `confirm: true` on every apply, including a change set
+ * that only creates — which trains an agent to send the flag reflexively and
  * destroys the signal the gate exists to carry. The flag belongs on the operation
  * that is actually destructive: `archive`, `delete` and `move` carry it, nothing
  * else accepts it, and `service/changeSet.ts` refuses the whole change set when one
  * of the three arrives without it. A change set is applied atomically, so a partly
  * confirmed set is never half applied — it is not applied at all.
+ *
+ * `mcp/defineTool.ts` used to derive a per-call gate from `destructiveHint`; that
+ * coupling was removed so this one is the only one, and `destructiveHint` is now
+ * purely the client-approval annotation the MCP spec means it to be.
+ *
+ * ## Why an operation can name a project
+ *
+ * A key is unique per project, so a bare key is resolved by asking every project in
+ * the workspace, and two answers is a refusal rather than a guess. `project` is how
+ * a caller says which one it means; without it a workspace with two projects cannot
+ * address `EPIC-1` at all. `create` has no `project` because an epic's `parent`
+ * already names one and a stream's or task's project comes with its parent.
  */
 
 /** The seven operations. Order is the order they are listed to the model. */
@@ -105,6 +117,19 @@ const changeSetOperation = z.strictObject({
       "create, move: the parent's key or temp id — an epic for a stream, a stream for a task. " +
         "An epic's parent is the project.",
     ),
+  // Keys are unique per *project*, so a bare key is resolved by asking every
+  // project in the workspace and two answers is a refusal. Without this field a
+  // two-project workspace could not address EPIC-1 at all. Terse because it is
+  // paid for twice on every listing; the refusal's own message says how to use it.
+  project: z
+    .string()
+    .min(1)
+    .max(200)
+    .optional()
+    .describe(
+      "All but create: which project the keys belong to, by name. " +
+        "Needed only when two projects use the same key.",
+    ),
   expected_revision: z
     .int()
     .min(1)
@@ -149,12 +174,12 @@ const changeSetOperation = z.strictObject({
  */
 export const OPERATION_FIELDS = {
   create: ["entity", "key", "parent", "data"],
-  update: ["key", "expected_revision", "data"],
-  link: ["source", "target", "relationship"],
-  unlink: ["source", "target", "relationship"],
-  archive: ["key", "expected_revision", "confirm"],
-  delete: ["key", "expected_revision", "confirm"],
-  move: ["key", "expected_revision", "parent", "confirm"],
+  update: ["key", "project", "expected_revision", "data"],
+  link: ["source", "target", "project", "relationship"],
+  unlink: ["source", "target", "project", "relationship"],
+  archive: ["key", "project", "expected_revision", "confirm"],
+  delete: ["key", "project", "expected_revision", "confirm"],
+  move: ["key", "project", "expected_revision", "parent", "confirm"],
 } as const satisfies Record<ChangeSetOperationKind, readonly OperationField[]>;
 
 /** Every field an operation can carry, `operation` itself excluded. */

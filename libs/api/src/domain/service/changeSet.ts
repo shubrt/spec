@@ -8,7 +8,12 @@ import { type PlanRef, type PlannedOperation, planChangeSet } from "../changeSet
 import { type ChangeSet, type ChangeSetOperationKind, changeSetSchema } from "../changeSet/schema";
 import type { EntityType } from "../enums";
 import { findDependencyCycle } from "../graph/cycle";
-import { type DbTransaction, type WriteResult, raiseKeyCounters } from "../repository/entity";
+import {
+  type DbTransaction,
+  type WriteResult,
+  listDescendants,
+  raiseKeyCounters,
+} from "../repository/entity";
 import { entityLinkRepository } from "../repository/entityLink";
 import { epicRepository } from "../repository/epic";
 import { streamRepository } from "../repository/stream";
@@ -312,15 +317,61 @@ async function listProjects(run: Execution): Promise<readonly Project[]> {
 }
 
 /**
+ * The projects one operation's keys may be resolved in.
+ *
+ * All of them, unless the operation named a `project` — the qualifier that lets a
+ * caller say which of two projects answering to `EPIC-1` it means. Read from the
+ * **submitted** operation rather than from the plan, the same way `confirm` is: the
+ * plan models what an operation does, and which project a key lives in is a fact
+ * about the workspace, not part of the operation's meaning.
+ *
+ * A `project` that names nothing is a refusal in its own right. Silently falling
+ * back to a workspace-wide search would turn a typo into a write against a project
+ * the caller did not name.
+ */
+async function candidateProjects(
+  run: Execution,
+  index: number,
+): Promise<
+  | { readonly ok: true; readonly projects: readonly Project[] }
+  | { readonly ok: false; readonly refusal: Refusal }
+> {
+  const named = run.changeSet.operations[index]?.project;
+  const projects = await listProjects(run);
+  if (named === undefined) {
+    return { ok: true, projects };
+  }
+  const match = projects.find((project) => project.name === named || project.id === named);
+  if (!match) {
+    return {
+      ok: false,
+      refusal: invalid(
+        shapeIssue(
+          `operations[${String(index)}].project`,
+          `No project of this workspace is called ${named}. The projects are: ${projects.map((project) => project.name).join(", ")}.`,
+        ),
+      ),
+    };
+  }
+  return { ok: true, projects: [match] };
+}
+
+/**
  * The entity a `PlanRef` names, as it stands inside this transaction.
  *
  * A temp id is already resolved — the plan guarantees its `create` ran earlier —
- * so it costs nothing. A key costs one lookup per project, because a key is unique
- * *per project* and the change-set schema carries no project on the operations
- * that name one: `STR-12` exists in every project that has twelve streams. When
- * two projects answer, the change set is refused rather than guessed at.
+ * so it costs nothing. A key costs one lookup per candidate project, because a key
+ * is unique *per project*: `STR-12` exists in every project that has twelve
+ * streams. `project` on the operation narrows the candidates to one; without it
+ * every project is asked, and two answers is a refusal that names the projects and
+ * says how to disambiguate rather than guessing.
  */
-async function resolveRef(run: Execution, ref: PlanRef, path: string): Promise<Resolution> {
+async function resolveRef(
+  run: Execution,
+  ref: PlanRef,
+  path: string,
+  index: number,
+): Promise<Resolution> {
   if (ref.kind === "project") {
     return {
       ok: false,
@@ -344,15 +395,23 @@ async function resolveRef(run: Execution, ref: PlanRef, path: string): Promise<R
     return { ok: true, value: created };
   }
 
+  const candidates = await candidateProjects(run, index);
+  if (!candidates.ok) {
+    return candidates;
+  }
+  // The cache is keyed by key alone, so it is only usable when the cached row is in
+  // a project this operation is willing to accept. Without that check, an operation
+  // qualified with `project: "b"` would be served the `EPIC-1` a previous
+  // unqualified operation happened to find in project `a`.
   const cached = run.resolvedByKey.get(ref.key);
-  if (cached) {
+  if (cached && candidates.projects.some((project) => project.id === cached.projectId)) {
     return { ok: true, value: cached };
   }
-  const hits: ResolvedEntity[] = [];
-  for (const project of await listProjects(run)) {
+  const hits: { project: Project; row: ResolvedEntity }[] = [];
+  for (const project of candidates.projects) {
     const row = await findByKey(run, ref.entity, project.id, ref.key);
     if (row) {
-      hits.push({ ...row, entity: ref.entity });
+      hits.push({ project, row: { ...row, entity: ref.entity } });
     }
   }
   const [only, ...rest] = hits;
@@ -365,13 +424,13 @@ async function resolveRef(run: Execution, ref: PlanRef, path: string): Promise<R
       refusal: invalid(
         shapeIssue(
           path,
-          `${ref.key} exists in ${String(hits.length)} projects of this workspace, so it does not name one entity. Keys are unique per project.`,
+          `${ref.key} exists in ${String(hits.length)} projects of this workspace, so it does not name one entity. Keys are unique per project. Send this operation again with project set to one of: ${hits.map((hit) => hit.project.name).join(", ")}.`,
         ),
       ),
     };
   }
-  run.resolvedByKey.set(ref.key, only);
-  return { ok: true, value: only };
+  run.resolvedByKey.set(ref.key, only.row);
+  return { ok: true, value: only.row };
 }
 
 /** The project a `create`'s parent names, for an epic — the only entity with one. */
@@ -628,7 +687,7 @@ async function applyCreate(
     }
     projectId = project.id;
   } else {
-    const parent = await resolveRef(run, operation.parent, parentPath);
+    const parent = await resolveRef(run, operation.parent, parentPath, operation.index);
     if (!parent.ok) {
       return parent.refusal;
     }
@@ -722,6 +781,7 @@ async function applyUpdate(
     run,
     operation.target,
     `operations[${String(operation.index)}].key`,
+    operation.index,
   );
   if (!target.ok) {
     return target.refusal;
@@ -794,6 +854,7 @@ async function applyRetirement(
     run,
     operation.target,
     `operations[${String(operation.index)}].key`,
+    operation.index,
   );
   if (!target.ok) {
     return target.refusal;
@@ -803,6 +864,19 @@ async function applyRetirement(
     return unconfirmed;
   }
 
+  // Read before the write, because a delete cascades: the streams and tasks under a
+  // deleted epic are gone by the time the delete returns, and their `entity_link`
+  // rows are not — the endpoints are polymorphic, so no foreign key cascades them.
+  // Enumerating the subtree afterwards would find nothing and leave every
+  // descendant's edges dangling, which is the same orphan-edge bug one level down.
+  const subtree =
+    operation.kind === "delete"
+      ? await listDescendants(run.scope, run.tx, {
+          type: target.value.entity,
+          id: target.value.id,
+        })
+      : [];
+
   const written =
     operation.kind === "archive"
       ? await archiveEntity(run, target.value, operation.expectedRevision)
@@ -811,14 +885,12 @@ async function applyRetirement(
     return writeRefusal(written, target.value, operation.index, operation.expectedRevision);
   }
   if (operation.kind === "delete") {
-    // `entity_link`'s endpoints are polymorphic, so the database cannot cascade
-    // them and a deleted entity would otherwise keep its edges — including
-    // `blocked_by` edges the cycle check would still walk through.
-    await entityLinkRepository.unlinkAll(
-      run.scope,
-      { type: target.value.entity, id: target.value.id },
-      run.tx,
-    );
+    // The deleted entity and everything the cascade took with it. A leftover
+    // `blocked_by` edge is one the cycle check would still walk through, reporting
+    // a cycle through an entity nobody can look up.
+    for (const endpoint of [{ type: target.value.entity, id: target.value.id }, ...subtree]) {
+      await entityLinkRepository.unlinkAll(run.scope, endpoint, run.tx);
+    }
     run.resolvedByKey.delete(target.value.key);
   } else {
     refresh(run, target.value, written.row);
@@ -882,7 +954,7 @@ async function applyMove(
 ): Promise<Refusal | null> {
   const keyPath = `operations[${String(operation.index)}].key`;
   const parentPath = `operations[${String(operation.index)}].parent`;
-  const target = await resolveRef(run, operation.target, keyPath);
+  const target = await resolveRef(run, operation.target, keyPath, operation.index);
   if (!target.ok) {
     return target.refusal;
   }
@@ -909,7 +981,7 @@ async function applyMove(
       run.tx,
     );
   } else {
-    const parent = await resolveRef(run, operation.parent, parentPath);
+    const parent = await resolveRef(run, operation.parent, parentPath, operation.index);
     if (!parent.ok) {
       return parent.refusal;
     }
@@ -950,6 +1022,7 @@ async function applyLink(
     run,
     operation.source,
     `operations[${String(operation.index)}].source`,
+    operation.index,
   );
   if (!source.ok) {
     return source.refusal;
@@ -958,6 +1031,7 @@ async function applyLink(
     run,
     operation.target,
     `operations[${String(operation.index)}].target`,
+    operation.index,
   );
   if (!target.ok) {
     return target.refusal;

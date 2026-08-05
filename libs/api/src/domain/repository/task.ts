@@ -1,10 +1,10 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { DomainError } from "../../_/errors";
 import { db } from "../../integration/drizzle/client";
 import { stream } from "../../integration/drizzle/schema/stream";
 import { task } from "../../integration/drizzle/schema/task";
 import type { WorkspaceScope } from "../auth/workspaceScope";
-import { TASK_STATUS, TASK_TYPE, type TaskType } from "../enums";
+import { TASK_STATUS, TASK_TYPE, type TaskStatus, type TaskType } from "../enums";
 import {
   type DbExecutor,
   type DbTransaction,
@@ -121,6 +121,41 @@ async function listByProject(
     .select()
     .from(task)
     .where(and(eq(task.workspaceId, scope), eq(task.projectId, projectId)))
+    .orderBy(asc(task.createdAt), asc(task.key));
+}
+
+/**
+ * The tasks of a set of streams whose status is one of `statuses`.
+ *
+ * `get_next_work`'s read. One statement whatever the number of streams, because an
+ * epic spans all of its streams and one query per stream would make "what should I
+ * work on next" cost a round trip per stream. Served by `task_stream_idx`
+ * (workspace-leading).
+ *
+ * The status filter is a parameter rather than a constant here because "which
+ * statuses count as workable" is a domain decision that belongs in
+ * `service/nextWork.ts`, next to the ordering it goes with — a repository that
+ * hard-coded it would put half of that decision out of reach of the service's own
+ * tests.
+ */
+async function listByStreams(
+  scope: WorkspaceScope,
+  input: { readonly streamIds: readonly string[]; readonly statuses: readonly TaskStatus[] },
+  executor: DbExecutor = db,
+): Promise<Task[]> {
+  if (input.streamIds.length === 0 || input.statuses.length === 0) {
+    return [];
+  }
+  return await executor
+    .select()
+    .from(task)
+    .where(
+      and(
+        eq(task.workspaceId, scope),
+        inArray(task.streamId, [...input.streamIds]),
+        inArray(task.status, [...input.statuses]),
+      ),
+    )
     .orderBy(asc(task.createdAt), asc(task.key));
 }
 
@@ -380,6 +415,7 @@ export const taskRepository = {
   findById,
   findByKey,
   listByProject,
+  listByStreams,
   insert,
   bumpRevision,
   archive,
