@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import { SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import {
   Field,
   ListSection,
@@ -9,6 +8,11 @@ import {
   RuledBlock,
   Section,
 } from "~/components/zpecs/document-sections";
+import {
+  EntityDetailHeader,
+  EntityDetailSurfaceProvider,
+  type EntityDetailSurface,
+} from "~/components/zpecs/entity-detail-header";
 import { EntityKey, StatusBadge, StatusDot, TypeTag } from "~/components/zpecs/tokens";
 import { asArray, asNumber, asRecord, asText, contentOf } from "~/lib/document";
 import { epicStatus, label, streamStatus } from "~/lib/vocabulary";
@@ -19,7 +23,15 @@ import type { EpicNode } from "~/server/board";
  * renders only sections the epic schema owns; stream requirements and workflows
  * stay in the stream drawer where they can remain bounded and actionable.
  */
-export function EpicDetail({ epic }: { epic: EpicNode }) {
+export function EpicDetail({
+  epic,
+  surface,
+  projectId,
+}: {
+  epic: EpicNode;
+  surface: EntityDetailSurface;
+  projectId: string;
+}) {
   const content = contentOf(epic.document);
   const scope = asRecord(content.scope);
   const included = asArray(scope.included);
@@ -29,20 +41,23 @@ export function EpicDetail({ epic }: { epic: EpicNode }) {
   const rules = asArray(content.business_rules);
 
   return (
-    <>
-      <SheetHeader className="border-b">
-        <div className="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
-          <span>Epic</span>
-          <EntityKey>{epic.key}</EntityKey>
-        </div>
-        <SheetTitle>{epic.title}</SheetTitle>
-        <SheetDescription asChild>
-          <div className="flex flex-wrap items-center gap-2">
+    <EntityDetailSurfaceProvider surface={surface}>
+      <EntityDetailHeader
+        surface={surface}
+        eyebrow={
+          <>
+            <span>Epic</span>
+            <EntityKey>{epic.key}</EntityKey>
+          </>
+        }
+        title={epic.title}
+        metadata={
+          <>
             <StatusBadge tone={epicStatus.toneOf(epic.status)}>{label(epic.status)}</StatusBadge>
             <span className="text-xs text-muted-foreground">revision {epic.revision}</span>
-          </div>
-        </SheetDescription>
-      </SheetHeader>
+          </>
+        }
+      />
 
       <div className="px-6 pb-10 pt-5">
         {epic.summary ? (
@@ -127,27 +142,47 @@ export function EpicDetail({ epic }: { epic: EpicNode }) {
 
         {epic.streams.length > 0 ? (
           <Section title={`Streams · ${epic.streams.length}`}>
-            {epic.streams.map((stream) => (
-              <Link
-                key={stream.id}
-                to="."
-                search={(prev) => ({
-                  project: prev.project,
-                  workspace: prev.workspace,
-                  stream: stream.id,
-                })}
-                className="flex items-center gap-3 border-t py-2.5 text-left first:border-t-0 hover:bg-secondary/50"
-              >
-                <StatusDot tone={streamStatus.toneOf(stream.status)} />
-                <EntityKey>{stream.key}</EntityKey>
-                <span className="flex-1 text-[13px] font-medium">{stream.title}</span>
-                <TypeTag>{label(stream.streamType)}</TypeTag>
-              </Link>
-            ))}
+            {epic.streams.map((stream) => {
+              const contents = (
+                <>
+                  <StatusDot tone={streamStatus.toneOf(stream.status)} />
+                  <EntityKey>{stream.key}</EntityKey>
+                  <span className="flex-1 text-[13px] font-medium">{stream.title}</span>
+                  <TypeTag>{label(stream.streamType)}</TypeTag>
+                </>
+              );
+              const className =
+                "flex items-center gap-3 border-t py-2.5 text-left first:border-t-0 hover:bg-secondary/50";
+
+              return surface === "drawer" ? (
+                <Link
+                  key={stream.id}
+                  to="."
+                  search={(prev) => ({
+                    project: projectId,
+                    workspace: prev.workspace,
+                    stream: stream.id,
+                  })}
+                  className={className}
+                >
+                  {contents}
+                </Link>
+              ) : (
+                <Link
+                  key={stream.id}
+                  to="/stream/$streamKey"
+                  params={{ streamKey: stream.key }}
+                  search={(prev) => ({ project: projectId, workspace: prev.workspace })}
+                  className={className}
+                >
+                  {contents}
+                </Link>
+              );
+            })}
           </Section>
         ) : null}
       </div>
-    </>
+    </EntityDetailSurfaceProvider>
   );
 }
 

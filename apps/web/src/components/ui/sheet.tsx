@@ -1,6 +1,7 @@
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { XIcon } from "lucide-react";
 import type * as React from "react";
+import { buttonVariants } from "~/components/ui/button";
 import { cn } from "~/lib/utils";
 
 const Sheet = SheetPrimitive.Root;
@@ -25,9 +26,11 @@ function SheetOverlay({
 function SheetContent({
   className,
   children,
+  actions,
   side = "right",
   ...props
 }: React.ComponentProps<typeof SheetPrimitive.Content> & {
+  actions?: React.ReactNode;
   side?: "top" | "right" | "bottom" | "left";
 }) {
   return (
@@ -48,11 +51,19 @@ function SheetContent({
         )}
         {...props}
       >
+        <div className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-md border bg-card p-1 shadow-sm">
+          {actions}
+          <SheetPrimitive.Close
+            className={cn(
+              buttonVariants({ variant: "ghost", size: "icon" }),
+              "text-muted-foreground",
+            )}
+          >
+            <XIcon aria-hidden="true" />
+            <span className="sr-only">Close</span>
+          </SheetPrimitive.Close>
+        </div>
         {children}
-        <SheetPrimitive.Close className="absolute right-4 top-4 rounded-sm text-muted-foreground opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-1 focus:ring-ring disabled:pointer-events-none">
-          <XIcon className="size-5" />
-          <span className="sr-only">Close</span>
-        </SheetPrimitive.Close>
       </SheetPrimitive.Content>
     </SheetPrimitive.Portal>
   );

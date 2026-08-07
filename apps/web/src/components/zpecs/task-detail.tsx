@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import { SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import {
   Criterion,
   Field,
@@ -10,6 +9,11 @@ import {
   RuledBlock,
   Section,
 } from "~/components/zpecs/document-sections";
+import {
+  EntityDetailHeader,
+  EntityDetailSurfaceProvider,
+  type EntityDetailSurface,
+} from "~/components/zpecs/entity-detail-header";
 import { EntityKey, SectionId, StatusBadge, TypeTag } from "~/components/zpecs/tokens";
 import {
   asArray,
@@ -35,7 +39,17 @@ import type { StreamNode, TaskNode } from "~/server/board";
  * what the task says to build. It is rendered last for the same reason.
  */
 
-export function TaskDetail({ task, stream }: { task: TaskNode; stream: StreamNode | undefined }) {
+export function TaskDetail({
+  task,
+  stream,
+  surface,
+  projectId,
+}: {
+  task: TaskNode;
+  stream: StreamNode | undefined;
+  surface: EntityDetailSurface;
+  projectId: string;
+}) {
   const content = contentOf(task.document);
 
   const implementsRef = asRecord(content.implements);
@@ -62,37 +76,51 @@ export function TaskDetail({ task, stream }: { task: TaskNode; stream: StreamNod
   const createdBy = asRecord(provenance.created_by);
 
   return (
-    <>
-      <SheetHeader className="border-b">
-        <div className="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
-          <span>Task</span>
-          <EntityKey>{task.key}</EntityKey>
-          <TypeTag>{label(task.taskType)}</TypeTag>
-        </div>
-        <SheetTitle>{task.title}</SheetTitle>
-        <SheetDescription asChild>
-          <div className="flex flex-wrap items-center gap-2">
+    <EntityDetailSurfaceProvider surface={surface}>
+      <EntityDetailHeader
+        surface={surface}
+        eyebrow={
+          <>
+            <span>Task</span>
+            <EntityKey>{task.key}</EntityKey>
+            <TypeTag>{label(task.taskType)}</TypeTag>
+          </>
+        }
+        title={task.title}
+        metadata={
+          <>
             <StatusBadge tone={taskStatus.toneOf(task.status)}>{label(task.status)}</StatusBadge>
             <span className="text-xs text-muted-foreground">revision {task.revision}</span>
             {stream ? (
               <>
                 <span className="text-xs text-muted-foreground">in</span>
-                <Link
-                  to="."
-                  search={(prev) => ({
-                    project: prev.project,
-                    workspace: prev.workspace,
-                    stream: stream.id,
-                  })}
-                  className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground hover:underline"
-                >
-                  {stream.key} {stream.title}
-                </Link>
+                {surface === "drawer" ? (
+                  <Link
+                    to="."
+                    search={(prev) => ({
+                      project: projectId,
+                      workspace: prev.workspace,
+                      stream: stream.id,
+                    })}
+                    className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground hover:underline"
+                  >
+                    {stream.key} {stream.title}
+                  </Link>
+                ) : (
+                  <Link
+                    to="/stream/$streamKey"
+                    params={{ streamKey: stream.key }}
+                    search={(prev) => ({ project: projectId, workspace: prev.workspace })}
+                    className="rounded-full bg-secondary px-2.5 py-0.5 text-xs font-medium text-secondary-foreground hover:underline"
+                  >
+                    {stream.key} {stream.title}
+                  </Link>
+                )}
               </>
             ) : null}
-          </div>
-        </SheetDescription>
-      </SheetHeader>
+          </>
+        }
+      />
 
       <div className="px-6 pb-10 pt-5">
         {task.summary ? (
@@ -264,7 +292,7 @@ export function TaskDetail({ task, stream }: { task: TaskNode; stream: StreamNod
           </Section>
         ) : null}
       </div>
-    </>
+    </EntityDetailSurfaceProvider>
   );
 }
 

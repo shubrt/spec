@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useEntityDetailSurface } from "~/components/zpecs/entity-detail-surface";
 import { SectionId } from "~/components/zpecs/tokens";
 import { asText } from "~/lib/document";
 
@@ -13,11 +14,13 @@ import { asText } from "~/lib/document";
  */
 
 export function Section({ title, children }: { title: string; children: ReactNode }) {
+  const Heading = useEntityDetailSurface() === "page" ? "h2" : "h3";
+
   return (
     <section className="mb-6">
-      <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+      <Heading className="mb-3 text-xs font-semibold uppercase tracking-[0.05em] text-muted-foreground">
         {title}
-      </h3>
+      </Heading>
       {children}
     </section>
   );

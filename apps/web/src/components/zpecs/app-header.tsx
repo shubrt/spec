@@ -1,4 +1,4 @@
-import { Link, useLoaderData, useNavigate } from "@tanstack/react-router";
+import { Link, useLoaderData, useNavigate, useRouterState } from "@tanstack/react-router";
 import { PlusIcon } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { WorkspaceSwitcher } from "~/components/zpecs/workspace-switcher";
@@ -26,13 +26,26 @@ const NAV = [
   { to: "/connection", label: "Connection", exact: false },
 ] as const;
 
+const ENTITY_DETAIL_PATH = /^\/(?:epic|stream|task)\/[^/]+\/?$/;
+
 export function AppHeader() {
   const board = useLoaderData({ from: "__root__" });
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const isEntityDetail = ENTITY_DETAIL_PATH.test(pathname);
 
   // Switching project resets any open drawer: the epic, stream or task in the URL
-  // belongs to the project being navigated away from.
+  // belongs to the project being navigated away from. A standalone entity page
+  // also resets its path, because its key belongs to that previous project.
   const switchProject = (projectId: string) => {
+    if (isEntityDetail) {
+      void navigate({
+        to: "/",
+        search: (previous) => projectChangedSearch(previous, projectId),
+      });
+      return;
+    }
+
     void navigate({
       to: ".",
       search: (previous) => projectChangedSearch(previous, projectId),
@@ -69,20 +82,27 @@ export function AppHeader() {
       ) : null}
 
       <nav className="order-last flex w-full items-center gap-1 border-t pt-2 sm:order-none sm:w-auto sm:border-0 sm:pt-0">
-        {NAV.map((item) => (
-          <Link
-            key={item.to}
-            to={item.to}
-            // `project` is carried across every navigation and the drawer
-            // parameters are not: which project you are looking at survives a
-            // page change, an open detail view does not.
-            search={(prev) => ({ project: prev.project, workspace: prev.workspace })}
-            activeOptions={{ exact: item.exact }}
-            className="rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary [&.active]:bg-secondary [&.active]:font-semibold [&.active]:text-foreground"
-          >
-            {item.label}
-          </Link>
-        ))}
+        {NAV.map((item) => {
+          const representsEntityDetail = item.to === "/epics" && isEntityDetail;
+
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              // `project` is carried across every navigation and the drawer
+              // parameters are not: which project you are looking at survives a
+              // page change, an open detail view does not.
+              search={(prev) => ({ project: prev.project, workspace: prev.workspace })}
+              activeOptions={{ exact: item.exact }}
+              aria-current={representsEntityDetail ? "page" : undefined}
+              className={`rounded-lg px-2.5 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-secondary [&.active]:bg-secondary [&.active]:font-semibold [&.active]:text-foreground ${
+                representsEntityDetail ? "bg-secondary font-semibold text-foreground" : ""
+              }`}
+            >
+              {item.label}
+            </Link>
+          );
+        })}
       </nav>
 
       <div className="flex-1" />

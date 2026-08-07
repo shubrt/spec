@@ -1,5 +1,4 @@
 import { Link } from "@tanstack/react-router";
-import { SheetDescription, SheetHeader, SheetTitle } from "~/components/ui/sheet";
 import {
   Criterion,
   Field,
@@ -10,6 +9,11 @@ import {
   RuledBlock,
   Section,
 } from "~/components/zpecs/document-sections";
+import {
+  EntityDetailHeader,
+  EntityDetailSurfaceProvider,
+  type EntityDetailSurface,
+} from "~/components/zpecs/entity-detail-header";
 import { EntityKey, StatusBadge, StatusDot, TypeTag } from "~/components/zpecs/tokens";
 import {
   asArray,
@@ -49,7 +53,15 @@ import type { StreamNode } from "~/server/board";
  * one.
  */
 
-export function StreamDetail({ stream }: { stream: StreamNode }) {
+export function StreamDetail({
+  stream,
+  surface,
+  projectId,
+}: {
+  stream: StreamNode;
+  surface: EntityDetailSurface;
+  projectId: string;
+}) {
   const content = contentOf(stream.document);
 
   const scope = asRecord(content.scope);
@@ -75,23 +87,26 @@ export function StreamDetail({ stream }: { stream: StreamNode }) {
   const successCriteria = asArray<SuccessCriterion>(content.success_criteria);
 
   return (
-    <>
-      <SheetHeader className="border-b">
-        <div className="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
-          <span>Stream</span>
-          <EntityKey>{stream.key}</EntityKey>
-          <TypeTag>{label(stream.streamType)}</TypeTag>
-        </div>
-        <SheetTitle>{stream.title}</SheetTitle>
-        <SheetDescription asChild>
-          <div className="flex flex-wrap items-center gap-2">
+    <EntityDetailSurfaceProvider surface={surface}>
+      <EntityDetailHeader
+        surface={surface}
+        eyebrow={
+          <>
+            <span>Stream</span>
+            <EntityKey>{stream.key}</EntityKey>
+            <TypeTag>{label(stream.streamType)}</TypeTag>
+          </>
+        }
+        title={stream.title}
+        metadata={
+          <>
             <StatusBadge tone={streamStatus.toneOf(stream.status)}>
               {label(stream.status)}
             </StatusBadge>
             <span className="text-xs text-muted-foreground">revision {stream.revision}</span>
-          </div>
-        </SheetDescription>
-      </SheetHeader>
+          </>
+        }
+      />
 
       <div className="px-6 pb-10 pt-5">
         {stream.summary ? (
@@ -358,27 +373,47 @@ export function StreamDetail({ stream }: { stream: StreamNode }) {
             set by the UI rather than typed by hand. */}
         {stream.tasks.length > 0 ? (
           <Section title={`Tasks · ${stream.tasks.length}`}>
-            {stream.tasks.map((task) => (
-              <Link
-                key={task.id}
-                to="."
-                search={(prev) => ({
-                  project: prev.project,
-                  workspace: prev.workspace,
-                  task: task.id,
-                })}
-                className="flex items-center gap-3 border-t py-2.5 text-left first:border-t-0 hover:bg-secondary/50"
-              >
-                <StatusDot tone={taskStatus.toneOf(task.status)} />
-                <EntityKey>{task.key}</EntityKey>
-                <span className="flex-1 text-[13px] font-medium">{task.title}</span>
-                <TypeTag>{label(task.taskType)}</TypeTag>
-              </Link>
-            ))}
+            {stream.tasks.map((task) => {
+              const contents = (
+                <>
+                  <StatusDot tone={taskStatus.toneOf(task.status)} />
+                  <EntityKey>{task.key}</EntityKey>
+                  <span className="flex-1 text-[13px] font-medium">{task.title}</span>
+                  <TypeTag>{label(task.taskType)}</TypeTag>
+                </>
+              );
+              const className =
+                "flex items-center gap-3 border-t py-2.5 text-left first:border-t-0 hover:bg-secondary/50";
+
+              return surface === "drawer" ? (
+                <Link
+                  key={task.id}
+                  to="."
+                  search={(prev) => ({
+                    project: projectId,
+                    workspace: prev.workspace,
+                    task: task.id,
+                  })}
+                  className={className}
+                >
+                  {contents}
+                </Link>
+              ) : (
+                <Link
+                  key={task.id}
+                  to="/task/$taskKey"
+                  params={{ taskKey: task.key }}
+                  search={(prev) => ({ project: projectId, workspace: prev.workspace })}
+                  className={className}
+                >
+                  {contents}
+                </Link>
+              );
+            })}
           </Section>
         ) : null}
       </div>
-    </>
+    </EntityDetailSurfaceProvider>
   );
 }
 

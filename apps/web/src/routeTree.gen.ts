@@ -12,7 +12,10 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as EpicsRouteImport } from './routes/epics'
 import { Route as ConnectionRouteImport } from './routes/connection'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as TaskTaskKeyRouteImport } from './routes/task.$taskKey'
+import { Route as StreamStreamKeyRouteImport } from './routes/stream.$streamKey'
 import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
+import { Route as EpicEpicKeyRouteImport } from './routes/epic.$epicKey'
 
 const EpicsRoute = EpicsRouteImport.update({
   id: '/epics',
@@ -29,9 +32,24 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const TaskTaskKeyRoute = TaskTaskKeyRouteImport.update({
+  id: '/task/$taskKey',
+  path: '/task/$taskKey',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StreamStreamKeyRoute = StreamStreamKeyRouteImport.update({
+  id: '/stream/$streamKey',
+  path: '/stream/$streamKey',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignInSplatRoute = SignInSplatRouteImport.update({
   id: '/sign-in/$',
   path: '/sign-in/$',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EpicEpicKeyRoute = EpicEpicKeyRouteImport.update({
+  id: '/epic/$epicKey',
+  path: '/epic/$epicKey',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -39,34 +57,68 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/connection': typeof ConnectionRoute
   '/epics': typeof EpicsRoute
+  '/epic/$epicKey': typeof EpicEpicKeyRoute
   '/sign-in/$': typeof SignInSplatRoute
+  '/stream/$streamKey': typeof StreamStreamKeyRoute
+  '/task/$taskKey': typeof TaskTaskKeyRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/connection': typeof ConnectionRoute
   '/epics': typeof EpicsRoute
+  '/epic/$epicKey': typeof EpicEpicKeyRoute
   '/sign-in/$': typeof SignInSplatRoute
+  '/stream/$streamKey': typeof StreamStreamKeyRoute
+  '/task/$taskKey': typeof TaskTaskKeyRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/connection': typeof ConnectionRoute
   '/epics': typeof EpicsRoute
+  '/epic/$epicKey': typeof EpicEpicKeyRoute
   '/sign-in/$': typeof SignInSplatRoute
+  '/stream/$streamKey': typeof StreamStreamKeyRoute
+  '/task/$taskKey': typeof TaskTaskKeyRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/connection' | '/epics' | '/sign-in/$'
+  fullPaths:
+    | '/'
+    | '/connection'
+    | '/epics'
+    | '/epic/$epicKey'
+    | '/sign-in/$'
+    | '/stream/$streamKey'
+    | '/task/$taskKey'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/connection' | '/epics' | '/sign-in/$'
-  id: '__root__' | '/' | '/connection' | '/epics' | '/sign-in/$'
+  to:
+    | '/'
+    | '/connection'
+    | '/epics'
+    | '/epic/$epicKey'
+    | '/sign-in/$'
+    | '/stream/$streamKey'
+    | '/task/$taskKey'
+  id:
+    | '__root__'
+    | '/'
+    | '/connection'
+    | '/epics'
+    | '/epic/$epicKey'
+    | '/sign-in/$'
+    | '/stream/$streamKey'
+    | '/task/$taskKey'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ConnectionRoute: typeof ConnectionRoute
   EpicsRoute: typeof EpicsRoute
+  EpicEpicKeyRoute: typeof EpicEpicKeyRoute
   SignInSplatRoute: typeof SignInSplatRoute
+  StreamStreamKeyRoute: typeof StreamStreamKeyRoute
+  TaskTaskKeyRoute: typeof TaskTaskKeyRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -92,11 +144,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/task/$taskKey': {
+      id: '/task/$taskKey'
+      path: '/task/$taskKey'
+      fullPath: '/task/$taskKey'
+      preLoaderRoute: typeof TaskTaskKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/stream/$streamKey': {
+      id: '/stream/$streamKey'
+      path: '/stream/$streamKey'
+      fullPath: '/stream/$streamKey'
+      preLoaderRoute: typeof StreamStreamKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sign-in/$': {
       id: '/sign-in/$'
       path: '/sign-in/$'
       fullPath: '/sign-in/$'
       preLoaderRoute: typeof SignInSplatRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/epic/$epicKey': {
+      id: '/epic/$epicKey'
+      path: '/epic/$epicKey'
+      fullPath: '/epic/$epicKey'
+      preLoaderRoute: typeof EpicEpicKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
@@ -106,7 +179,10 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConnectionRoute: ConnectionRoute,
   EpicsRoute: EpicsRoute,
+  EpicEpicKeyRoute: EpicEpicKeyRoute,
   SignInSplatRoute: SignInSplatRoute,
+  StreamStreamKeyRoute: StreamStreamKeyRoute,
+  TaskTaskKeyRoute: TaskTaskKeyRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
