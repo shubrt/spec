@@ -1,6 +1,14 @@
-import { index, integer, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 import type { EntityType } from "../../../domain/enums";
-import { jsonbObject } from "../customTypes";
 import { project } from "./project";
 import { workspace } from "./workspace";
 
@@ -47,7 +55,7 @@ export const entityRevision = pgTable(
     projectId: uuid()
       .notNull()
       .references(() => project.id, { onDelete: "cascade" }),
-    document: jsonbObject<Record<string, unknown>>()().notNull(),
+    document: jsonb().$type<Record<string, unknown>>().notNull(),
     /** Clerk user id of the human, or the agent identity acting on their behalf. */
     changedBy: text().notNull(),
     /** Why, in the author's words. Nullable: the first revision has no prior state to explain. */

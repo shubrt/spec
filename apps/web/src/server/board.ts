@@ -7,11 +7,11 @@ import { createApiClient } from "./api";
 
 /**
  * The single read-only aggregate the whole UI derives from, fetched once per
- * project through Eden Treaty from the server.
+ * project through in-process Eden Treaty calls.
  *
  * Filtering and sorting are the client's job over this one payload: the MVP
- * deliberately does not paginate or server-filter, so no interaction costs a
- * second round trip.
+ * deliberately does not paginate or server-filter, so no interaction needs
+ * another server-function request.
  *
  * Failures are values, not exceptions. A root loader that throws blanks the
  * entire app, and two of the three failure modes here — no session, no
@@ -20,19 +20,19 @@ import { createApiClient } from "./api";
 
 const UNREACHABLE = {
   status: "unavailable",
-  message: "The zpecs API is not reachable.",
+  message: "The zpecs API could not complete the request.",
   apiReachable: false,
 } satisfies ApiFailure;
 
 /**
- * Runs one network call and turns a refused connection into `null`.
+ * Invokes one embedded API operation and turns an unexpected throw into `null`.
  *
  * Treaty returns HTTP errors in `error` rather than throwing, so this `try` is
- * not about status codes — it is about `@zpecs/api` not listening, which is the
- * most common state during local development. Only the call itself sits inside
- * it: a throw from the mapping code below would be a bug in this file, and
- * reporting that as "the API is not reachable" would send someone hunting in
- * the wrong package.
+ * not about status codes — it covers failures while invoking the embedded API,
+ * including database connectivity. Only the call itself sits inside it: a
+ * throw from the mapping code below would be a bug in this file, and reporting
+ * that as "the API could not complete the request" would send someone hunting
+ * in the wrong package.
  */
 async function reachable<T>(call: () => Promise<T>): Promise<T | null> {
   try {
@@ -83,8 +83,8 @@ export const getBoard = createServerFn({ method: "GET" })
 
     // The aggregate cannot join the two calls above, because *which* project to
     // fetch is the answer `selectProject` gives — `?project=` may be absent, or
-    // may name a project this workspace no longer has. Two round trips on load,
-    // none afterwards, which is the part that matters.
+    // may name a project this workspace no longer has. This requires a second
+    // invocation phase on load, but none afterwards.
     const aggregateResponse = await reachable(() =>
       api.workspace.projects({ projectId: selected.id }).get(),
     );

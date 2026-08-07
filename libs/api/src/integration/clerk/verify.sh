@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
-# Captures live evidence for the canonical Clerk instance and a running
-# zpecs web service (see SETUP.md). Run it only as an explicit live operator check because
-# it talks to external services. Every required check either proves
-# the real configuration or fails loudly; it never substitutes fixture data.
+# Captures live evidence for the canonical Clerk instance and the combined
+# zpecs TanStack web service (see SETUP.md). Run it only as an explicit live
+# operator check because it talks to external services. Every required check
+# either proves the real configuration or fails loudly; it never substitutes
+# fixture data.
 #
 # Usage:
 #   CLERK_PUBLISHABLE_KEY=pk_live_... \
-#   ZPECS_BASE_URL=http://localhost:3004 \
+#   ZPECS_BASE_URL=http://localhost:3003 \
 #   ZPECS_ACCESS_TOKEN=eyJ... \
 #     libs/api/src/integration/clerk/verify.sh
 #
 # CLERK_PUBLISHABLE_KEY is required. ZPECS_BASE_URL defaults to
-# http://localhost:3004 (apps/web's default PORT). ZPECS_ACCESS_TOKEN is
+# http://localhost:3003 (apps/web's default port). ZPECS_ACCESS_TOKEN is
 # optional — omit it to skip section 5 (safe token-shape inspection); every
 # other section still runs. The token and its complete payload are never
 # printed, nor are individual claim values.
@@ -30,15 +31,17 @@ command -v curl >/dev/null 2>&1 || fail "curl is required and is not on PATH."
 if [ -z "${CLERK_PUBLISHABLE_KEY}" ]; then
   fail "CLERK_PUBLISHABLE_KEY is not set. Export the real pk_test_/pk_live_ key from the Clerk dashboard (see SETUP.md) — there is nothing this script can check without it."
 fi
-if [ "${CLERK_PUBLISHABLE_KEY}" = "pk_test_placeholder_not_wired_in_yet" ]; then
-  fail "CLERK_PUBLISHABLE_KEY is still the .env placeholder. Complete SETUP.md steps 1-4 and put the real key in apps/web/.env (exported into this shell) before running this script."
-fi
+case "${CLERK_PUBLISHABLE_KEY}" in
+  pk_test_placeholder_not_wired_in_yet|pk_test_replace-me)
+    fail "CLERK_PUBLISHABLE_KEY is still the .env placeholder. Complete SETUP.md steps 1-4 and export the real apps/web VITE_CLERK_PUBLISHABLE_KEY value under this script's CLERK_PUBLISHABLE_KEY input name before running it."
+    ;;
+esac
 case "${CLERK_PUBLISHABLE_KEY}" in
   pk_test_*|pk_live_*) ;;
   *) fail "CLERK_PUBLISHABLE_KEY does not start with pk_test_ or pk_live_ — got a value that is not a Clerk publishable key." ;;
 esac
 
-ZPECS_BASE_URL="${ZPECS_BASE_URL:-http://localhost:3004}"
+ZPECS_BASE_URL="${ZPECS_BASE_URL:-http://localhost:3003}"
 readonly EXPECTED_SCOPES_JSON='["openid","profile","email","user:org:read"]'
 readonly EXPECTED_SCOPES_TEXT="openid profile email user:org:read"
 readonly EXPECTED_RESOURCE="${ZPECS_BASE_URL}/mcp"

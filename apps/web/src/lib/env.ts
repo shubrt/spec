@@ -40,29 +40,26 @@ const publicOrigin = z
     message: "must use HTTPS unless the hostname is localhost, 127.0.0.0/8, or [::1]",
   });
 
-// Server-only environment, imported only from src/start.ts and src/server/*.
-//
-// There is deliberately no DATABASE_URL here, unlike apps/legacy project: this app owns
-// no database connection. Aggregate reads and the one project-container write go
-// to @zpecs/api over HTTP, so tenant scoping lives in exactly one place. Epic,
-// stream and task writes remain MCP-only.
+// Server-only environment for the unified TanStack + Elysia process. The
+// browser still receives only variables explicitly consumed through Vite.
 export const env = createEnv({
   server: {
-    // Origin of @zpecs/api. Deliberately not VITE_-prefixed: keeping it off
-    // import.meta.env is what stops the browser reaching the API directly,
-    // which would put a session-authenticated multi-tenant surface behind CORS
-    // instead of behind this app's server functions.
-    // 3001 = zpecs.api, 3002 = legacy project, 3003 = web, 3004 = zpecs web service.
-    ZPECS_API_URL: z.url().default("http://localhost:3004"),
-    // Canonical public origin copied into MCP client setup instructions. This is
-    // intentionally separate from the server-to-server API URL above: a proxy's
-    // internal address must never leak into the OAuth resource identifier.
+    DATABASE_URL: z.url(),
+    // Canonical origin of the unified process. It is used for MCP resource and
+    // discovery URLs and must never be inferred from proxy-controlled headers.
     ZPECS_PUBLIC_URL: publicOrigin,
+    // Canonical Clerk publishable key for this app. The shared API maps this to
+    // its compatibility name when it builds OAuth discovery metadata.
+    VITE_CLERK_PUBLISHABLE_KEY: z
+      .string()
+      .regex(/^pk_(test|live)_/, "must start with pk_test_ or pk_live_"),
     // Clerk's request middleware and server helpers would read this straight
     // from process.env. Declaring it means a missing or malformed key fails
     // once at boot with a readable message, rather than surfacing as an opaque
     // Clerk error on the first authenticated request.
     CLERK_SECRET_KEY: z.string().regex(/^sk_(test|live)_/, "must start with sk_test_ or sk_live_"),
+    AXIOM_DATASET: z.string().min(1).optional(),
+    AXIOM_TOKEN: z.string().min(1).optional(),
   },
   runtimeEnv: process.env,
   emptyStringAsUndefined: true,

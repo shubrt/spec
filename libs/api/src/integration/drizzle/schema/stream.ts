@@ -1,7 +1,16 @@
 import { sql } from "drizzle-orm";
-import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import type { StreamStatus, StreamType } from "../../../domain/enums";
-import { jsonbObject, tsvector } from "../customTypes";
+import { tsvector } from "../customTypes";
 import { epic } from "./epic";
 import { project } from "./project";
 import { workspace } from "./workspace";
@@ -39,7 +48,7 @@ export const stream = pgTable(
     revision: integer().notNull().default(1),
     title: text().notNull(),
     summary: text(),
-    document: jsonbObject<Record<string, unknown>>()().notNull(),
+    document: jsonb().$type<Record<string, unknown>>().notNull(),
     /** See `schema/epic.ts` for why this is a generated column over plain text. */
     searchVector: tsvector().generatedAlwaysAs(
       sql`to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(summary, ''))`,

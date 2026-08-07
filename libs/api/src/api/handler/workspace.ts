@@ -5,7 +5,7 @@ import { workspaceRepository } from "../../domain/repository/workspace";
 import { authScope } from "../plugin/authScope";
 
 /**
- * The authenticated REST surface the web UI uses.
+ * The authenticated Elysia route surface the web UI calls in-process.
  *
  * Epic, stream and task writes still go exclusively through an MCP change-set,
  * which owns document validation, readiness, revision history and destructive
@@ -14,7 +14,7 @@ import { authScope } from "../plugin/authScope";
  * scope is its only tenant input. It cannot write a planning entity.
  *
  * Three properties hold for every route in this file and are the reason it is
- * safe to expose at all:
+ * safe to make available to server functions:
  *
  *  - the only tenant key is `scope`, produced by `authScope` from a verified
  *    session — no route accepts a workspace id, a project id's owner, or any

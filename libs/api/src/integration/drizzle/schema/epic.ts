@@ -1,7 +1,16 @@
 import { sql } from "drizzle-orm";
-import { index, integer, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import {
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+} from "drizzle-orm/pg-core";
 import type { EpicStatus } from "../../../domain/enums";
-import { jsonbObject, tsvector } from "../customTypes";
+import { tsvector } from "../customTypes";
 import { project } from "./project";
 import { workspace } from "./workspace";
 
@@ -38,9 +47,8 @@ export const epic = pgTable(
     revision: integer().notNull().default(1),
     title: text().notNull(),
     summary: text(),
-    // The type parameter stays open until B9 defines the document envelope; the
-    // column shape and the driver behaviour are what matter here.
-    document: jsonbObject<Record<string, unknown>>()().notNull(),
+    // The type parameter stays open until B9 defines the document envelope.
+    document: jsonb().$type<Record<string, unknown>>().notNull(),
     /**
      * `generatedAlwaysAs` emits `GENERATED ALWAYS AS (…) STORED`, which `push`
      * supports. A generated column over the two plain text columns is

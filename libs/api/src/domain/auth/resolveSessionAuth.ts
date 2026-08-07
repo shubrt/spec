@@ -16,7 +16,7 @@ export type SessionAuthOutcome =
 
 /**
  * Resolves a Clerk **session** token into an `AuthContext` for the authenticated
- * REST subtree (`api/plugin/authScope.ts`).
+ * in-process Elysia subtree (`api/plugin/authScope.ts`).
  *
  * The session auth object exposes `orgId` and `orgSlug` directly, so unlike the
  * MCP path this needs no claim archaeology — nothing here is unverified.

@@ -1,13 +1,14 @@
 # Canonical Clerk instance — setup and live verification
 
 The Clerk tenant configured in `apps/web/.env` is zpecs' canonical
-authorization server for both Claude Code and OpenAI Codex. zpecs does not run
-an OpenAI model and needs neither an OpenAI SDK nor an OpenAI API key: both
-clients connect to the same client-neutral MCP endpoint.
+authorization server for both Claude Code and OpenAI Codex. The shared
+`@zpecs/api` Elysia app runs inside that TanStack Start service. zpecs does
+not run an OpenAI model and needs neither an OpenAI SDK nor an OpenAI API key:
+both clients connect to the same client-neutral MCP endpoint on the web origin.
 
 Keep real keys and tokens in gitignored `.env` files or the deployment secret
-store. This document and both committed `.env.example` files contain
-placeholders only.
+store. This document and the committed `.env.example` file contain placeholders
+only.
 
 The required scope list is defined once by
 `../../domain/auth/mcpOAuth.ts`'s `MCP_OAUTH_SCOPES`:
@@ -19,44 +20,46 @@ openid profile email user:org:read
 Keep Clerk's defaults and every operator check character-identical to that
 source of truth.
 
-## 1. Configure the same public origin and Clerk instance
+## 1. Configure the public web origin and Clerk instance
 
-Set the mandatory server-side `ZPECS_PUBLIC_URL` in both deployments. Its value
-must be identical in API and web:
+Set the mandatory server-side `ZPECS_PUBLIC_URL` in the sole `apps/web`
+deployment:
 
 ```dotenv
 # Local development
-ZPECS_PUBLIC_URL="http://localhost:3004"
+ZPECS_PUBLIC_URL="http://localhost:3003"
 
-# Production (current canonical origin)
-ZPECS_PUBLIC_URL="https://zpecs-api-production.up.railway.app"
+# Production (use the existing canonical web origin)
+ZPECS_PUBLIC_URL="https://zpecs.example.com"
 ```
 
 The value is an origin only: no path, query, fragment, credentials, or trailing
 slash. HTTP is accepted only for a loopback address; every deployed origin must
-use HTTPS. API and web fail at startup when this contract is missing or
+use HTTPS. The web service fails at startup when this contract is missing or
 invalid.
 
-The API publishes these values from that origin, never from `Host`,
+The Elysia runtime publishes these values from that origin, never from `Host`,
 `Forwarded`, `X-Forwarded-*`, or the incoming request URL:
 
 - MCP resource: `${ZPECS_PUBLIC_URL}/mcp`
 - protected-resource metadata:
   `${ZPECS_PUBLIC_URL}/.well-known/oauth-protected-resource/mcp`
 
-`apps/web/.env` still needs `ZPECS_API_URL` for server-to-server API calls.
-That value can describe private routing. The MCP address copied from the
+Only `/mcp` and the OAuth discovery endpoints are exposed through the TanStack
+server entry. `/workspace*` is not a public REST surface: TanStack server
+functions call the shared Elysia app in-process through Eden Treaty. There is no
+`ZPECS_API_URL` or second service-to-service hop. The MCP address copied from the
 Connection page is built exclusively from `ZPECS_PUBLIC_URL`.
 
-Use the same Clerk key pair in API and web:
+Configure the Clerk key pair in `apps/web/.env`:
 
-- `apps/web/.env` `CLERK_PUBLISHABLE_KEY` becomes
-  `apps/web/.env` `VITE_CLERK_PUBLISHABLE_KEY`.
-- `CLERK_SECRET_KEY` is identical in both files.
+- `VITE_CLERK_PUBLISHABLE_KEY` is the canonical publishable-key variable used
+  by the browser, TanStack middleware and shared Elysia runtime.
+- `CLERK_SECRET_KEY` remains server-only.
 
-The API verifies OAuth access tokens and web session tokens against this one
-issuer. Mixing Clerk tenants can make each app look healthy in isolation while
-authenticated API requests fail.
+Both OAuth access tokens and web session tokens are verified against this one
+issuer. The browser session and MCP flow must therefore use the same Clerk
+tenant.
 
 ## 2. Configure Organizations, DCR, PKCE, JWTs, and scopes
 
@@ -92,13 +95,13 @@ authenticated API requests fail.
 
 6. Create a test user and a dedicated test organization, and make the user a
    member. Also exercise a user without an organization: Clerk should route
-   that user to organization setup. At the API boundary, a valid full-scope
-   token without `org_id` remains authenticated and follows zpecs' existing
-   `no_workspace` remediation instead of restarting OAuth.
+   that user to organization setup. At the Elysia auth boundary, a valid
+   full-scope token without `org_id` remains authenticated and follows zpecs'
+   existing `no_workspace` remediation instead of restarting OAuth.
 
 7. Remove any old statically configured OAuth client with a fixed callback
    port, or label it as an optional manual test client. It is not part of the
-   product flow. Do not add its credentials to either zpecs app.
+   product flow. Do not add its credentials to the zpecs web app.
 
 Under DCR there are no additional zpecs OAuth environment variables. Redirect
 URI, client registration, and PKCE exchange are negotiated by the MCP client
@@ -106,19 +109,21 @@ and Clerk.
 
 ## 3. Verify discovery, the challenge, and token shape
 
-Start `apps/web`, complete one real MCP OAuth flow, and run:
+Start `apps/web`, complete one real MCP OAuth flow, and run. Pass the value
+of `VITE_CLERK_PUBLISHABLE_KEY` to the operator script under its
+`CLERK_PUBLISHABLE_KEY` input name:
 
 ```bash
 CLERK_PUBLISHABLE_KEY=pk_test_... \
-ZPECS_BASE_URL=http://localhost:3004 \
+ZPECS_BASE_URL=http://localhost:3003 \
 ZPECS_ACCESS_TOKEN=... \
   libs/api/src/integration/clerk/verify.sh
 ```
 
-For production, set `ZPECS_BASE_URL` to the exact `ZPECS_PUBLIC_URL`, for example
-`https://zpecs-api-production.up.railway.app`. It must be an origin with no
-trailing slash. `ZPECS_ACCESS_TOKEN` is optional, so discovery and the
-unauthenticated challenge can be checked first.
+For production, set `ZPECS_BASE_URL` to the exact canonical web
+`ZPECS_PUBLIC_URL`. It must be an origin with no trailing slash.
+`ZPECS_ACCESS_TOKEN` is optional, so discovery and the unauthenticated challenge
+can be checked first.
 
 The script requires all of the following:
 
@@ -161,7 +166,7 @@ commands are:
 ### Claude Code
 
 ```bash
-claude mcp add --transport http zpecs http://localhost:3004/mcp
+claude mcp add --transport http zpecs http://localhost:3003/mcp
 ```
 
 Complete consent and select an organization. To clear an old token or change
@@ -172,14 +177,14 @@ claude mcp logout zpecs
 ```
 
 Then reconnect in Claude Code and complete consent again. The add command and
-endpoint stay unchanged.
+endpoint stay on the web origin.
 
 ### OpenAI Codex
 
 Add the server, then start OAuth explicitly:
 
 ```bash
-codex mcp add zpecs --url http://localhost:3004/mcp
+codex mcp add zpecs --url http://localhost:3003/mcp
 codex mcp login zpecs
 ```
 
@@ -189,6 +194,10 @@ For reauthentication or a workspace change:
 codex mcp logout zpecs
 codex mcp login zpecs
 ```
+
+When migrating from the former API origin, remove the existing `zpecs` MCP entry
+from each client, add it again with the web-origin URL, and complete OAuth
+again. Configuration and tokens for the former origin are not carried forward.
 
 The organization selected during consent is bound to the issued MCP token as
 `org_id`. The first authenticated request JIT-provisions that organization's
@@ -229,21 +238,29 @@ the selected test workspace.
 
 ## 7. Rollout order and token compatibility
 
-1. Set the same production `ZPECS_PUBLIC_URL` in the API and web Railway
-   services before deploying code.
-2. Deploy the API first. Verify the HTTPS protected-resource metadata, the
-   `401` challenge, the `403 insufficient_scope` contract, and Claude Code.
-3. Complete the real Codex flow and confirm that Clerk issues the canonical
-   MCP resource as the token audience. If it does not, stop the release; do not
-   weaken audience validation and do not publish the Codex UI.
-4. Deploy the web UI only after the Codex end-to-end check succeeds.
-5. Monitor existing HTTP 401/403 and coarse auth-status events. Do not log
-   access tokens or claims.
+1. Pause automatic deployments of the former API service while leaving its
+   current deployment available for rollback during the release check.
+2. Configure the web service with `DATABASE_URL`, the Clerk variables, optional
+   Axiom variables, and the exact canonical HTTPS web origin as
+   `ZPECS_PUBLIC_URL`.
+3. Deploy the combined TanStack service. Verify the protected-resource
+   metadata, the `401` challenge, the `403 insufficient_scope` contract, the
+   web project flow, and one real read-only Claude or Codex MCP flow on the web
+   origin.
+4. Confirm that Clerk issues the canonical web MCP resource as the token
+   audience. If it does not, stop the release; do not weaken audience
+   validation.
+5. Publish the new Connection-page URL and operator guidance, then stop and
+   remove the former API service in the same release. Remove `ZPECS_API_URL` and
+   the obsolete service configuration from the deployment environment.
+6. Monitor HTTP 401/403 and coarse auth-status events. Do not log access tokens
+   or claims.
 
-Changing the canonical resource from the previously advertised internal HTTP
-URL to the public HTTPS URL can invalidate the audience/resource binding of
-already-issued tokens. Existing Claude users may need one logout/reconnect
-cycle; communicate that reauthentication before rollout.
+Changing the canonical resource to the web origin invalidates the
+audience/resource binding of tokens issued for the former API origin. There is
+no compatibility or seven-day overlap period: users must immediately remove
+the old MCP entry, add the web-origin URL, and authenticate again. Communicate
+those steps as part of the release.
 
 ## 8. Roll out self-service project creation
 

@@ -5,9 +5,9 @@ import { env, isLoopbackHostname } from "~/lib/env";
  * Where an MCP client connects.
  *
  * This has to come from the server: `ZPECS_PUBLIC_URL` is deliberately not
- * `VITE_`-prefixed, because keeping the API origin off `import.meta.env` is what
- * stops browser code from choosing or deriving the public OAuth resource. The
- * value is read here and handed to the page as a string.
+ * `VITE_`-prefixed: even though it is also the web origin, the canonical OAuth
+ * resource must come from trusted deployment configuration rather than browser
+ * location or request headers. The value is handed to the page as a string.
  */
 
 export interface McpEndpoint {

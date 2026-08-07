@@ -5,7 +5,7 @@ import type { EpicNode, StreamNode, TaskNode } from "~/server/board";
  * The derived numbers the project overview shows.
  *
  * Pure functions over the aggregate the root loader already holds — the API
- * exposes no counts, and asking it for any would be a second round trip for
+ * exposes no counts, and asking it for any would be a second API call for
  * something the payload already answers.
  */
 

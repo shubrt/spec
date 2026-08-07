@@ -45,7 +45,7 @@ export type ConnectionWorkspaceChecks = {
  * Separates what Clerk knows from what the last zpecs API read confirmed.
  *
  * An API failure must not be rendered as proof that the session has no
- * organization: 404/500/network failures say nothing about `org_id`. Keeping
+ * organization: 404/500/invocation failures say nothing about `org_id`. Keeping
  * these as two checks makes that distinction explicit on the connection page.
  */
 export function connectionWorkspaceChecks(input: {

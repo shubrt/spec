@@ -1,11 +1,10 @@
-import { drizzle } from "drizzle-orm/bun-sql";
+import { drizzle } from "drizzle-orm/postgres-js";
+import postgres from "postgres";
 import { env } from "../../_/env";
 import { schema } from "./schema";
 
-export const db = drizzle({
-  connection: env.DATABASE_URL,
-  schema,
-  casing: "snake_case",
-});
+const client = postgres(env.DATABASE_URL, { prepare: false });
+
+export const db = drizzle(client, { schema, casing: "snake_case" });
 
 export type Db = typeof db;
