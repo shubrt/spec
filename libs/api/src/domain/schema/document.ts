@@ -166,9 +166,9 @@ export const DOCUMENT_SCHEMA_TARGETS = Object.keys(
  * The two tiers are genuinely different types rather than one optional-field
  * type: a stored document *has* an id, a key and a revision, and code that reads
  * `document.meta.revision` should not have to null-check it. So the stored types
- * are what `jsonbObject<T>()` gets parameterized with, while `ZpecsDocument` — the
- * union `parseDocument` returns — spans both, because what comes back depends on
- * the `source` the caller asked for.
+ * are what the Drizzle `jsonb()` columns are parameterized with, while
+ * `ZpecsDocument` — the union `parseDocument` returns — spans both, because what
+ * comes back depends on the `source` the caller asked for.
  */
 export type EpicDocumentInput = z.infer<typeof epicDocument.agent>;
 export type EpicDocument = z.infer<typeof epicDocument.store>;

@@ -19,7 +19,7 @@ export type RequestEventLoggerAccessor = () => RequestEventLogger | undefined;
 
 let requestEventLogger: RequestEventLoggerAccessor | undefined;
 
-/** Installed by `apps/web` when it creates the instrumented runtime. */
+/** Installed by the TanStack server host when it creates the instrumented runtime. */
 export function configureRequestEventLogger(
   accessor: RequestEventLoggerAccessor | undefined,
 ): void {

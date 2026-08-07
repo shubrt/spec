@@ -1,22 +1,19 @@
 import { treaty } from "@elysiajs/eden";
-import type { App } from "@zpecs/api";
-import { env } from "~/lib/env";
+import { runtimeApp } from "./zpecsRuntime.server";
 
 /**
  * A Treaty client bound to one session.
  *
- * `App` is @zpecs/api's Elysia instance type, so every path, every response
- * status and every DTO on this client is the API's own — a renamed field on the
- * server becomes a type error here rather than an `undefined` at runtime.
+ * Treaty receives the Elysia instance directly, so every path, every response
+ * status and every DTO is inferred from the shared API without a network hop.
  *
  * The token is per-request, so the client is built per-request too. The API
- * accepts a Clerk session token as `Authorization: Bearer`; sending the token
- * rather than forwarding the browser's Clerk cookie is what keeps this a plain
- * server-to-server call, with no cross-origin cookie semantics to get right and
- * no CORS on the API.
+ * still accepts a Clerk session token as `Authorization: Bearer`; retaining the
+ * same guard means direct calls cannot bypass workspace scoping just because
+ * API and web now share one process.
  */
 export function createApiClient(sessionToken: string) {
-  return treaty<App>(env.ZPECS_API_URL, {
+  return treaty(runtimeApp, {
     headers: { authorization: `Bearer ${sessionToken}` },
     // `parseDate` defaults to true, and that default is a type lie. Treaty walks
     // the parsed body and revives anything ISO-8601-shaped into a `Date`, while

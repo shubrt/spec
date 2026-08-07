@@ -9,7 +9,7 @@
 export interface ApiFailure {
   readonly status: "signed_out" | "no_workspace" | "unavailable";
   readonly message: string;
-  /** Whether an HTTP response, as opposed to a transport failure, was observed. */
+  /** Whether the embedded Elysia runtime produced an HTTP-shaped response. */
   readonly apiReachable: boolean;
 }
 
@@ -39,7 +39,7 @@ export function toApiFailure(
   if (!error) {
     return {
       status: "unavailable",
-      message: "The zpecs API did not answer.",
+      message: "The zpecs API could not complete the request.",
       apiReachable: false,
     };
   }

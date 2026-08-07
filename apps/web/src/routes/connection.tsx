@@ -14,9 +14,9 @@ import { getMcpEndpoint } from "~/server/connection";
  * MCP clients: `POST /mcp` is stateless, a fresh transport per request with no
  * `sessionIdGenerator`, so there is no such thing as a connected client to
  * report on. This page therefore reports the two things it really can observe —
- * whether the API answered, and whether this session has a workspace — and says
- * plainly that it cannot observe the third. An indicator reading "connected"
- * would be decoration over a fact nobody measured.
+ * whether the embedded API completed a data read, and whether this session has
+ * a workspace — and says plainly that it cannot observe the third. An indicator
+ * reading "connected" would be decoration over a fact nobody measured.
  */
 export const Route = createFileRoute("/connection")({
   loader: () => getMcpEndpoint(),
@@ -30,9 +30,8 @@ function ConnectionPage() {
   const clientSetups = mcpClientSetups(endpoint.url);
   const [claudeSetup, codexSetup] = clientSetups;
 
-  // Any HTTP response proves the API answered — including 401, 403 and 5xx.
-  // Only an absent session that prevented a request, or an actual network
-  // failure, makes this false.
+  // Any Elysia response proves the embedded API ran — including 401, 403 and
+  // 5xx. An absent session or an unexpected invocation failure makes this false.
   const reachable = board.status === "ok" || board.apiReachable;
   const workspace = board.status === "ok" ? board.workspace : null;
   const unreachableReason = board.status === "ok" ? null : board.message;
@@ -84,11 +83,11 @@ function ConnectionPage() {
           <Card className="p-4">
             <Check
               ok={reachable}
-              name="zpecs API reachable"
+              name="zpecs API available"
               detail={
                 reachable
-                  ? "The API answered this app's last read."
-                  : (unreachableReason ?? "The API did not answer.")
+                  ? "The embedded API completed this app's last read."
+                  : (unreachableReason ?? "The API read did not complete.")
               }
             />
             <Check

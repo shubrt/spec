@@ -12,10 +12,9 @@ export const app = new Elysia()
 
 export type App = typeof app;
 
-// The launcher installs an evlog accessor through this side-effect-free bridge.
+// The executable host installs an evlog accessor through this side-effect-free bridge.
 // Re-exporting it keeps evlog itself at the executable runtime boundary.
 export { configureRequestEventLogger } from "./eventLog";
 
-// Re-exported so the launcher (apps/web) can read PORT without its own
-// env schema — libs/api is "all code", apps/web is just the launcher.
+// Public URL, database and Clerk configuration remain owned by the shared API.
 export { env } from "./env";
