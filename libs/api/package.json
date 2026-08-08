@@ -14,8 +14,8 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.tools.json",
     "schema:generate": "bun scripts/generateSchemas.ts --write",
     "schema:check": "bun scripts/generateSchemas.ts --check",
-    "project:bootstrap": "bun --env-file=../../apps/web/.env scripts/bootstrapProject.ts",
-    "db:push": "bun --env-file=../../apps/web/.env drizzle-kit push"
+    "project:bootstrap": "bun --env-file=../../.env scripts/bootstrapProject.ts",
+    "db:push": "bun --env-file=../../.env drizzle-kit push"
   },
   "dependencies": {
     "@clerk/backend": "^3.15.0",

@@ -33,7 +33,7 @@ if [ -z "${CLERK_PUBLISHABLE_KEY}" ]; then
 fi
 case "${CLERK_PUBLISHABLE_KEY}" in
   pk_test_placeholder_not_wired_in_yet|pk_test_replace-me)
-    fail "CLERK_PUBLISHABLE_KEY is still the .env placeholder. Complete SETUP.md steps 1-4 and export the real apps/web VITE_CLERK_PUBLISHABLE_KEY value under this script's CLERK_PUBLISHABLE_KEY input name before running it."
+    fail "CLERK_PUBLISHABLE_KEY is still the root .env.example placeholder. Complete SETUP.md steps 1-4 and export the real root .env VITE_CLERK_PUBLISHABLE_KEY value under this script's CLERK_PUBLISHABLE_KEY input name before running it."
     ;;
 esac
 case "${CLERK_PUBLISHABLE_KEY}" in

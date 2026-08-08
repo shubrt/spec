@@ -62,7 +62,7 @@ export function createRuntimeApp(options: RuntimeAppOptions = {}) {
 
   if (!drain && options.announceConsoleFallback !== false) {
     console.info(
-      "[zpecs-api] AXIOM_DATASET / AXIOM_TOKEN not set — structured request events use the console.",
+      "[zpecs-api] ZPECS_AXIOM_DATASET / ZPECS_AXIOM_TOKEN (or deployment AXIOM_DATASET / AXIOM_TOKEN) not set — structured request events use the console.",
     );
   }
 

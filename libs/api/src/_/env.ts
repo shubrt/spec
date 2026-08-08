@@ -88,6 +88,7 @@ export const env = createEnv({
   },
   runtimeEnv: {
     ...process.env,
+    DATABASE_URL: process.env.ZPECS_DATABASE_URL || process.env.DATABASE_URL,
     CLERK_PUBLISHABLE_KEY: genericPublishableKey ?? vitePublishableKey,
   },
   emptyStringAsUndefined: true,

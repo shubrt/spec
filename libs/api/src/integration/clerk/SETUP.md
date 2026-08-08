@@ -1,14 +1,14 @@
 # Canonical Clerk instance — setup and live verification
 
-The Clerk tenant configured in `apps/web/.env` is zpecs' canonical
+The Clerk tenant configured in the repository-root `.env` is zpecs' canonical
 authorization server for both Claude Code and OpenAI Codex. The shared
 `@zpecs/api` Elysia app runs inside that TanStack Start service. zpecs does
 not run an OpenAI model and needs neither an OpenAI SDK nor an OpenAI API key:
 both clients connect to the same client-neutral MCP endpoint on the web origin.
 
-Keep real keys and tokens in gitignored `.env` files or the deployment secret
-store. This document and the committed `.env.example` file contain placeholders
-only.
+Keep real keys and tokens in the gitignored root `.env` or the deployment
+secret store. This document and the committed root `.env.example` file contain
+placeholders only.
 
 The required scope list is defined once by
 `../../domain/auth/mcpOAuth.ts`'s `MCP_OAUTH_SCOPES`:
@@ -51,7 +51,7 @@ functions call the shared Elysia app in-process through Eden Treaty. There is no
 `ZPECS_API_URL` or second service-to-service hop. The MCP address copied from the
 Connection page is built exclusively from `ZPECS_PUBLIC_URL`.
 
-Configure the Clerk key pair in `apps/web/.env`:
+Configure the Clerk key pair in the repository-root `.env`:
 
 - `VITE_CLERK_PUBLISHABLE_KEY` is the canonical publishable-key variable used
   by the browser, TanStack middleware and shared Elysia runtime.
@@ -240,9 +240,10 @@ the selected test workspace.
 
 1. Pause automatic deployments of the former API service while leaving its
    current deployment available for rollback during the release check.
-2. Configure the web service with `DATABASE_URL`, the Clerk variables, optional
-   Axiom variables, and the exact canonical HTTPS web origin as
-   `ZPECS_PUBLIC_URL`.
+2. Configure the web service with `ZPECS_DATABASE_URL`, the Clerk variables,
+   optional `ZPECS_AXIOM_DATASET` and `ZPECS_AXIOM_TOKEN`, and the exact canonical
+   HTTPS web origin as `ZPECS_PUBLIC_URL`. Deployments may use the generic
+   `DATABASE_URL`, `AXIOM_DATASET`, and `AXIOM_TOKEN` fallback names.
 3. Deploy the combined TanStack service. Verify the protected-resource
    metadata, the `401` challenge, the `403 insufficient_scope` contract, the
    web project flow, and one real read-only Claude or Codex MCP flow on the web

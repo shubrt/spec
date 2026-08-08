@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "clean": "git clean -xdf dist node_modules",
-    "dev": "vite dev",
-    "build": "vite build",
-    "start": "srvx serve --port ${PORT:-3003} --prod --static ../client --entry dist/server/server.js",
+    "dev": "bun --env-file=../../.env run vite dev",
+    "build": "bun --env-file=../../.env run vite build",
+    "start": "bun --env-file=../../.env run srvx serve --port ${PORT:-3003} --prod --static ../client --entry dist/server/server.js",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

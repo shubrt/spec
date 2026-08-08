@@ -61,6 +61,11 @@ export const env = createEnv({
     AXIOM_DATASET: z.string().min(1).optional(),
     AXIOM_TOKEN: z.string().min(1).optional(),
   },
-  runtimeEnv: process.env,
+  runtimeEnv: {
+    ...process.env,
+    DATABASE_URL: process.env.ZPECS_DATABASE_URL || process.env.DATABASE_URL,
+    AXIOM_DATASET: process.env.ZPECS_AXIOM_DATASET || process.env.AXIOM_DATASET,
+    AXIOM_TOKEN: process.env.ZPECS_AXIOM_TOKEN || process.env.AXIOM_TOKEN,
+  },
   emptyStringAsUndefined: true,
 });
