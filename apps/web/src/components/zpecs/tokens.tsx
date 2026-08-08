@@ -5,12 +5,8 @@ import type { Tone } from "~/lib/vocabulary";
 
 /**
  * The presentational primitives that render zpecs' status vocabularies through
- * the ported `data-tone` system.
- *
- * The equivalent file in `apps/legacy project` is `components/pm/tokens.tsx`, which could
- * not be ported: it resolves labels through legacy project's own status vocabulary, which
- * is not zpecs'. The CSS underneath — `.tone-dot`, `.tone-pill`, `.rule-tag` in
- * `styles.css` — is byte-identical, so the two dashboards stay one visual system.
+ * the `data-tone` system — `.tone-dot`, `.tone-pill` and `.rule-tag` in
+ * `styles.css`.
  *
  * Tone is passed in rather than derived here, because which vocabulary a status
  * belongs to is what makes the mapping exhaustive, and only the caller knows

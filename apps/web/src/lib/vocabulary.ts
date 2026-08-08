@@ -9,12 +9,10 @@ import type { EpicNode, StreamNode, TaskNode } from "~/server/board";
  */
 
 /**
- * The four tones the ported `data-tone` CSS styles, plus the neutral default.
- *
- * `styles.css` is byte-identical to `apps/legacy project`'s and stays that way, so the
- * palette is the settled one rather than a second copy free to drift. zpecs'
- * vocabularies are larger than legacy project's, which is why statuses map onto these
- * four rather than each getting a colour of its own.
+ * The four tones the `data-tone` CSS in `styles.css` styles, plus the neutral
+ * default. zpecs' three status vocabularies are larger than four together,
+ * which is why statuses map onto these rather than each getting a colour of
+ * its own.
  */
 export type Tone = "in_progress" | "blocked" | "done" | "none";
 

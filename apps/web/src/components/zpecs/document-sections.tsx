@@ -136,8 +136,7 @@ export function Field({ name, children }: { name: string; children: ReactNode })
 }
 
 /**
- * A left-ruled block for a rule or a decision — the shape legacy project uses for
- * business rules, kept so the two dashboards read the same.
+ * A left-ruled block for a rule or a decision.
  */
 export function RuledBlock({ label, children }: { label?: string; children: ReactNode }) {
   return (
