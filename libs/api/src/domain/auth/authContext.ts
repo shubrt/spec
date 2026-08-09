@@ -43,7 +43,7 @@ export function hasWorkspace(auth: AuthContext): auth is WorkspaceAuthContext {
 }
 
 /**
- * The key zpecs' `AuthContext` travels under inside the MCP SDK's `AuthInfo`.
+ * The key zpecs's `AuthContext` travels under inside the MCP SDK's `AuthInfo`.
  *
  * The SDK's `AuthInfo` is the only channel from an HTTP request into a tool
  * handler: `transport.handleRequest(request, { authInfo })` puts it on every

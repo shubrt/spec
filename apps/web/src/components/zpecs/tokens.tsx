@@ -4,7 +4,7 @@ import { cn } from "~/lib/utils";
 import type { Tone } from "~/lib/vocabulary";
 
 /**
- * The presentational primitives that render zpecs' status vocabularies through
+ * The presentational primitives that render zpecs's status vocabularies through
  * the `data-tone` system — `.tone-dot`, `.tone-pill` and `.rule-tag` in
  * `styles.css`.
  *

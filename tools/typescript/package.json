@@ -1,0 +1,9 @@
+{
+  "name": "@tool/tsconfig",
+  "files": [
+    "*.json"
+  ],
+  "devDependencies": {
+    "typescript": "catalog:"
+  }
+}

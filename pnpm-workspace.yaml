@@ -1,0 +1,19 @@
+packages:
+  - "apps/*"
+  - "libs/*"
+  - "tools/*"
+
+allowBuilds:
+  bun: true
+  esbuild: true
+
+# Hoist type packages to the root node_modules so tsc can name inferred
+# types by bare specifier during declaration checks (avoids TS2742 under
+# pnpm's isolated store).
+publicHoistPattern:
+  - "*types*"
+
+catalog:
+  zod: ^4.1.5
+  typescript: ^5.9.2
+  "@t3-oss/env-core": ^0.13.8

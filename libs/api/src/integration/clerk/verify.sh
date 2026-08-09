@@ -274,14 +274,14 @@ curl -sS -f "${FAPI_URL}/.well-known/oauth-authorization-server" \
   || fail "Clerk metadata did not prove DCR and all four required zpecs scopes. Check SETUP.md and the Clerk Dashboard."
 echo
 
-echo "== 2. zpecs' protected-resource metadata (RFC 9728) =="
+echo "== 2. zpecs's protected-resource metadata (RFC 9728) =="
 echo "GET ${ZPECS_BASE_URL}/.well-known/oauth-protected-resource/mcp"
 curl -sS -f "${ZPECS_BASE_URL}/.well-known/oauth-protected-resource/mcp" \
   | check_protected_resource_metadata \
-  || fail "zpecs' protected-resource metadata is unavailable or its scopes differ from the required four. Is apps/web running at ${ZPECS_BASE_URL}?"
+  || fail "zpecs's protected-resource metadata is unavailable or its scopes differ from the required four. Is apps/web running at ${ZPECS_BASE_URL}?"
 echo
 
-echo "== 3. zpecs' unauthenticated MCP challenge =="
+echo "== 3. zpecs's unauthenticated MCP challenge =="
 echo "POST ${EXPECTED_RESOURCE}"
 curl -sS -o /dev/null -D - \
   -X POST \
@@ -290,14 +290,14 @@ curl -sS -o /dev/null -D - \
   --data-binary '{"jsonrpc":"2.0","id":"verify-auth-challenge","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"zpecs-verify","version":"1"}}}' \
   "${EXPECTED_RESOURCE}" \
   | check_unauthenticated_challenge \
-  || fail "zpecs' unauthenticated MCP response did not provide the canonical 401 challenge. Is apps/web running at ${ZPECS_BASE_URL}?"
+  || fail "zpecs's unauthenticated MCP response did not provide the canonical 401 challenge. Is apps/web running at ${ZPECS_BASE_URL}?"
 echo
 
-echo "== 4. zpecs' authorization-server passthrough =="
+echo "== 4. zpecs's authorization-server passthrough =="
 echo "GET ${ZPECS_BASE_URL}/.well-known/oauth-authorization-server"
 curl -sS -f "${ZPECS_BASE_URL}/.well-known/oauth-authorization-server" \
   | check_authorization_server_metadata "zpecs authorization-server passthrough" \
-  || fail "zpecs' authorization-server passthrough did not prove DCR and all four required scopes. Is apps/web running at ${ZPECS_BASE_URL}?"
+  || fail "zpecs's authorization-server passthrough did not prove DCR and all four required scopes. Is apps/web running at ${ZPECS_BASE_URL}?"
 echo
 
 echo "== 5. Safe access-token organization-claim check =="

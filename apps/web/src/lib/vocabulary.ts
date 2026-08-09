@@ -10,7 +10,7 @@ import type { EpicNode, StreamNode, TaskNode } from "~/server/board";
 
 /**
  * The four tones the `data-tone` CSS in `styles.css` styles, plus the neutral
- * default. zpecs' three status vocabularies are larger than four together,
+ * default. zpecs's three status vocabularies are larger than four together,
  * which is why statuses map onto these rather than each getting a colour of
  * its own.
  */

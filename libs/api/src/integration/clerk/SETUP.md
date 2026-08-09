@@ -1,6 +1,6 @@
 # Canonical Clerk instance — setup and live verification
 
-The Clerk tenant configured in the repository-root `.env` is zpecs' canonical
+The Clerk tenant configured in the repository-root `.env` is zpecs's canonical
 authorization server for both Claude Code and OpenAI Codex. The shared
 `@zpecs/api` Elysia app runs inside that TanStack Start service. zpecs does
 not run an OpenAI model and needs neither an OpenAI SDK nor an OpenAI API key:
@@ -96,7 +96,7 @@ tenant.
 6. Create a test user and a dedicated test organization, and make the user a
    member. Also exercise a user without an organization: Clerk should route
    that user to organization setup. At the Elysia auth boundary, a valid
-   full-scope token without `org_id` remains authenticated and follows zpecs'
+   full-scope token without `org_id` remains authenticated and follows zpecs's
    existing `no_workspace` remediation instead of restarting OAuth.
 
 7. Remove any old statically configured OAuth client with a fixed callback
@@ -135,7 +135,7 @@ The script requires all of the following:
   challenge whose `resource_metadata` is exactly
   `${ZPECS_BASE_URL}/.well-known/oauth-protected-resource/mcp` and whose `scope`
   contains all four required scopes.
-- zpecs' authorization-server passthrough still exposes DCR and the scopes.
+- zpecs's authorization-server passthrough still exposes DCR and the scopes.
 - When supplied, the access token is a JWT with a non-empty `org_id`.
 
 The script never prints the access token, its payload, or individual claim

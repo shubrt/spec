@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "./core.json",
+  "compilerOptions": {
+    "moduleResolution": "Bundler",
+    "module": "ESNext",
+    "outDir": "${configDir}/dist",
+    "rootDir": "${configDir}/src",
+
+    "isolatedModules": true,
+
+    "declaration": true,
+    "declarationMap": true,
+
+    "emitDeclarationOnly": true,
+    "noEmit": false
+  }
+}

@@ -70,7 +70,7 @@ function unauthorized(reason: string): Response {
   );
 }
 
-/** A valid token that needs renewed consent for zpecs' complete scope set. */
+/** A valid token that needs renewed consent for zpecs's complete scope set. */
 function insufficientScope(): Response {
   return Response.json(
     {

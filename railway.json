@@ -1,0 +1,23 @@
+{
+  "$schema": "https://railway.com/railway.schema.json",
+  "build": {
+    "builder": "RAILPACK",
+    "buildCommand": "vp run --filter @zpecs/web build",
+    "watchPatterns": [
+      "/apps/web/**",
+      "/libs/api/**",
+      "/tools/typescript/**",
+      "/.env.example",
+      "/package.json",
+      "/pnpm-lock.yaml",
+      "/pnpm-workspace.yaml",
+      "/vite.config.ts"
+    ]
+  },
+  "deploy": {
+    "preDeployCommand": "vp run --filter @zpecs/api db:push",
+    "startCommand": "vp run --filter @zpecs/web start",
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 10
+  }
+}

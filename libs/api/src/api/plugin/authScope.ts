@@ -5,15 +5,10 @@ import { resolveSessionAuth } from "../../domain/auth/resolveSessionAuth";
 /**
  * ── ADR: zpecs takes exactly ONE Elysia lifecycle hook, and this is it ──────────
  *
- * `libs/zpecs-api` uses no lifecycle hooks at all, and that is the house style:
- * a handler reads its own inputs, so what a route does is readable from the route.
- * This file is the one deliberate departure, and the reason is the difference in
- * what a mistake costs.
- *
- * In zpecs a forgotten guard produces a **wrong answer for the single tenant** —
- * visible, embarrassing, contained. In zpecs a forgotten guard produces a
- * **cross-tenant leak**: one workspace reading another workspace's roadmap. That
- * asymmetry is what buys a hook here and nowhere else.
+ * A handler normally reads its own inputs, so what a route does is readable from
+ * the route. This file is the one deliberate departure, because in Zpecs a
+ * forgotten guard can produce a cross-workspace leak. That failure mode, not
+ * convenience, is what buys a hook here and nowhere else.
  *
  * **Why `resolve` and not `derive`/`onRequest`/`onBeforeHandle`.** `resolve` runs
  * *after* validation, so a malformed request is rejected before any Clerk call or

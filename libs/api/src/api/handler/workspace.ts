@@ -29,7 +29,7 @@ import { authScope } from "../plugin/authScope";
  *    precise enough that a field rename breaks the consumer's build.
  */
 
-/** The signed-in user's own workspace. `id` is zpecs' uuid, never the Clerk org id. */
+/** The signed-in user's own workspace. `id` is zpecs's uuid, never the Clerk org id. */
 const WorkspaceDto = z.strictObject({
   id: z.uuid(),
   name: z.string(),

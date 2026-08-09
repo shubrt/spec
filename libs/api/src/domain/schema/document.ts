@@ -180,11 +180,11 @@ export type TaskDocumentInput = z.infer<typeof taskDocument.agent>;
 export type TaskDocument = z.infer<typeof taskDocument.store>;
 
 /** A validated document as it is stored. Discriminated on `entity`. */
-export type ZpecStoredDocument = EpicDocument | StreamDocument | TaskDocument;
+export type ZpecsStoredDocument = EpicDocument | StreamDocument | TaskDocument;
 
 /** Any validated document, either tier. What `parseDocument` returns. */
 export type ZpecsDocument =
-  | ZpecStoredDocument
+  | ZpecsStoredDocument
   | EpicDocumentInput
   | StreamDocumentInput
   | TaskDocumentInput;

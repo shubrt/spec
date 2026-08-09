@@ -6,7 +6,7 @@ import tsConfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   server: {
-    // 3001 = zpecs.api, 3003 = unified zpecs web + MCP host.
+    // The web UI and MCP endpoint share this one local origin.
     port: 3003,
   },
   plugins: [
