@@ -1,5 +1,6 @@
 import { type SQL, and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "../../integration/drizzle/client";
+import { executeRows } from "../../integration/drizzle/executeRows";
 import { entityLink } from "../../integration/drizzle/schema/entityLink";
 import { epic } from "../../integration/drizzle/schema/epic";
 import { stream } from "../../integration/drizzle/schema/stream";
@@ -139,10 +140,8 @@ async function forEntity(
   endpoint: DependencyEndpoint,
   executor: DbExecutor = db,
 ): Promise<readonly DependencyRow[]> {
-  const rows = (await executor.execute(
-    dependencyStatement(scope, endpoint),
-  )) as unknown as RawDependencyRow[];
-  return [...rows].map(toDependencyRow);
+  const rows = await executeRows<RawDependencyRow>(executor, dependencyStatement(scope, endpoint));
+  return rows.map(toDependencyRow);
 }
 
 /**

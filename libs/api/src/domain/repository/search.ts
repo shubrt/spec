@@ -1,5 +1,6 @@
 import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import { db } from "../../integration/drizzle/client";
+import { executeRows } from "../../integration/drizzle/executeRows";
 import { epic } from "../../integration/drizzle/schema/epic";
 import { stream } from "../../integration/drizzle/schema/stream";
 import { task } from "../../integration/drizzle/schema/task";
@@ -245,8 +246,8 @@ const toHitRow = (row: RawSearchRow): SearchHitRow => {
 };
 
 const run = async (executor: DbExecutor, statement: SQL): Promise<readonly SearchHitRow[]> => {
-  const rows = (await executor.execute(statement)) as unknown as RawSearchRow[];
-  return [...rows].map(toHitRow);
+  const rows = await executeRows<RawSearchRow>(executor, statement);
+  return rows.map(toHitRow);
 };
 
 /**
