@@ -7,16 +7,18 @@
       "/apps/web/**",
       "/libs/api/**",
       "/tools/typescript/**",
+      "/.bun-version",
       "/.env.example",
       "/package.json",
       "/pnpm-lock.yaml",
       "/pnpm-workspace.yaml",
+      "/railway.json",
       "/vite.config.ts"
     ]
   },
   "deploy": {
     "preDeployCommand": "vp run --filter @zpecs/api db:deploy",
-    "startCommand": "vp run --filter @zpecs/web start",
+    "startCommand": "cd apps/web && bun --env-file=../../.env run node .output/server/index.mjs",
     "restartPolicyType": "ON_FAILURE",
     "restartPolicyMaxRetries": 10
   }
