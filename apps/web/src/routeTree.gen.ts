@@ -9,17 +9,17 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as EpicsRouteImport } from './routes/epics'
-import { Route as ConnectionRouteImport } from './routes/connection'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as TaskTaskKeyRouteImport } from './routes/task.$taskKey'
-import { Route as StreamStreamKeyRouteImport } from './routes/stream.$streamKey'
-import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
+import { Route as ConnectionRouteImport } from './routes/connection'
+import { Route as EpicsRouteImport } from './routes/epics'
 import { Route as EpicEpicKeyRouteImport } from './routes/epic.$epicKey'
+import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
+import { Route as StreamStreamKeyRouteImport } from './routes/stream.$streamKey'
+import { Route as TaskTaskKeyRouteImport } from './routes/task.$taskKey'
 
-const EpicsRoute = EpicsRouteImport.update({
-  id: '/epics',
-  path: '/epics',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ConnectionRoute = ConnectionRouteImport.update({
@@ -27,19 +27,14 @@ const ConnectionRoute = ConnectionRouteImport.update({
   path: '/connection',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const EpicsRoute = EpicsRouteImport.update({
+  id: '/epics',
+  path: '/epics',
   getParentRoute: () => rootRouteImport,
 } as any)
-const TaskTaskKeyRoute = TaskTaskKeyRouteImport.update({
-  id: '/task/$taskKey',
-  path: '/task/$taskKey',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const StreamStreamKeyRoute = StreamStreamKeyRouteImport.update({
-  id: '/stream/$streamKey',
-  path: '/stream/$streamKey',
+const EpicEpicKeyRoute = EpicEpicKeyRouteImport.update({
+  id: '/epic/$epicKey',
+  path: '/epic/$epicKey',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignInSplatRoute = SignInSplatRouteImport.update({
@@ -47,9 +42,14 @@ const SignInSplatRoute = SignInSplatRouteImport.update({
   path: '/sign-in/$',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EpicEpicKeyRoute = EpicEpicKeyRouteImport.update({
-  id: '/epic/$epicKey',
-  path: '/epic/$epicKey',
+const StreamStreamKeyRoute = StreamStreamKeyRouteImport.update({
+  id: '/stream/$streamKey',
+  path: '/stream/$streamKey',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TaskTaskKeyRoute = TaskTaskKeyRouteImport.update({
+  id: '/task/$taskKey',
+  path: '/task/$taskKey',
   getParentRoute: () => rootRouteImport,
 } as any)
 
@@ -123,11 +123,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/epics': {
-      id: '/epics'
-      path: '/epics'
-      fullPath: '/epics'
-      preLoaderRoute: typeof EpicsRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/connection': {
@@ -137,25 +137,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConnectionRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/epics': {
+      id: '/epics'
+      path: '/epics'
+      fullPath: '/epics'
+      preLoaderRoute: typeof EpicsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/task/$taskKey': {
-      id: '/task/$taskKey'
-      path: '/task/$taskKey'
-      fullPath: '/task/$taskKey'
-      preLoaderRoute: typeof TaskTaskKeyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/stream/$streamKey': {
-      id: '/stream/$streamKey'
-      path: '/stream/$streamKey'
-      fullPath: '/stream/$streamKey'
-      preLoaderRoute: typeof StreamStreamKeyRouteImport
+    '/epic/$epicKey': {
+      id: '/epic/$epicKey'
+      path: '/epic/$epicKey'
+      fullPath: '/epic/$epicKey'
+      preLoaderRoute: typeof EpicEpicKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-in/$': {
@@ -165,11 +158,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignInSplatRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/epic/$epicKey': {
-      id: '/epic/$epicKey'
-      path: '/epic/$epicKey'
-      fullPath: '/epic/$epicKey'
-      preLoaderRoute: typeof EpicEpicKeyRouteImport
+    '/stream/$streamKey': {
+      id: '/stream/$streamKey'
+      path: '/stream/$streamKey'
+      fullPath: '/stream/$streamKey'
+      preLoaderRoute: typeof StreamStreamKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/task/$taskKey': {
+      id: '/task/$taskKey'
+      path: '/task/$taskKey'
+      fullPath: '/task/$taskKey'
+      preLoaderRoute: typeof TaskTaskKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
   }
