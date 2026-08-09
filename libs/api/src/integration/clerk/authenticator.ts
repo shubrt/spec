@@ -72,9 +72,8 @@ export type AuthenticationOutcome<TIdentity> =
  *     cache to build), but it is the documented source and it also returns
  *     `org_name` and `org_slug`, which would fill the workspace row outright.
  *     **This remains the fallback if path 2 ever comes up empty**. Opaque
- *     access tokens cannot satisfy the strict local audience check below;
- *     supporting them would require an introspection/userinfo path that keeps
- *     the same audience guarantee before resolving organization claims.
+ *     access tokens still need that path before they can resolve an
+ *     organization-scoped workspace.
  *
  * Decoding without re-verifying is safe *here specifically*: the caller only
  * ever passes the token string that `clerkClient.authenticateRequest` just
@@ -98,9 +97,8 @@ export function readOrgClaims(verifiedAccessToken: string): ClerkOrgClaims | nul
 
 /**
  * Reads the payload segment of a JWT. Returns null for anything that is not a
- * three-segment JWT with a JSON object payload. Callers decide whether that
- * means an invalid audience-bound OAuth token or an absent optional claim;
- * malformed input must never turn either path into a 500.
+ * three-segment JWT with a JSON object payload. Callers treat that as an absent
+ * optional claim; malformed input must never turn claim extraction into a 500.
  *
  * This performs **no** signature check by design; see `readOrgClaims`.
  */
@@ -125,27 +123,15 @@ function decodeJwtPayload(token: string): Record<string, unknown> | null {
 }
 
 /**
- * Clerk checks a configured audience when an `aud` claim is present, but its
- * verifier intentionally tolerates tokens without that claim for other Clerk
- * token types. MCP access tokens are audience-bound, so the already-verified
- * JWT must also carry this resource explicitly.
- */
-function hasExpectedAudience(verifiedAccessToken: string, expectedAudience: string): boolean {
-  const audience = decodeJwtPayload(verifiedAccessToken)?.["aud"];
-  if (typeof audience === "string") return audience === expectedAudience;
-  return (
-    Array.isArray(audience) &&
-    audience.every((entry) => typeof entry === "string") &&
-    audience.includes(expectedAudience)
-  );
-}
-
-/**
  * The single OAuth authentication boundary.
  *
  * `acceptsToken: "oauth_token"` is what makes a Clerk *session* cookie fail
  * here: `/mcp` is reachable only with a token issued through the OAuth flow.
- * `audience` binds that token to the configured public MCP resource.
+ * `audience` asks Clerk to enforce the configured public MCP resource whenever
+ * the access token carries an `aud` claim. Clerk's current OAuth tokens can
+ * legitimately omit `aud` (they use `azp` instead), and Clerk's own verifier
+ * and MCP middleware accept that shape. Do not add a second decoded-token gate:
+ * it rejects a token that the authoritative Clerk verifier just accepted.
  */
 export async function authenticateOAuthToken(
   request: Request,
@@ -160,9 +146,6 @@ export async function authenticateOAuthToken(
   });
   if (!requestState.isAuthenticated) {
     return { status: "invalid_token", reason: requestState.reason };
-  }
-  if (!hasExpectedAudience(requestState.token, expectedAudience)) {
-    return { status: "invalid_token", reason: "token_audience_mismatch" };
   }
 
   const auth = requestState.toAuth();

@@ -77,10 +77,12 @@ tenant.
    secret. Keep PKCE enabled if the Clerk tenant exposes a corresponding
    setting.
 
-4. Configure Clerk to issue JWT access tokens for the MCP flow. zpecs verifies
-   their signature, issuer, expiry, format, and audience, then reads the
-   selected organization from the verified token. An opaque access token is
-   not compatible with the current direct-claim path.
+4. Keep Clerk's default JWT access-token format for the MCP flow. Clerk's SDK
+   verifies that the bearer is an OAuth token and validates its signature,
+   issuer, expiry and any `aud` claim it carries. Current Clerk OAuth JWTs may
+   omit `aud` and identify the authorized client through `azp`; that is a valid
+   Clerk token shape and must not be rejected by a second decoded-token check.
+   An opaque access token is not compatible with the current direct-claim path.
 
 5. Set the DCR default scopes exactly:
 
@@ -145,8 +147,10 @@ reported only as present or absent; its absence does not fail this slice.
 ## 4. Direct claim path and userinfo fallback boundary
 
 `authenticator.ts` reads organization identity from the payload only after
-Clerk has verified the JWT for the canonical MCP resource audience. This keeps
-the normal request path to one verification call.
+Clerk has verified the bearer as an OAuth JWT. The configured MCP resource is
+passed to Clerk as `audience`, so a present `aud` claim is checked; Clerk OAuth
+JWTs without that optional claim are accepted in the same way as Clerk's own
+MCP middleware. This keeps the normal request path to one verification call.
 
 Do not add a userinfo request speculatively. Add the already identified
 userinfo fallback only if live OAuth evidence shows either of these cases
@@ -248,9 +252,10 @@ the selected test workspace.
    metadata, the `401` challenge, the `403 insufficient_scope` contract, the
    web project flow, and one real read-only Claude or Codex MCP flow on the web
    origin.
-4. Confirm that Clerk issues the canonical web MCP resource as the token
-   audience. If it does not, stop the release; do not weaken audience
-   validation.
+4. Confirm that discovery and the OAuth requests use the canonical web MCP
+   resource. If Clerk emits an `aud` claim, it must equal that resource. Do not
+   treat Clerk's `azp` claim as a resource audience; it identifies the OAuth
+   client/authorization party instead.
 5. Publish the new Connection-page URL and operator guidance, then stop and
    remove the former API service in the same release. Remove `ZPECS_API_URL` and
    the obsolete service configuration from the deployment environment.
