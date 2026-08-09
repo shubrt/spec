@@ -8,7 +8,7 @@ import type { EpicNode } from "~/server/board";
  * All of it runs over the one aggregate the root loader already holds. The MVP
  * deliberately does not paginate or server-filter, so typing in the search box
  * must not cost a round trip — which also means this module, not the API, owns
- * what "matches" means, and is where that decision is pinned by tests.
+ * what "matches" means and keeps that decision in one place.
  */
 
 /** The filter value that applies no constraint. Not a status, so it cannot collide with one. */
@@ -59,7 +59,7 @@ function entityText(entity: {
 /**
  * Narrows the epic list and the streams nested beneath each epic.
  *
- * The rule, stated once so the tests can hold it:
+ * The rule, stated once for every caller:
  *
  * - the epic-status filter drops whole epics;
  * - the stream-status filter drops streams, and then any epic left with none;

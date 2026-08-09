@@ -6,9 +6,8 @@ import type { EpicNode, StreamNode, TaskNode } from "~/server/board";
  *
  * The drawer is driven by the URL rather than by component state, so these ids
  * arrive from somewhere a human can edit and from links that may be weeks old.
- * That makes "no longer here" an ordinary outcome rather than an error, and it is
- * the reason this is a pure function with tests instead of a lookup inlined into
- * the component.
+ * That makes "no longer here" an ordinary outcome rather than an error. Keeping
+ * the lookup pure also prevents URL-state rules from leaking into the component.
  */
 
 export type DrawerTarget =
