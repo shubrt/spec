@@ -46,10 +46,10 @@ the client connection instructions.
 
 Two workspaces make up one deployable service:
 
-| Package       | Path       | What it is                                                        |
-| ------------- | ---------- | ----------------------------------------------------------------- |
-| `@zpecs/web`  | `apps/web` | TanStack Start web app and the unified Elysia/MCP production host |
-| `@zpecs/api`  | `libs/api` | Domain, repositories, auth, schemas, Elysia routes, and MCP tools |
+| Package      | Path       | What it is                                                        |
+| ------------ | ---------- | ----------------------------------------------------------------- |
+| `@zpecs/web` | `apps/web` | TanStack Start web app and the unified Elysia/MCP production host |
+| `@zpecs/api` | `libs/api` | Domain, repositories, auth, schemas, Elysia routes, and MCP tools |
 
 ### :building_construction: Architecture
 
@@ -87,14 +87,14 @@ Environment variables live in one file at the repository root:
 cp .env.example .env
 ```
 
-| Variable                       | Required | Purpose                                                        |
-| ------------------------------ | -------- | -------------------------------------------------------------- |
-| `ZPECS_DATABASE_URL`           | yes      | PostgreSQL connection; deployments may use `DATABASE_URL`      |
-| `ZPECS_PUBLIC_URL`             | yes      | Canonical public origin used by MCP and OAuth discovery        |
-| `VITE_CLERK_PUBLISHABLE_KEY`   | yes      | Clerk tenant used by the browser and shared API runtime        |
-| `CLERK_SECRET_KEY`             | yes      | Server-only Clerk credential                                   |
-| `ZPECS_AXIOM_DATASET`          | no       | Optional structured-event dataset; `AXIOM_DATASET` also works  |
-| `ZPECS_AXIOM_TOKEN`            | no       | Optional structured-event token; `AXIOM_TOKEN` also works      |
+| Variable                     | Required | Purpose                                                       |
+| ---------------------------- | -------- | ------------------------------------------------------------- |
+| `ZPECS_DATABASE_URL`         | yes      | PostgreSQL connection; deployments may use `DATABASE_URL`     |
+| `ZPECS_PUBLIC_URL`           | yes      | Canonical public origin used by MCP and OAuth discovery       |
+| `VITE_CLERK_PUBLISHABLE_KEY` | yes      | Clerk tenant used by the browser and shared API runtime       |
+| `CLERK_SECRET_KEY`           | yes      | Server-only Clerk credential                                  |
+| `ZPECS_AXIOM_DATASET`        | no       | Optional structured-event dataset; `AXIOM_DATASET` also works |
+| `ZPECS_AXIOM_TOKEN`          | no       | Optional structured-event token; `AXIOM_TOKEN` also works     |
 
 `ZPECS_PUBLIC_URL` must be an origin without a path or trailing slash. Local
 loopback development may use HTTP; deployed instances must use HTTPS.
@@ -108,8 +108,12 @@ columns. Two PostgreSQL details live in
 trigger afterward. The file is intentionally ordered and idempotent.
 
 ```bash
-vp run db:push
+vp run db:deploy
 ```
+
+Railway runs the same three phases automatically before each deployment through
+`railway.json`: create `pg_trgm`, push the Drizzle schema, then install the
+append-only trigger. All phases are idempotent.
 
 <!-- Getting Started -->
 
@@ -150,20 +154,21 @@ The default local origin is `http://localhost:3003`; its MCP endpoint is
 
 ## :eyes: Usage
 
-| Script             | Description                                               |
-| ------------------ | --------------------------------------------------------- |
-| `vp install`       | Install workspace dependencies                            |
-| `vp run dev`       | Start the unified web and MCP service                     |
-| `vp run build`     | Build production outputs                                  |
-| `vp run start`     | Start the built service                                   |
-| `vp run typecheck` | Type-check both packages                                  |
-| `vp run db:push`   | Push the Drizzle schema                                   |
-| `vp check`         | Run lint and format checks                                |
-| `vp check --fix`   | Apply lint and format fixes                               |
-| `vp run sherif`    | Check workspace dependency consistency                    |
-| `vp run qa`        | Run static checks, workspace checks, and schema drift     |
-| `vp run clean`     | Remove generated package and toolchain output             |
+| Script             | Description                                           |
+| ------------------ | ----------------------------------------------------- |
+| `vp install`       | Install workspace dependencies                        |
+| `vp run dev`       | Start the unified web and MCP service                 |
+| `vp run build`     | Build production outputs                              |
+| `vp run start`     | Start the built service                               |
+| `vp run typecheck` | Type-check both packages                              |
+| `vp run db:deploy` | Apply the complete idempotent database setup          |
+| `vp run db:push`   | Push the Drizzle schema                               |
+| `vp check`         | Run lint and format checks                            |
+| `vp check --fix`   | Apply lint and format fixes                           |
+| `vp run sherif`    | Check workspace dependency consistency                |
+| `vp run qa`        | Run static checks, workspace checks, and schema drift |
+| `vp run clean`     | Remove generated package and toolchain output         |
 
-`railway.json` builds and starts only `@zpecs/web`, runs the API library's
-database schema command before deployment, and watches both workspaces plus the
+`railway.json` builds and starts only `@zpecs/web`, applies the API library's
+complete database setup before deployment, and watches both workspaces plus the
 shared toolchain configuration.

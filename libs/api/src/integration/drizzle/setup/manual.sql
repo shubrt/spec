@@ -1,5 +1,6 @@
--- Statements `drizzle-kit push` cannot express. Run by hand, in two halves —
--- the order matters, and getting it wrong breaks a fresh deploy.
+-- Statements `drizzle-kit push` cannot express. The `db:deploy` script applies
+-- them in two phases; the order matters, and getting it wrong breaks a fresh
+-- deploy.
 --
 -- Everything that push *can* express stays in the Drizzle schema, including
 -- CHECK constraints and the GENERATED ALWAYS AS tsvector columns. That is not a

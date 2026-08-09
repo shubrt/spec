@@ -15,7 +15,10 @@
     "schema:generate": "bun scripts/generateSchemas.ts --write",
     "schema:check": "bun scripts/generateSchemas.ts --check",
     "project:bootstrap": "bun --env-file=../../.env scripts/bootstrapProject.ts",
-    "db:push": "bun --env-file=../../.env drizzle-kit push"
+    "db:deploy": "pnpm run db:setup:before && pnpm run db:push && pnpm run db:setup:after",
+    "db:push": "bun --env-file=../../.env drizzle-kit push",
+    "db:setup:before": "bun --env-file=../../.env run node scripts/applyDatabaseSetup.mjs before",
+    "db:setup:after": "bun --env-file=../../.env run node scripts/applyDatabaseSetup.mjs after"
   },
   "dependencies": {
     "@clerk/backend": "^3.15.0",

@@ -6,6 +6,7 @@
     "dev": "vp run -r --parallel dev",
     "start": "vp run -r --parallel start",
     "typecheck": "vp run -r typecheck",
+    "db:deploy": "vp run --filter @zpecs/api db:deploy",
     "db:push": "vp run -r db:push",
     "clean": "vp run -r clean && git clean -xdf node_modules .vite",
     "check": "vp check",
