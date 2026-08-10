@@ -40,7 +40,7 @@ export const epic = pgTable(
     projectId: uuid()
       .notNull()
       .references(() => project.id, { onDelete: "cascade" }),
-    /** `EPIC-1`, from `project.epic_counter`. Unique per project, never reused. */
+    /** `E-1`, from `project.epic_counter`. Unique per project, never reused. */
     key: text().notNull(),
     status: text().$type<EpicStatus>().notNull().default("active"),
     /** Monotonic; every write bumps it and snapshots the document into `entity_revision`. */

@@ -1,12 +1,10 @@
-import type { EntityType, StreamType } from "../enums";
+import type { StreamType, VersionedEntityType } from "../enums";
 import type { DocumentSchemaTarget } from "./document";
-import { STREAM_SCHEMA_TARGET, usesBaseStreamContentOnly } from "./stream/registry";
-
-export { usesBaseStreamContentOnly };
+import { STREAM_SCHEMA_TARGET } from "./stream/registry";
 
 /** A valid public request for one writable document schema. */
 export type DocumentSchemaSelection =
-  | { readonly entity: Exclude<EntityType, "stream"> }
+  | { readonly entity: Exclude<VersionedEntityType, "stream"> }
   | { readonly entity: "stream"; readonly streamType: StreamType };
 
 /**

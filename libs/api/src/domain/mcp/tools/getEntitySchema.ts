@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { ENTITY_TYPE, STREAM_TYPE, type StreamType } from "../../enums";
+import { STREAM_TYPE, VERSIONED_ENTITY_TYPE, type StreamType } from "../../enums";
 import type { DocumentSchemaTarget } from "../../schema/document";
 import { documentJsonSchema } from "../../schema/jsonSchema";
-import { resolveDocumentSchemaTarget, usesBaseStreamContentOnly } from "../../schema/target";
+import { resolveDocumentSchemaTarget } from "../../schema/target";
 import { defineTool } from "../defineTool";
 import { TOOL_ERROR_CODE, textResult, toolError } from "../results";
 
@@ -12,7 +12,7 @@ import { TOOL_ERROR_CODE, textResult, toolError } from "../results";
  * rules, it is the rules.
  */
 const getEntitySchemaInput = z.strictObject({
-  entity: z.enum(ENTITY_TYPE).describe("Which entity kind's document schema to return."),
+  entity: z.enum(VERSIONED_ENTITY_TYPE),
   // A cross-field rule: required when `entity` is "stream", meaningless otherwise.
   // `z.toJSONSchema()` silently drops `.refine()`, so the rule is carried as the
   // field's own description — the only form a model ever sees — and enforced by
@@ -23,7 +23,7 @@ const getEntitySchemaInput = z.strictObject({
     .meta({
       description:
         "Required when entity is 'stream': each stream type has its own content schema. " +
-        "Must be omitted for 'epic' and 'task'.",
+        "Omit for epic, task, rule, and milestone.",
     }),
 });
 
@@ -72,10 +72,7 @@ export const getEntitySchemaTool = defineTool({
  */
 function renderSchema(target: DocumentSchemaTarget, streamType: StreamType | undefined) {
   const schema = documentJsonSchema(target);
-  const note =
-    streamType !== undefined && usesBaseStreamContentOnly(streamType)
-      ? `This is the base stream schema: ${streamType ?? ""} has no sections of its own yet, so only the invariant ones apply.`
-      : `Schema target: ${target}.`;
+  const note = `Schema target: ${target}${streamType === undefined ? "" : ` (${streamType})`}.`;
 
   return textResult(
     [

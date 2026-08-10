@@ -1,5 +1,5 @@
-import type { EpicStatus, StreamStatus, StreamType, TaskStatus } from "../enums";
-import { ruleIssue, type DocumentIssue } from "./rules";
+import type { EpicStatus, MilestoneStatus, StreamStatus, StreamType, TaskStatus } from "../enums";
+import { ruleIssue, shapeIssue, type DocumentIssue } from "./rules";
 
 /**
  * The draft/ready split, in one place, plus the domain spec §11 gates that hang
@@ -74,16 +74,9 @@ const at = (content: unknown, key: string): unknown =>
  * "Ein `ready`-Stream braucht ein passendes fachliches Erfolgskriterium" — and
  * *passend* is the whole point, so what counts differs by type:
  *
- * - `feature` — acceptance criteria. Given/when/then is the fitting form.
- * - `bug` — the expected behaviour *is* the success criterion, together with the
- *   actual behaviour that defines the defect (domain spec §11 names both).
- * - `investigation` — success criteria or an expected decision, because
- *   given/when/then cannot be written for a question that is still open.
- * - `change`, `experiment`, `refactor`, `maintenance` — no gate yet. Their
- *   type-specific sections are not modelled in this increment (see
- *   `stream/registry.ts`), so there is no field in which a criterion could be
- *   stated, and gating on a field that does not exist would make those four types
- *   unable to leave `planned` at all. The gate arrives with the sections.
+ * Every type now has addressable business targets. A `ready` Stream therefore
+ * has to contain the minimum set that makes its own kind actionable; drafts and
+ * planned Streams remain deliberately incomplete.
  */
 export const streamReadinessIssues = (
   streamType: StreamType,
@@ -98,35 +91,54 @@ export const streamReadinessIssues = (
     issues.push(ruleIssue("ready_stream_needs_success_criterion", "content.acceptance_criteria"));
   }
 
-  if (streamType === "bug") {
-    const hasActual = stated(at(content, "actual_behavior"));
-    const hasExpected = stated(at(content, "expected_behavior"));
-    if (!hasActual || !hasExpected) {
+  if (streamType === "bug" && !filled(at(content, "behavior_cases"))) {
+    issues.push(
+      ruleIssue("ready_bug_needs_actual_and_expected_behavior", "content.behavior_cases"),
+    );
+  }
+
+  if (streamType === "change" && !filled(at(content, "changes"))) {
+    issues.push(ruleIssue("ready_stream_needs_success_criterion", "content.changes"));
+  }
+
+  if (streamType === "experiment") {
+    for (const field of ["hypotheses", "success_criteria", "decision_rules"] as const) {
+      if (!filled(at(content, field))) {
+        issues.push(ruleIssue("ready_stream_needs_success_criterion", `content.${field}`));
+      }
+    }
+  }
+
+  if (streamType === "investigation") {
+    if (!filled(at(content, "questions"))) {
+      issues.push(ruleIssue("ready_stream_needs_success_criterion", "content.questions"));
+    }
+    if (!filled(at(content, "success_criteria")) && !stated(at(content, "expected_decision"))) {
       issues.push(
-        ruleIssue(
-          "ready_bug_needs_actual_and_expected_behavior",
-          hasActual ? "content.expected_behavior" : "content.actual_behavior",
-        ),
+        ruleIssue("success_criteria_may_replace_acceptance_criteria", "content.success_criteria"),
       );
     }
   }
 
-  if (
-    streamType === "investigation" &&
-    !filled(at(content, "success_criteria")) &&
-    !stated(at(content, "expected_decision"))
-  ) {
-    issues.push(
-      ruleIssue("success_criteria_may_replace_acceptance_criteria", "content.success_criteria"),
-    );
+  if (streamType === "refactor") {
+    for (const field of ["refactor_targets", "invariants"] as const) {
+      if (!filled(at(content, field))) {
+        issues.push(ruleIssue("ready_stream_needs_success_criterion", `content.${field}`));
+      }
+    }
+  }
+
+  if (streamType === "maintenance" && !filled(at(content, "maintenance_goals"))) {
+    issues.push(ruleIssue("ready_stream_needs_success_criterion", "content.maintenance_goals"));
   }
 
   return issues;
 };
 
 /**
- * The §11 gates for a task at `ready` or beyond: a technical definition of done,
- * and a reference to the business work it serves.
+ * The §11 gates for a Task at `ready` or beyond: a technical definition of done,
+ * and at least one typed reference to the business work it serves. The parent
+ * Stream type and existence checks belong to the cross-document service layer.
  *
  * `done_when` and `verification` are both required at this tier because they
  * answer different questions — what "finished" means, and how anyone would know.
@@ -148,12 +160,65 @@ export const taskReadinessIssues = (status: string, content: unknown): readonly 
 
   const implementsSection = at(content, "implements");
   const hasStream = stated(at(implementsSection, "stream_id"));
-  const hasReference =
-    filled(at(implementsSection, "requirement_ids")) ||
-    filled(at(implementsSection, "acceptance_criteria_ids"));
+  const hasReference = [
+    "requirement_ids",
+    "acceptance_criteria_ids",
+    "behavior_case_ids",
+    "change_ids",
+    "hypothesis_ids",
+    "research_question_ids",
+    "success_criteria_ids",
+    "decision_rule_ids",
+    "investigation_question_ids",
+    "refactor_target_ids",
+    "invariant_ids",
+    "quality_goal_ids",
+    "maintenance_goal_ids",
+  ].some((field) => filled(at(implementsSection, field)));
   if (!hasStream || !hasReference) {
     issues.push(ruleIssue("task_references_business_requirements", "content.implements"));
   }
 
   return issues;
+};
+
+/** Milestone lifecycle gates. Ordering remains advisory and has no date semantics. */
+export const milestoneReadinessIssues = (
+  status: string,
+  content: unknown,
+): readonly DocumentIssue[] => {
+  const lifecycle = status as MilestoneStatus;
+  if (lifecycle === "draft" || lifecycle === "cancelled") return [];
+
+  const criteria = at(content, "exit_criteria");
+  if (!filled(criteria)) {
+    return [
+      shapeIssue(
+        "content.exit_criteria",
+        `A ${lifecycle} Milestone needs at least one explicit exit criterion.`,
+      ),
+    ];
+  }
+  if (lifecycle !== "completed" || !Array.isArray(criteria)) return [];
+
+  return criteria.flatMap((criterion, index) => {
+    const criterionStatus = at(criterion, "status");
+    if (criterionStatus !== "met" && criterionStatus !== "waived") {
+      return [
+        shapeIssue(
+          `content.exit_criteria[${String(index)}].status`,
+          "A completed Milestone requires every exit criterion to be met or explicitly waived.",
+        ),
+      ];
+    }
+    if (criterionStatus === "waived" && !stated(at(criterion, "waiver_reason"))) {
+      return [
+        shapeIssue(
+          `content.exit_criteria[${String(index)}].waiver_reason`,
+          "A waived exit criterion needs a reason.",
+        ),
+      ];
+    }
+    return [];
+  });
 };

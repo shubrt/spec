@@ -73,13 +73,14 @@ export const workspaceRepository = {
   /**
    * Serializes all entity change sets inside one workspace.
    *
-   * Cross-project moves rewrite descendants without bumping their revisions,
-   * and relationship endpoints have no FK row all writers could lock. Taking
-   * the workspace row before any resolution is therefore the common boundary:
-   * a create/update cannot retain a pre-move parent projection, and a concurrent
-   * link/delete/move cannot create a stale polymorphic edge. Every change set
-   * takes this as its first database lock, avoiding lock-order inversions with
-   * the per-project key counters acquired later.
+   * Cross-project moves reproject descendant relational ownership without
+   * bumping their document revisions, and relationship endpoints have no FK row
+   * all writers could lock. Taking the workspace row before any resolution is
+   * therefore the common boundary: a create/update cannot retain a pre-move
+   * parent projection, and a concurrent link/delete/move cannot create a stale
+   * polymorphic edge. Every change set takes this as its first database lock,
+   * avoiding lock-order inversions with the per-project key counters acquired
+   * later.
    */
   async lockForChangeSet(scope: WorkspaceScope, tx: DbTransaction): Promise<void> {
     const [row] = await tx
@@ -186,7 +187,7 @@ export const workspaceRepository = {
     const [row] = await db
       .select()
       .from(project)
-      .where(and(eq(project.workspaceId, scope), eq(project.name, ref)))
+      .where(and(eq(project.workspaceId, scope), sql`lower(${project.name}) = lower(${ref})`))
       .limit(1);
     return row ?? null;
   },

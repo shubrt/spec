@@ -1,8 +1,9 @@
-import type { EntityType } from "../enums";
-import { parseKey } from "../keys";
+import { HIERARCHY_ENTITY_TYPE, LINKABLE_ENTITY_TYPE, type VersionedEntityType } from "../enums";
+import { parseVersionedKey } from "../keys";
 import { type DocumentIssue, ruleIssue, shapeIssue } from "../schema/rules";
 import {
   type ChangeSet,
+  type ChangeSetItemMutation,
   type ChangeSetOperation,
   type LinkInputRelationship,
   OPERATION_FIELDS,
@@ -21,7 +22,7 @@ import {
  * returns and therefore the only feedback channel that actually reaches an agent.
  *
  * Pure: no database, no repository, no I/O. Every check is answerable from the
- * change set itself. "Does `STR-12` exist?" and "would this close a dependency
+ * change set itself. "Does `S-12` exist?" and "would this close a dependency
  * cycle?" are not, so they are the pipeline's (B14) and belong nowhere near this
  * file.
  *
@@ -48,7 +49,7 @@ import {
  * it in natural language.
  */
 export type PlanRef =
-  | { readonly kind: "key"; readonly key: string; readonly entity: EntityType }
+  | { readonly kind: "key"; readonly key: string; readonly entity: VersionedEntityType }
   | { readonly kind: "temp"; readonly ref: string }
   | { readonly kind: "project"; readonly name: string };
 
@@ -58,17 +59,20 @@ export type PlannedOperation = {
 } & (
   | {
       readonly kind: "create";
-      readonly entity: EntityType;
+      readonly entity: VersionedEntityType;
       /** The temp id later operations reference, if the author declared one. */
       readonly ref: string | null;
       readonly parent: PlanRef;
       readonly data: Record<string, unknown>;
+      readonly roadmapOrder: number | null;
     }
   | {
       readonly kind: "update";
       readonly target: KeyRef;
       readonly expectedRevision: number;
-      readonly data: Record<string, unknown>;
+      readonly data: Record<string, unknown> | null;
+      readonly items: readonly ChangeSetItemMutation[];
+      readonly rebaseStreamRevision: boolean;
     }
   | {
       readonly kind: "archive" | "delete";
@@ -87,6 +91,15 @@ export type PlannedOperation = {
       readonly target: PlanRef;
       readonly relationship: LinkInputRelationship;
     }
+  | {
+      readonly kind: "schedule";
+      readonly target: KeyRef | Extract<PlanRef, { kind: "temp" }>;
+      /** A temp target uses the revision produced by its earlier create. */
+      readonly expectedRevision: number | null;
+      readonly milestone: KeyRef | Extract<PlanRef, { kind: "temp" }> | null;
+      readonly roadmapRank: number | null;
+      readonly roadmapOrder: number | null;
+    }
 );
 
 /** An operation that acts on an entity that already exists can only name a key. */
@@ -101,12 +114,14 @@ const PARENT_ENTITY = {
   epic: null,
   stream: "epic",
   task: "stream",
-} as const satisfies Record<EntityType, EntityType | null>;
+  rule: null,
+  milestone: null,
+} as const satisfies Record<VersionedEntityType, VersionedEntityType | null>;
 
 export function planChangeSet(changeSet: ChangeSet): PlanResult {
   const issues: DocumentIssue[] = [];
   /** Temp id → the entity type the `create` that defines it will produce. */
-  const declared = new Map<string, EntityType>();
+  const declared = new Map<string, VersionedEntityType>();
 
   // Two passes: a temp id may be referenced by an operation that comes *before*
   // the create declaring it, so every declaration has to be known before any
@@ -118,7 +133,7 @@ export function planChangeSet(changeSet: ChangeSet): PlanResult {
     const path = `operations[${index}].key`;
     if (!isTempId(operation.key)) {
       issues.push(
-        parseKey(operation.key) === null
+        parseVersionedKey(operation.key) === null
           ? shapeIssue(
               path,
               `${operation.key} is not a usable temp id. A create's key is an optional temp id: $ followed by lower-case letters, digits and underscores, e.g. $new_stream.`,
@@ -162,7 +177,7 @@ export function planChangeSet(changeSet: ChangeSet): PlanResult {
 type OperationContext = {
   readonly index: number;
   readonly operation: ChangeSetOperation;
-  readonly declared: Map<string, EntityType>;
+  readonly declared: Map<string, VersionedEntityType>;
   readonly issues: DocumentIssue[];
 };
 
@@ -200,13 +215,18 @@ function reportUnusedFields({ index, operation, issues }: OperationContext): voi
   if (
     operation.operation === "create" &&
     operation.project !== undefined &&
-    (operation.entity === "epic" || (operation.parent !== undefined && isTempId(operation.parent)))
+    (operation.entity === "epic" ||
+      operation.entity === "rule" ||
+      operation.entity === "milestone" ||
+      (operation.parent !== undefined && isTempId(operation.parent)))
   ) {
     issues.push(
       shapeIssue(
         `operations[${index}].project`,
-        operation.entity === "epic"
-          ? "project is not used when creating an epic: parent already is the project name."
+        operation.entity === "epic" ||
+          operation.entity === "rule" ||
+          operation.entity === "milestone"
+          ? "project is not used for an Epic, Rule or Milestone create: parent already is the project name."
           : "project is not used when the create parent is a temp id: temp ids are unique within this change set.",
       ),
     );
@@ -215,15 +235,29 @@ function reportUnusedFields({ index, operation, issues }: OperationContext): voi
   if (
     operation.operation === "move" &&
     operation.parent_project !== undefined &&
-    ((operation.key !== undefined && parseKey(operation.key)?.entity === "epic") ||
+    ((operation.key !== undefined && parseVersionedKey(operation.key)?.entity === "epic") ||
       (operation.parent !== undefined && isTempId(operation.parent)))
   ) {
     issues.push(
       shapeIssue(
         `operations[${index}].parent_project`,
-        operation.key !== undefined && parseKey(operation.key)?.entity === "epic"
+        operation.key !== undefined && parseVersionedKey(operation.key)?.entity === "epic"
           ? "parent_project is not used when moving an epic: parent already is the new project name."
           : "parent_project is not used when the new parent is a temp id: temp ids are unique within this change set.",
+      ),
+    );
+  }
+
+  if (
+    operation.operation === "schedule" &&
+    operation.project !== undefined &&
+    operation.key !== undefined &&
+    isTempId(operation.key)
+  ) {
+    issues.push(
+      shapeIssue(
+        `operations[${index}].project`,
+        "project is not used when scheduling a temp Stream: temp ids are unique within this change set.",
       ),
     );
   }
@@ -231,6 +265,7 @@ function reportUnusedFields({ index, operation, issues }: OperationContext): voi
 
 function buildOperation(context: OperationContext): PlannedOperation | null {
   const { index, operation } = context;
+  validateEmbeddedRuleRefs(context);
   switch (operation.operation) {
     case "create": {
       const entity = operation.entity;
@@ -252,16 +287,26 @@ function buildOperation(context: OperationContext): PlannedOperation | null {
         ref: operation.key ?? null,
         parent,
         data,
+        roadmapOrder: createRoadmapOrder(context, entity),
       };
     }
     case "update": {
       const target = keyRef(context);
       const expectedRevision = requireExpectedRevision(context);
-      const data = requireData(context);
-      if (!target || expectedRevision === null || !data) {
+      const payload = requireUpdatePayload(context);
+      if (!target || expectedRevision === null || !payload) {
         return null;
       }
-      return { index, kind: "update", target, expectedRevision, data };
+      if (payload.rebaseStreamRevision && target.entity !== "task") {
+        context.issues.push(
+          shapeIssue(
+            `operations[${index}].rebase_stream_revision`,
+            "Only a Task captures and rebases a parent Stream revision.",
+          ),
+        );
+        return null;
+      }
+      return { index, kind: "update", target, expectedRevision, ...payload };
     }
     case "archive":
     case "delete": {
@@ -276,6 +321,15 @@ function buildOperation(context: OperationContext): PlannedOperation | null {
       const target = keyRef(context);
       const expectedRevision = requireExpectedRevision(context);
       if (!target || expectedRevision === null) {
+        return null;
+      }
+      if (!(HIERARCHY_ENTITY_TYPE as readonly string[]).includes(target.entity)) {
+        context.issues.push(
+          shapeIssue(
+            `operations[${index}].key`,
+            `${target.key} is a ${target.entity}; only Epics, Streams and Tasks have movable parents.`,
+          ),
+        );
         return null;
       }
       const parent = parentRef(context, target.entity);
@@ -302,7 +356,205 @@ function buildOperation(context: OperationContext): PlannedOperation | null {
       }
       return { index, kind: operation.operation, source, target, relationship };
     }
+    case "schedule": {
+      return buildSchedule(context);
+    }
   }
+}
+
+function createRoadmapOrder(
+  { index, operation, issues }: OperationContext,
+  entity: VersionedEntityType,
+): number | null {
+  if (entity === "milestone") {
+    if (operation.roadmap_order === undefined) {
+      issues.push(
+        shapeIssue(
+          `operations[${index}].roadmap_order`,
+          "Creating a Milestone needs its advisory roadmap_order; equal values are allowed.",
+        ),
+      );
+      return null;
+    }
+    return operation.roadmap_order;
+  }
+  if (operation.roadmap_order !== undefined) {
+    issues.push(
+      shapeIssue(
+        `operations[${index}].roadmap_order`,
+        "roadmap_order is used only when creating or scheduling a Milestone.",
+      ),
+    );
+  }
+  return null;
+}
+
+function buildSchedule(context: OperationContext): PlannedOperation | null {
+  const { index, operation, issues } = context;
+  const target = scheduleTargetRef(context);
+  if (target === null) return null;
+  const expectedRevision = target.ref.kind === "temp" ? null : requireExpectedRevision(context);
+  if (target.ref.kind === "key" && expectedRevision === null) return null;
+
+  if (target.entity === "milestone") {
+    if (operation.roadmap_order === undefined) {
+      issues.push(
+        shapeIssue(
+          `operations[${index}].roadmap_order`,
+          "Scheduling a Milestone needs roadmap_order.",
+        ),
+      );
+      return null;
+    }
+    if (operation.milestone !== undefined || operation.roadmap_rank !== undefined) {
+      issues.push(
+        shapeIssue(
+          `operations[${index}]`,
+          "A Milestone schedule uses roadmap_order, not milestone or roadmap_rank.",
+        ),
+      );
+      return null;
+    }
+    return {
+      index,
+      kind: "schedule",
+      target: target.ref,
+      expectedRevision,
+      milestone: null,
+      roadmapRank: null,
+      roadmapOrder: operation.roadmap_order,
+    };
+  }
+
+  if (target.entity !== "stream") {
+    issues.push(
+      shapeIssue(
+        `operations[${index}].key`,
+        "schedule acts on a Stream placement or a Milestone order.",
+      ),
+    );
+    return null;
+  }
+  if (!Object.hasOwn(operation, "milestone")) {
+    issues.push(
+      shapeIssue(
+        `operations[${index}].milestone`,
+        "Scheduling a Stream needs a Milestone key, or null to return it to Backlog.",
+      ),
+    );
+    return null;
+  }
+  if (operation.roadmap_order !== undefined) {
+    issues.push(
+      shapeIssue(
+        `operations[${index}].roadmap_order`,
+        "A Stream schedule uses roadmap_rank, not roadmap_order.",
+      ),
+    );
+    return null;
+  }
+  if (operation.milestone === null) {
+    if (operation.roadmap_rank !== undefined && operation.roadmap_rank !== null) {
+      issues.push(
+        shapeIssue(
+          `operations[${index}].roadmap_rank`,
+          "An unscheduled Backlog Stream has no roadmap_rank.",
+        ),
+      );
+      return null;
+    }
+    return {
+      index,
+      kind: "schedule",
+      target: target.ref,
+      expectedRevision,
+      milestone: null,
+      roadmapRank: null,
+      roadmapOrder: null,
+    };
+  }
+  if (operation.milestone === undefined || operation.roadmap_rank == null) {
+    issues.push(
+      shapeIssue(
+        `operations[${index}].roadmap_rank`,
+        "A Stream assigned to a Milestone needs roadmap_rank; equal ranks mean parallel work.",
+      ),
+    );
+    return null;
+  }
+  const milestoneEntity = referencedEntity(
+    context,
+    operation.milestone,
+    `operations[${index}].milestone`,
+  );
+  if (milestoneEntity === null) return null;
+  if (milestoneEntity !== "milestone") {
+    issues.push(
+      shapeIssue(`operations[${index}].milestone`, `${operation.milestone} is not a Milestone.`),
+    );
+    return null;
+  }
+  const milestone: KeyRef | Extract<PlanRef, { kind: "temp" }> = isTempId(operation.milestone)
+    ? { kind: "temp", ref: operation.milestone }
+    : { kind: "key", key: operation.milestone, entity: "milestone" };
+  return {
+    index,
+    kind: "schedule",
+    target: target.ref,
+    expectedRevision,
+    milestone,
+    roadmapRank: operation.roadmap_rank,
+    roadmapOrder: null,
+  };
+}
+
+/**
+ * A Stream created earlier in the same atomic set may be placed immediately.
+ * Its revision is known from the simulated create, so asking the caller to
+ * invent `expected_revision: 1` would add a round trip without adding OCC.
+ */
+function scheduleTargetRef(context: OperationContext): {
+  readonly ref: KeyRef | Extract<PlanRef, { kind: "temp" }>;
+  readonly entity: "stream" | "milestone";
+} | null {
+  const { index, operation, issues } = context;
+  const path = `operations[${index}].key`;
+  if (operation.key === undefined) {
+    issues.push(shapeIssue(path, "schedule needs key: a Stream or Milestone key."));
+    return null;
+  }
+  const entity = referencedEntity(context, operation.key, path);
+  if (entity === null) return null;
+  if (entity !== "stream" && entity !== "milestone") {
+    issues.push(shapeIssue(path, "schedule acts on a Stream placement or a Milestone order."));
+    return null;
+  }
+  if (isTempId(operation.key)) {
+    if (entity !== "stream") {
+      issues.push(
+        shapeIssue(
+          path,
+          "A new Milestone already receives roadmap_order on create; only a newly created Stream needs a later schedule operation.",
+        ),
+      );
+      return null;
+    }
+    if (operation.expected_revision !== undefined) {
+      issues.push(
+        shapeIssue(
+          `operations[${index}].expected_revision`,
+          "Do not send expected_revision for a temp Stream. Its current revision comes from the earlier create in this same atomic change set.",
+        ),
+      );
+      return null;
+    }
+    return { ref: { kind: "temp", ref: operation.key }, entity };
+  }
+  const parsed = parseVersionedKey(operation.key);
+  if (parsed === null || (parsed.entity !== "stream" && parsed.entity !== "milestone")) {
+    return null;
+  }
+  return { ref: { kind: "key", key: operation.key, entity: parsed.entity }, entity: parsed.entity };
 }
 
 function requireData({
@@ -320,6 +572,49 @@ function requireData({
     return null;
   }
   return operation.data;
+}
+
+function requireUpdatePayload({ index, operation, issues }: OperationContext): {
+  readonly data: Record<string, unknown> | null;
+  readonly items: readonly ChangeSetItemMutation[];
+  readonly rebaseStreamRevision: boolean;
+} | null {
+  const data =
+    operation.data !== undefined && Object.keys(operation.data).length > 0 ? operation.data : null;
+  const items = operation.items ?? [];
+  const rebaseStreamRevision = operation.rebase_stream_revision === true;
+  if (data === null && items.length === 0 && !rebaseStreamRevision) {
+    issues.push(
+      shapeIssue(
+        `operations[${index}]`,
+        "update needs data, items, rebase_stream_revision: true, or a combination. data replaces document sections; items edits complete id-bearing elements.",
+      ),
+    );
+    return null;
+  }
+
+  items.forEach((item, itemIndex) => {
+    const path = `operations[${index}].items[${itemIndex}]`;
+    if (item.action === "remove") {
+      if (item.value !== undefined) {
+        issues.push(shapeIssue(`${path}.value`, "remove does not use value."));
+      }
+      return;
+    }
+    if (item.value === undefined) {
+      issues.push(shapeIssue(`${path}.value`, `${item.action} needs the complete element value.`));
+      return;
+    }
+    if (item.value.id !== item.id) {
+      issues.push(
+        shapeIssue(
+          `${path}.value.id`,
+          `The complete element id must equal ${item.id}; item replacement cannot rename identity.`,
+        ),
+      );
+    }
+  });
+  return { data, items, rebaseStreamRevision };
 }
 
 function requireExpectedRevision({ index, operation, issues }: OperationContext): number | null {
@@ -357,12 +652,12 @@ function keyRef({ index, operation, issues }: OperationContext): KeyRef | null {
     );
     return null;
   }
-  const parsed = parseKey(operation.key);
+  const parsed = parseVersionedKey(operation.key);
   if (!parsed) {
     issues.push(
       shapeIssue(
         path,
-        `${operation.key} is not an entity key. Keys look like EPIC-1, STR-12, TASK-45.`,
+        `${operation.key} is not an entity key. Keys look like E-1, S-12, T-45, M-2 or R-7.`,
       ),
     );
     return null;
@@ -379,7 +674,7 @@ function keyRef({ index, operation, issues }: OperationContext): KeyRef | null {
  * instead of a foreign-key violation from the database after half the change set
  * has been built.
  */
-function parentRef(context: OperationContext, entity: EntityType): PlanRef | null {
+function parentRef(context: OperationContext, entity: VersionedEntityType): PlanRef | null {
   const { index, operation, issues } = context;
   const path = `operations[${index}].parent`;
   const expected = PARENT_ENTITY[entity];
@@ -389,7 +684,7 @@ function parentRef(context: OperationContext, entity: EntityType): PlanRef | nul
       shapeIssue(
         path,
         expected === null
-          ? `${operation.operation} of an epic needs parent: the name of the project it belongs to.`
+          ? `${operation.operation} of a ${entity} needs parent: the name of the project it belongs to.`
           : `${operation.operation} of a ${entity} needs parent: the ${expected} it belongs to, by key or temp id.`,
       ),
     );
@@ -401,7 +696,7 @@ function parentRef(context: OperationContext, entity: EntityType): PlanRef | nul
       issues.push(
         shapeIssue(
           path,
-          "An epic's parent is a project, named by its project name. A change set cannot create a project.",
+          `A ${entity}'s parent is a project, named by its project name. A change set cannot create a project.`,
         ),
       );
       return null;
@@ -442,6 +737,15 @@ function endpointRef(context: OperationContext, field: "source" | "target"): Pla
   if (entity === null) {
     return null;
   }
+  if (!(LINKABLE_ENTITY_TYPE as readonly string[]).includes(entity)) {
+    issues.push(
+      shapeIssue(
+        path,
+        `${value} is a ${entity}; Milestones are roadmap overlays, not graph endpoints.`,
+      ),
+    );
+    return null;
+  }
   return isTempId(value) ? { kind: "temp", ref: value } : { kind: "key", key: value, entity };
 }
 
@@ -454,7 +758,7 @@ function referencedEntity(
   { declared, issues }: OperationContext,
   value: string,
   path: string,
-): EntityType | null {
+): VersionedEntityType | null {
   if (value.startsWith("$")) {
     const entity = declared.get(value);
     if (entity === undefined) {
@@ -468,12 +772,12 @@ function referencedEntity(
     }
     return entity;
   }
-  const parsed = parseKey(value);
+  const parsed = parseVersionedKey(value);
   if (!parsed) {
     issues.push(
       shapeIssue(
         path,
-        `${value} is neither an entity key (EPIC-1, STR-12, TASK-45) nor a temp id from this change set ($new_stream).`,
+        `${value} is neither an entity key (E-1, S-12, T-45, M-2, R-7) nor a temp id from this change set ($new_stream).`,
       ),
     );
     return null;
@@ -496,7 +800,61 @@ function pendingRefs(operation: PlannedOperation): readonly string[] {
     collect(operation.source);
     collect(operation.target);
   }
-  return refs;
+  if (operation.kind === "schedule" && operation.milestone !== null) {
+    collect(operation.target);
+    collect(operation.milestone);
+  } else if (operation.kind === "schedule") {
+    collect(operation.target);
+  }
+  if (operation.kind === "create") {
+    refs.push(...embeddedRuleTempRefs(operation.data));
+  }
+  if (operation.kind === "update") {
+    if (operation.data !== null) refs.push(...embeddedRuleTempRefs(operation.data));
+    refs.push(...operation.items.flatMap((item) => embeddedRuleTempRefs(item.value)));
+  }
+  return [...new Set(refs)];
+}
+
+const RULE_REFERENCE_FIELDS = new Set(["rule_key", "rule_keys", "constrained_by_rule_keys"]);
+
+function embeddedRuleTempRefs(value: unknown): readonly string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap(embeddedRuleTempRefs);
+  }
+  if (typeof value !== "object" || value === null) return [];
+  return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) => {
+    if (!RULE_REFERENCE_FIELDS.has(key)) return embeddedRuleTempRefs(child);
+    if (typeof child === "string") return isTempId(child) ? [child] : [];
+    return Array.isArray(child)
+      ? child.filter((item): item is string => typeof item === "string" && isTempId(item))
+      : [];
+  });
+}
+
+function validateEmbeddedRuleRefs({ index, operation, declared, issues }: OperationContext): void {
+  const refs = [
+    ...(operation.data === undefined ? [] : embeddedRuleTempRefs(operation.data)),
+    ...(operation.items ?? []).flatMap((item) => embeddedRuleTempRefs(item.value)),
+  ];
+  for (const ref of new Set(refs)) {
+    const entity = declared.get(ref);
+    if (entity === undefined) {
+      issues.push(
+        shapeIssue(
+          `operations[${index}].data`,
+          `${ref} is used as a Rule reference, but no create in this change set declares it.`,
+        ),
+      );
+    } else if (entity !== "rule") {
+      issues.push(
+        shapeIssue(
+          `operations[${index}].data`,
+          `${ref} is used as a Rule reference, but it declares a ${entity}.`,
+        ),
+      );
+    }
+  }
 }
 
 function orderPlan(planned: readonly PlannedOperation[]): PlanResult {

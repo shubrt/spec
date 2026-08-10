@@ -4,8 +4,8 @@ import { STREAM_TYPE, TASK_TYPE } from "../enums";
  * The sentences that appear in more than one piece of tool text.
  *
  * Every per-tool `description` and the server instructions are composed from
- * these, so a rule that changes is edited once instead of six times. That is not
- * only about effort: six near-identical restatements of the same rule are how a
+ * these, so a rule that changes is edited once instead of seven times. That is not
+ * only about effort: seven near-identical restatements of the same rule are how a
  * model ends up reading two subtly contradictory versions of it.
  *
  * Each fragment is one or two whole sentences with no trailing space, so callers
@@ -18,7 +18,8 @@ export const HIERARCHY =
   "Hierarchy: Workspace > Project > Epic > Stream > Task. An epic is a long-lived business " +
   "capability, never a sprint or a release. A stream is one bounded change, problem or " +
   "investigation inside an epic and is the planning unit for the business 'what'. A task is " +
-  "one technical unit of work under a stream.";
+  "one technical unit of work under a stream. Project Rules are canonical constraints and " +
+  "Milestones are an advisory roadmap overlay; neither adds an ownership tier.";
 
 /** Domain spec §4, compressed to the rule plus the two failure modes it prevents. */
 export const WHAT_VS_HOW =
@@ -40,9 +41,9 @@ export const UNKNOWN_RULE =
  * consent.
  */
 export const CONFIRM_RULE =
-  "archive, delete and move need confirm: true on the operation itself. Show the user exactly " +
-  "what will be removed or moved, get explicit approval, then repeat the identical call with " +
-  "confirm set.";
+  "Archive, delete, move, id-bearing removal, and a Rule update with active consumers need " +
+  "confirm: true on that operation. Show the exact removal, movement, or downstream impact, " +
+  "get explicit approval, then repeat the identical call with confirm set.";
 
 /** Why read tools return summaries. */
 export const COMPACT_FIRST =

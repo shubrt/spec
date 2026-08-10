@@ -1,6 +1,6 @@
 import { sql } from "drizzle-orm";
 import { check, index, pgTable, text, timestamp, uniqueIndex, uuid } from "drizzle-orm/pg-core";
-import type { EntityType, RelationshipType } from "../../../domain/enums";
+import type { LinkableEntityType, RelationshipType } from "../../../domain/enums";
 import { project } from "./project";
 import { workspace } from "./workspace";
 
@@ -30,9 +30,9 @@ export const entityLink = pgTable(
     projectId: uuid()
       .notNull()
       .references(() => project.id, { onDelete: "cascade" }),
-    sourceType: text().$type<EntityType>().notNull(),
+    sourceType: text().$type<LinkableEntityType>().notNull(),
     sourceId: uuid().notNull(),
-    targetType: text().$type<EntityType>().notNull(),
+    targetType: text().$type<LinkableEntityType>().notNull(),
     targetId: uuid().notNull(),
     relationshipType: text().$type<RelationshipType>().notNull(),
     /** The domain spec §5.5 `reason` — why this dependency exists, in prose. */
@@ -50,6 +50,24 @@ export const entityLink = pgTable(
      * Bare column names: a CHECK expression may not qualify them.
      */
     check("entity_link_no_self", sql`not (source_type = target_type and source_id = target_id)`),
+    check(
+      "entity_link_endpoint_type_chk",
+      sql`source_type in ('epic', 'stream', 'task', 'rule') and target_type in ('epic', 'stream', 'task', 'rule')`,
+    ),
+    /**
+     * A hard dependency never crosses planning levels. The service reports a
+     * friendly validation issue first; this check is the final invariant for
+     * scripts and future writers that bypass it. `cancelled` is a status concern,
+     * not an endpoint kind, so it does not change this shape.
+     */
+    check(
+      "entity_link_blocked_by_level_chk",
+      sql`relationship_type <> 'blocked_by' or (source_type = target_type and source_type in ('stream', 'task'))`,
+    ),
+    check(
+      "entity_link_rule_relation_chk",
+      sql`not (source_type = 'rule' or target_type = 'rule' or relationship_type in ('derived_from', 'exception_to')) or (source_type = 'rule' and target_type = 'rule' and relationship_type in ('related_to', 'supersedes', 'derived_from', 'exception_to'))`,
+    ),
     /**
      * One link per direction per relationship. Unlinking is a real DELETE, not
      * a tombstone, so re-linking the same pair afterwards succeeds — a

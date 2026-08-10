@@ -2,12 +2,14 @@ import { Link } from "@tanstack/react-router";
 import {
   Criterion,
   Field,
-  ListSection,
+  OrderedList,
   Panel,
   PanelTitle,
   ProseSection,
   RuledBlock,
+  RuleApplicationsSection,
   Section,
+  UnknownsSections,
 } from "~/components/zpecs/document-sections";
 import {
   EntityDetailHeader,
@@ -22,11 +24,21 @@ import {
   asText,
   contentOf,
   type AcceptanceCriterion,
-  type BusinessRule,
+  type BehaviorCase,
+  type ChangeTarget,
+  type DecisionRule,
   type EdgeCase,
+  type ExperimentHypothesis,
   type FunctionalRequirement,
   type InvestigationQuestion,
+  type MaintenanceGoal,
+  type MaintenanceRisk,
   type NonFunctionalRequirement,
+  type QualityGoal,
+  type RefactorInvariant,
+  type RefactorTarget,
+  type ResearchQuestion,
+  type RuleApplication,
   type ScopeItem,
   type StreamActor,
   type SuccessCriterion,
@@ -41,16 +53,14 @@ import type { StreamNode } from "~/server/board";
  * Stream detail.
  *
  * The first seven sections are in the plan's order — Purpose, Scope,
- * Requirements, Workflows, Business rules, Edge cases, Acceptance criteria —
+ * Requirements, Workflows, Rule applications, Edge cases, Acceptance criteria —
  * which mirrors how the domain document itself is structured. That order is
  * deliberate and is not a layout preference.
  *
- * After them come the sections a particular stream type adds. Only `feature`,
- * `bug` and `investigation` have typed schemas; the other four carry the
- * invariant base only. So nothing here assumes a section exists: every block
- * renders from what is actually in the document and disappears when absent,
- * because an empty heading claims a section is blank when the schema never had
- * one.
+ * After them come the sections a particular stream type adds. Nothing here
+ * assumes a section exists: every block renders from what is actually in the
+ * document and disappears when absent, because an empty heading claims a
+ * section is blank when the schema never had one.
  */
 
 export function StreamDetail({
@@ -73,7 +83,7 @@ export function StreamDetail({
   const nonFunctional = asArray<NonFunctionalRequirement>(requirements.non_functional);
 
   const workflows = asArray<Workflow>(content.workflows);
-  const rules = asArray<BusinessRule>(content.business_rules);
+  const ruleApplications = asArray<RuleApplication>(content.rule_applications);
   const edgeCases = asArray<EdgeCase>(content.edge_cases);
   const criteria = asArray<AcceptanceCriterion>(content.acceptance_criteria);
 
@@ -85,6 +95,17 @@ export function StreamDetail({
   const discoveryIncluded = asArray<ScopeItem>(discoveryScope.included);
   const discoveryExcluded = asArray<ScopeItem>(discoveryScope.excluded);
   const successCriteria = asArray<SuccessCriterion>(content.success_criteria);
+
+  const behaviorCases = asArray<BehaviorCase>(content.behavior_cases);
+  const changes = asArray<ChangeTarget>(content.changes);
+  const hypotheses = asArray<ExperimentHypothesis>(content.hypotheses);
+  const researchQuestions = asArray<ResearchQuestion>(content.research_questions);
+  const decisionRules = asArray<DecisionRule>(content.decision_rules);
+  const refactorTargets = asArray<RefactorTarget>(content.refactor_targets);
+  const invariants = asArray<RefactorInvariant>(content.invariants);
+  const qualityGoals = asArray<QualityGoal>(content.quality_goals);
+  const maintenanceGoals = asArray<MaintenanceGoal>(content.maintenance_goals);
+  const risks = asArray<MaintenanceRisk>(content.risks);
 
   return (
     <EntityDetailSurfaceProvider surface={surface}>
@@ -184,25 +205,7 @@ export function StreamDetail({
         ) : null}
 
         {/* 5 */}
-        {rules.length > 0 ? (
-          <Section title="Business rules">
-            {rules.map((rule, index) => (
-              <RuledBlock key={rule.id ?? index} label={rule.id}>
-                <div className="text-[13px] leading-relaxed">{asText(rule.rule)}</div>
-                {rule.impact ? (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Impact: {asText(rule.impact)}
-                  </div>
-                ) : null}
-                {rule.consequence ? (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    → {asText(rule.consequence)}
-                  </div>
-                ) : null}
-              </RuledBlock>
-            ))}
-          </Section>
-        ) : null}
+        <RuleApplicationsSection applications={ruleApplications} />
 
         {/* 6 */}
         {edgeCases.length > 0 ? (
@@ -244,40 +247,48 @@ export function StreamDetail({
         {/* 7 — feature streams only */}
         {criteria.length > 0 ? (
           <Section title="Acceptance criteria">
-            {criteria.map((criterion, index) => (
-              <Criterion key={criterion.id ?? index} id={criterion.id}>
-                <span className="text-muted-foreground">Given</span> {asText(criterion.given)}{" "}
-                <span className="text-muted-foreground">when</span> {asText(criterion.when)}{" "}
-                <span className="text-muted-foreground">then</span> {asText(criterion.then)}
-                {criterion.verifies && criterion.verifies.length > 0 ? (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    Verifies {criterion.verifies.join(", ")}
-                  </div>
-                ) : null}
-                {criterion.type || criterion.verification ? (
-                  <div className="mt-1 text-xs text-muted-foreground">
-                    {criterion.type ? label(asText(criterion.type)) : null}
-                    {criterion.type && criterion.verification ? " · " : null}
-                    {criterion.verification
-                      ? `Verified by ${label(asText(criterion.verification))}`
-                      : null}
-                  </div>
-                ) : null}
-              </Criterion>
-            ))}
+            {criteria.map((criterion, index) => {
+              const references = acceptanceReferences(criterion);
+              return (
+                <Criterion key={criterion.id ?? index} id={criterion.id}>
+                  <span className="text-muted-foreground">Given</span> {asText(criterion.given)}{" "}
+                  <span className="text-muted-foreground">when</span> {asText(criterion.when)}{" "}
+                  <span className="text-muted-foreground">then</span> {asText(criterion.then)}
+                  {references.length > 0 ? (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      Verifies {references.join(", ")}
+                    </div>
+                  ) : null}
+                  {criterion.type || criterion.verification ? (
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {criterion.type ? label(asText(criterion.type)) : null}
+                      {criterion.type && criterion.verification ? " · " : null}
+                      {criterion.verification
+                        ? `Verified by ${label(asText(criterion.verification))}`
+                        : null}
+                    </div>
+                  ) : null}
+                </Criterion>
+              );
+            })}
           </Section>
         ) : null}
 
-        {/* `bug` streams: the domain spec's three sections, deliberately not a
-            user story. */}
-        <ListSection title="Reproduction" items={asArray(content.reproduction)} ordered />
-        <ProseSection title="Actual behaviour" value={content.actual_behavior} />
-        <ProseSection title="Expected behaviour" value={content.expected_behavior} />
-        {asText(content.severity) ? (
-          <Section title="Severity">
-            <TypeTag>{label(asText(content.severity))}</TypeTag>
-          </Section>
-        ) : null}
+        {/* Type-specific business anchors. Each renderer disappears for every
+            other Stream type instead of suggesting a missing section. */}
+        <BehaviorCasesSection cases={behaviorCases} />
+        <ChangeTargetsSection changes={changes} />
+        <ExperimentSections
+          hypotheses={hypotheses}
+          researchQuestions={researchQuestions}
+          decisionRules={decisionRules}
+        />
+        <RefactorSections
+          targets={refactorTargets}
+          invariants={invariants}
+          qualityGoals={qualityGoals}
+        />
+        <MaintenanceSections goals={maintenanceGoals} risks={risks} />
 
         {/* `investigation` streams: "we do not know yet" as a first-class state. */}
         {questions.length > 0 ? (
@@ -331,8 +342,7 @@ export function StreamDetail({
 
         <ProseSection title="Expected decision" value={content.expected_decision} />
 
-        {/* Remaining invariant base sections. Present on any stream type, so
-            omitting them would hide real work on the four untyped types. */}
+        {/* Remaining invariant base sections. */}
         {actor.primary ? (
           <Section title="Actor">
             <div className="rounded-xl border p-4">
@@ -366,8 +376,7 @@ export function StreamDetail({
           </Section>
         ) : null}
 
-        <ListSection title="Open questions" items={asArray(content.open_questions)} />
-        <ListSection title="Assumptions" items={asArray(content.assumptions)} muted />
+        <UnknownsSections questions={content.open_questions} assumptions={content.assumptions} />
 
         {/* The only way to reach a task, and therefore the only way `?task=` gets
             set by the UI rather than typed by hand. */}
@@ -415,6 +424,233 @@ export function StreamDetail({
       </div>
     </EntityDetailSurfaceProvider>
   );
+}
+
+function BehaviorCasesSection({ cases }: { cases: BehaviorCase[] }) {
+  if (cases.length === 0) return null;
+
+  return (
+    <Section title="Behaviour cases">
+      {cases.map((behaviorCase, index) => {
+        const reproduction = asArray(behaviorCase.reproduction).map(asText).filter(Boolean);
+        return (
+          <Panel key={behaviorCase.id ?? index}>
+            <PanelTitle id={behaviorCase.id}>Behaviour case</PanelTitle>
+            {reproduction.length > 0 ? (
+              <div className="mb-3">
+                <div className="mb-1 text-xs font-semibold text-secondary-foreground">
+                  Reproduction
+                </div>
+                <OrderedList items={reproduction} />
+              </div>
+            ) : null}
+            <div className="rounded-xl border px-3">
+              {behaviorCase.actual_behavior ? (
+                <Field name="actual">{asText(behaviorCase.actual_behavior)}</Field>
+              ) : null}
+              {behaviorCase.expected_behavior ? (
+                <Field name="expected">{asText(behaviorCase.expected_behavior)}</Field>
+              ) : null}
+              {behaviorCase.severity ? (
+                <Field name="severity">
+                  <TypeTag>{label(asText(behaviorCase.severity))}</TypeTag>
+                </Field>
+              ) : null}
+            </div>
+          </Panel>
+        );
+      })}
+    </Section>
+  );
+}
+
+function ChangeTargetsSection({ changes }: { changes: ChangeTarget[] }) {
+  if (changes.length === 0) return null;
+
+  return (
+    <Section title="Changes">
+      {changes.map((change, index) => (
+        <Panel key={change.id ?? index}>
+          <PanelTitle id={change.id}>{asText(change.trigger) || "Change target"}</PanelTitle>
+          <div className="rounded-xl border px-3">
+            {change.current_state ? (
+              <Field name="current">{asText(change.current_state)}</Field>
+            ) : null}
+            {change.desired_state ? (
+              <Field name="desired">{asText(change.desired_state)}</Field>
+            ) : null}
+            {change.success_measure ? (
+              <Field name="success">{asText(change.success_measure)}</Field>
+            ) : null}
+          </div>
+        </Panel>
+      ))}
+    </Section>
+  );
+}
+
+function ExperimentSections({
+  hypotheses,
+  researchQuestions,
+  decisionRules,
+}: {
+  hypotheses: ExperimentHypothesis[];
+  researchQuestions: ResearchQuestion[];
+  decisionRules: DecisionRule[];
+}) {
+  return (
+    <>
+      {hypotheses.length > 0 ? (
+        <Section title="Hypotheses">
+          {hypotheses.map((hypothesis, index) => (
+            <RuledBlock key={hypothesis.id ?? index} label={hypothesis.id}>
+              <div className="text-[13px] leading-relaxed">{asText(hypothesis.hypothesis)}</div>
+            </RuledBlock>
+          ))}
+        </Section>
+      ) : null}
+
+      {researchQuestions.length > 0 ? (
+        <Section title="Research questions">
+          {researchQuestions.map((question, index) => (
+            <Panel key={question.id ?? index}>
+              <PanelTitle id={question.id}>{asText(question.question)}</PanelTitle>
+              {question.why_it_matters ? (
+                <div className="text-xs text-muted-foreground">
+                  {asText(question.why_it_matters)}
+                </div>
+              ) : null}
+            </Panel>
+          ))}
+        </Section>
+      ) : null}
+
+      {decisionRules.length > 0 ? (
+        <Section title="Decision rules">
+          {decisionRules.map((rule, index) => (
+            <Panel key={rule.id ?? index}>
+              <PanelTitle id={rule.id}>Decision rule</PanelTitle>
+              <div className="rounded-xl border px-3">
+                {rule.condition ? <Field name="if">{asText(rule.condition)}</Field> : null}
+                {rule.decision ? <Field name="then">{asText(rule.decision)}</Field> : null}
+              </div>
+            </Panel>
+          ))}
+        </Section>
+      ) : null}
+    </>
+  );
+}
+
+function RefactorSections({
+  targets,
+  invariants,
+  qualityGoals,
+}: {
+  targets: RefactorTarget[];
+  invariants: RefactorInvariant[];
+  qualityGoals: QualityGoal[];
+}) {
+  return (
+    <>
+      {targets.length > 0 ? (
+        <Section title="Refactor targets">
+          {targets.map((target, index) => (
+            <Panel key={target.id ?? index}>
+              <PanelTitle id={target.id}>Refactor target</PanelTitle>
+              <div className="rounded-xl border px-3">
+                {target.current_state ? (
+                  <Field name="current">{asText(target.current_state)}</Field>
+                ) : null}
+                {target.target_state ? (
+                  <Field name="target">{asText(target.target_state)}</Field>
+                ) : null}
+              </div>
+            </Panel>
+          ))}
+        </Section>
+      ) : null}
+
+      {invariants.length > 0 ? (
+        <Section title="Invariants">
+          {invariants.map((invariant, index) => (
+            <RuledBlock key={invariant.id ?? index} label={invariant.id}>
+              <div className="text-[13px] leading-relaxed">{asText(invariant.statement)}</div>
+            </RuledBlock>
+          ))}
+        </Section>
+      ) : null}
+
+      {qualityGoals.length > 0 ? (
+        <Section title="Quality goals">
+          {qualityGoals.map((goal, index) => (
+            <Panel key={goal.id ?? index}>
+              <PanelTitle id={goal.id}>{asText(goal.goal)}</PanelTitle>
+              {goal.measurement ? (
+                <div className="text-xs text-muted-foreground">
+                  Measured by {asText(goal.measurement)}
+                </div>
+              ) : null}
+            </Panel>
+          ))}
+        </Section>
+      ) : null}
+    </>
+  );
+}
+
+function MaintenanceSections({
+  goals,
+  risks,
+}: {
+  goals: MaintenanceGoal[];
+  risks: MaintenanceRisk[];
+}) {
+  return (
+    <>
+      {goals.length > 0 ? (
+        <Section title="Maintenance goals">
+          {goals.map((goal, index) => (
+            <Panel key={goal.id ?? index}>
+              <PanelTitle id={goal.id}>{asText(goal.goal)}</PanelTitle>
+              {goal.done_when ? (
+                <div className="text-xs text-muted-foreground">
+                  Done when {asText(goal.done_when)}
+                </div>
+              ) : null}
+            </Panel>
+          ))}
+        </Section>
+      ) : null}
+
+      {risks.length > 0 ? (
+        <Section title="Risks">
+          {risks.map((risk, index) => (
+            <RuledBlock key={risk.id ?? index} label={risk.id}>
+              <div className="text-[13px] leading-relaxed">{asText(risk.risk)}</div>
+              {risk.mitigation ? (
+                <div className="mt-1 text-xs text-muted-foreground">
+                  Mitigation: {asText(risk.mitigation)}
+                </div>
+              ) : null}
+              {risk.severity ? (
+                <div className="mt-1">
+                  <TypeTag>{label(asText(risk.severity))}</TypeTag>
+                </div>
+              ) : null}
+            </RuledBlock>
+          ))}
+        </Section>
+      ) : null}
+    </>
+  );
+}
+
+function acceptanceReferences(criterion: AcceptanceCriterion): string[] {
+  const verifies = asRecord(criterion.verifies);
+  return [...asArray(verifies.requirement_ids), ...asArray(verifies.rule_keys)]
+    .map(asText)
+    .filter(Boolean);
 }
 
 function ScopeLines({ items, muted }: { items: ScopeItem[]; muted?: boolean }) {

@@ -59,6 +59,8 @@ export type UpdateTaskInput = RevisionAuthor & {
 export type ArchiveTaskInput = RevisionAuthor & {
   readonly id: string;
   readonly expectedRevision: number;
+  /** Optional service-validated terminal trace; status is still stamped here. */
+  readonly document?: Record<string, unknown>;
 };
 
 export type DeleteTaskInput = {
@@ -132,35 +134,31 @@ async function listByProject(
 }
 
 /**
- * The tasks of a set of streams whose status is one of `statuses`.
+ * The tasks of a set of streams, optionally restricted to `statuses`.
  *
  * `get_next_work`'s read. One statement whatever the number of streams, because an
  * epic spans all of its streams and one query per stream would make "what should I
  * work on next" cost a round trip per stream. Served by `task_stream_idx`
  * (workspace-leading).
  *
- * The status filter is a parameter rather than a constant here because "which
- * statuses count as workable" is a domain decision that belongs in
- * `service/nextWork.ts`, next to the ordering it goes with — a repository that
- * hard-coded it would split one decision across two layers.
+ * `get_next_work` deliberately omits the filter: it needs to distinguish a stream
+ * with no tasks from one with draft-only, review or terminal tasks. Callers that
+ * only need a status slice can still ask the database to apply it.
  */
 async function listByStreams(
   scope: WorkspaceScope,
-  input: { readonly streamIds: readonly string[]; readonly statuses: readonly TaskStatus[] },
+  input: { readonly streamIds: readonly string[]; readonly statuses?: readonly TaskStatus[] },
   executor: DbExecutor = db,
 ): Promise<Task[]> {
-  if (input.streamIds.length === 0 || input.statuses.length === 0) {
+  if (input.streamIds.length === 0 || input.statuses?.length === 0) {
     return [];
   }
+  const statusFilter = input.statuses ? inArray(task.status, [...input.statuses]) : undefined;
   return await executor
     .select()
     .from(task)
     .where(
-      and(
-        eq(task.workspaceId, scope),
-        inArray(task.streamId, [...input.streamIds]),
-        inArray(task.status, [...input.statuses]),
-      ),
+      and(eq(task.workspaceId, scope), inArray(task.streamId, [...input.streamIds]), statusFilter),
     )
     .orderBy(asc(task.createdAt), asc(task.key));
 }
@@ -175,10 +173,9 @@ async function insert(
     return { ok: false, reason: "not_found" };
   }
   const id = crypto.randomUUID();
-  const stamped = stampServerOwnedMeta(scope, input.document, {
+  const stamped = stampServerOwnedMeta(input.document, {
     id,
     key,
-    projectId: input.projectId,
     revision: FIRST_REVISION,
     statuses: TASK_STATUS,
     sections: { links: { parent_stream_id: input.streamId } },
@@ -237,7 +234,7 @@ async function archive(
   }
   return await writeRevision(scope, tx, current, {
     ...input,
-    document: current.document,
+    document: input.document ?? current.document,
     sections: { meta: { status: ARCHIVED } },
   });
 }
@@ -305,10 +302,9 @@ async function move(
             implements: { ...implementation, stream_id: target.id },
           },
         };
-  const stamped = stampServerOwnedMeta(scope, document, {
+  const stamped = stampServerOwnedMeta(document, {
     id: current.id,
     key: current.key,
-    projectId: target.projectId,
     revision,
     statuses: TASK_STATUS,
     sections: { links: { parent_stream_id: target.id } },
@@ -387,10 +383,9 @@ async function writeRevision(
   },
 ): Promise<WriteResult<Task>> {
   const revision = input.expectedRevision + 1;
-  const stamped = stampServerOwnedMeta(scope, input.document, {
+  const stamped = stampServerOwnedMeta(input.document, {
     id: current.id,
     key: current.key,
-    projectId: current.projectId,
     revision,
     statuses: TASK_STATUS,
     sections: input.sections,

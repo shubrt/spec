@@ -1,9 +1,12 @@
 import type { z } from "zod";
 import type { StreamType } from "../../enums";
-import { streamBaseContent } from "./base";
 import { bugStreamContent } from "./bug";
+import { changeStreamContent } from "./change";
+import { experimentStreamContent } from "./experiment";
 import { featureStreamContent } from "./feature";
 import { investigationStreamContent } from "./investigation";
+import { maintenanceStreamContent } from "./maintenance";
+import { refactorStreamContent } from "./refactor";
 
 /**
  * Which content schema applies to which stream type.
@@ -31,31 +34,18 @@ import { investigationStreamContent } from "./investigation";
  * The cost is one lookup; the benefit is a precise error path and a per-type
  * schema a fifth of the size.
  *
- * ## Why the four unmapped types point at the base
- *
- * `change`, `experiment`, `refactor` and `maintenance` are legal stream types
- * (`domain/enums.ts` lists all seven) whose type-specific sections are not
- * modelled yet. They map to `streamBaseContent` explicitly rather than through a
- * `?? streamBaseContent` fallback, for two reasons:
- *
- * 1. `Record<StreamType, …>` makes the map **total**. Adding an eighth stream
- *    type to `domain/enums.ts` is a type error here until it is mapped, so a new
- *    type can never silently inherit a default.
- * 2. Adding those sections later is purely additive — new optional fields on top
- *    of the same base — so existing documents stay valid and `schema_version`
- *    does **not** bump. A fallback would hide which types are still provisional;
- *    the explicit entries document it.
+ * The map is total over `StreamType`. Adding an eighth type is therefore a type
+ * error until it receives an explicit schema instead of silently inheriting base
+ * content.
  */
 export const STREAM_CONTENT = {
   feature: featureStreamContent,
   bug: bugStreamContent,
   investigation: investigationStreamContent,
-
-  // Base only for now — see the file header. Additive, no `schema_version` bump.
-  change: streamBaseContent,
-  experiment: streamBaseContent,
-  refactor: streamBaseContent,
-  maintenance: streamBaseContent,
+  change: changeStreamContent,
+  experiment: experimentStreamContent,
+  refactor: refactorStreamContent,
+  maintenance: maintenanceStreamContent,
 } as const satisfies Record<StreamType, z.ZodType>;
 
 /**
@@ -70,21 +60,8 @@ export const STREAM_SCHEMA_TARGET = {
   feature: "stream.feature",
   bug: "stream.bug",
   investigation: "stream.investigation",
-  // These four share base content but keep a concrete discriminator schema.
   change: "stream.change",
   experiment: "stream.experiment",
   refactor: "stream.refactor",
   maintenance: "stream.maintenance",
 } as const satisfies Record<StreamType, string>;
-
-/**
- * True when the type still uses the base schema unchanged, i.e. its
- * type-specific sections have not been modelled yet.
- *
- * Derived from the map rather than from a second hand-written list, so it cannot
- * disagree with `STREAM_CONTENT`. `get_entity_schema` uses this to tell an agent
- * that a `refactor` stream currently has no sections of its own, instead of
- * letting it infer that from a schema that merely looks thin.
- */
-export const usesBaseStreamContentOnly = (streamType: StreamType): boolean =>
-  STREAM_CONTENT[streamType] === streamBaseContent;

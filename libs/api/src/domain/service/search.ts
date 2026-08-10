@@ -1,5 +1,5 @@
 import type { WorkspaceScope } from "../auth/workspaceScope";
-import type { EntityType } from "../enums";
+import type { VersionedEntityType } from "../enums";
 import type { DbExecutor } from "../repository/entity";
 import { type SearchHitRow, searchRepository } from "../repository/search";
 
@@ -8,7 +8,7 @@ import { type SearchHitRow, searchRepository } from "../repository/search";
  *
  * ## Why the hits are this small
  *
- * A hit is five short strings. That is the whole point of having `search_context`
+ * A hit is six short strings, including its project qualifier. That is the whole point of having `search_context`
  * and `get_context` as two tools: search is what a model uses to *scan*, so it must
  * be able to look at twenty hits without spending its context, and `get_context` is
  * what it uses to *read* one of them. A search that returned whole documents would
@@ -23,13 +23,15 @@ import { type SearchHitRow, searchRepository } from "../repository/search";
  * at the service boundary without exposing repository details.
  */
 
-/** One compact hit. Deliberately five short fields — see the file comment. */
+/** One compact hit. Deliberately six short fields — see the file comment. */
 export type SearchHit = {
+  /** Project qualifier required because E/S/T/M/R keys are only project-scoped. */
+  readonly project: string;
   readonly key: string;
   /** The entity's title, as denormalised onto the row. */
   readonly title: string;
   /**
-   * Entity kind, plus the stream or task type after a colon: `epic`,
+   * Entity kind, plus the Stream or Task type after a colon: `rule`,
    * `stream:feature`, `task:implementation`. One field rather than two because it
    * is what an agent reads to decide whether a hit is worth a `get_context`, and
    * two fields would be two things to line up.
@@ -42,7 +44,7 @@ export type SearchHit = {
 
 export type SearchContextInput = {
   readonly query: string;
-  readonly entity?: EntityType;
+  readonly entity?: VersionedEntityType;
   readonly projectId?: string;
   /** Clamped into `[1, MAX_SEARCH_LIMIT]`; omitted means `DEFAULT_SEARCH_LIMIT`. */
   readonly limit?: number;
@@ -68,6 +70,7 @@ const clampLimit = (limit: number | undefined): number => {
 };
 
 const toHit = (row: SearchHitRow): SearchHit => ({
+  project: row.project,
   key: row.key,
   title: row.title,
   type: row.subtype === null ? row.entity : `${row.entity}:${row.subtype}`,

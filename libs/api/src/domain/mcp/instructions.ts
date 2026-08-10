@@ -23,9 +23,9 @@ import {
  * types (§3.2/§3.3), the unknown-marking rule (§14), and the confirm rule.
  */
 export const SERVER_INSTRUCTIONS = [
-  "zpecs is the project-management system for this workspace. Epics, streams and tasks live " +
-    "here as validated, versioned documents; this server is the only way to read or change " +
-    "them.",
+  "zpecs is the project-management system for this workspace. Epics, Streams, Tasks, Rules, " +
+    "and Milestones live here as validated, versioned documents; this server is their only " +
+    "write path.",
 
   HIERARCHY,
 
@@ -33,13 +33,13 @@ export const SERVER_INSTRUCTIONS = [
 
   "Belongs in an epic or stream: purpose, business problem, scope and exclusions, outcomes, " +
     "functional requirements, non-functional requirements with measurable targets, workflows, " +
-    "business rules, edge cases, business dependencies, acceptance or success criteria, open " +
+    "Rule applications, edge cases, business dependencies, acceptance or success criteria, open " +
     "questions and assumptions.",
 
   "Belongs in a task: frameworks and libraries, concrete files and modules, API endpoints, " +
     "database tables and migrations, technical architecture, implementation decisions, test " +
-    "files and strategy, deployment steps, branches and environments. Every task references " +
-    "the requirements or acceptance criteria it serves, so what and why stay separate from " +
+    "files and strategy, deployment steps, branches and environments. Every ready Task references " +
+    "at least one typed business target in its parent Stream, so what and why stay separate from " +
     "how but remain traceable.",
 
   `${STREAM_TYPES_LINE} Pick the type from the nature of the work; do not force a user-story ` +
@@ -51,10 +51,9 @@ export const SERVER_INSTRUCTIONS = [
 
   CONFIRM_RULE,
 
-  "Working order: search_context to find what exists, get_context to load it, " +
+  "Working order: list_context or search_context to find what exists, get_context to load it, " +
     "get_entity_schema for the exact document shape, validate_change_set on your proposal, " +
     "apply_change_set once the user approves; put confirm: true on each destructive operation. " +
-    "get_next_work answers 'what " +
-    "should I do next' for a stream or epic. Prefer extending an existing stream under the " +
-    "right epic over creating a duplicate.",
+    "get_next_work answers 'what should I do next' for a Project, Milestone, Epic, or Stream. " +
+    "Prefer extending an existing Stream or referencing an existing Rule over duplicating it.",
 ].join("\n\n");

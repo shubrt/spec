@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { DomainError } from "../../_/errors";
 import { db } from "../../integration/drizzle/client";
 import { epic } from "../../integration/drizzle/schema/epic";
@@ -103,7 +103,7 @@ async function findById(
 
 /**
  * A key is unique per project, not per workspace, so the project is part of the
- * lookup. `EPIC-1` exists in every project.
+ * lookup. `E-1` exists in every project.
  */
 async function findByKey(
   scope: WorkspaceScope,
@@ -134,7 +134,7 @@ async function findByKey(
  * per parent. Served by `epic_scope_status_idx` (workspace-leading).
  *
  * Ordered by creation so the aggregate is deterministic across calls; `key` is
- * the tiebreaker and not the sort, because keys are `EPIC-1 … EPIC-10` and sort
+ * the tiebreaker and not the sort, because keys are `E-1 … E-10` and sort
  * lexicographically. The web UI re-sorts client-side anyway.
  */
 async function listByProject(
@@ -161,10 +161,9 @@ async function insert(
   // The id is generated here rather than by the column default so that the
   // document can carry `meta.id` in the same statement that writes the row.
   const id = crypto.randomUUID();
-  const stamped = stampServerOwnedMeta(scope, input.document, {
+  const stamped = stampServerOwnedMeta(input.document, {
     id,
     key,
-    projectId: input.projectId,
     revision: FIRST_REVISION,
     statuses: EPIC_STATUS,
   });
@@ -265,30 +264,24 @@ async function deleteEpic(
  * Moves an epic — and its whole subtree — into another project of the same
  * workspace.
  *
- * `project_id` is denormalised onto every stream and task row (and into their
- * documents' `meta.project_id`), and the FKs are single-column, so the database
- * will **not** notice a subtree left half-moved. Nothing here is optional
- * therefore: the epic, its streams and their tasks are rewritten in one
- * transaction because no database constraint can enforce the full move.
+ * `project_id` is denormalised onto every stream and task row, and the FKs are
+ * single-column, so the database will **not** notice a subtree left half-moved.
+ * Nothing here is optional therefore: the epic, its streams and their tasks are
+ * reprojected relationally in one transaction because no database constraint can
+ * enforce the full move.
  *
  * `workspace_id` is never rewritten. A move across tenants is not a move, and
  * every statement below is filtered by the scope, so an attempt to name another
  * workspace's project ends as `not_found`.
  *
- * The descendants' revisions are deliberately **not** bumped. Their documents
- * change only in the denormalised copy of a fact that changed elsewhere, and
- * bumping them would invalidate the `expected_revision` every agent currently
- * holds for every entity in the subtree — a move would then make an unrelated
- * stream's next write fail. The move itself is recorded on the epic, which is where
- * it happened.
+ * The descendants' revisions are deliberately **not** bumped because their
+ * documents do not change: project ownership exists only in relational columns.
+ * The move itself is recorded on the epic, which is where it happened.
  *
- * **Known limitation:** keys are per project and are never rewritten, so moving
- * into a project that has already issued the same numbers fails on
- * `epic_project_key_uniq` (or the stream/task equivalent) and the change set
- * aborts with nothing written. Re-keying the subtree was rejected — a key is a
- * permanent external reference, and reissuing it would silently repoint every
- * mention of it. Note also that the target project's counters do not learn about
- * the keys that moved in; see the report's concerns.
+ * Keys are permanent external references and are never rewritten. The service
+ * checks the complete subtree for target-project collisions before reaching
+ * this repository; the database unique constraints remain the final race-safe
+ * invariant. The target counters are raised after a successful move.
  */
 async function move(
   scope: WorkspaceScope,
@@ -309,10 +302,9 @@ async function move(
   }
 
   const revision = input.expectedRevision + 1;
-  const stamped = stampServerOwnedMeta(scope, current.document, {
+  const stamped = stampServerOwnedMeta(current.document, {
     id: current.id,
     key: current.key,
-    projectId: input.projectId,
     revision,
     statuses: EPIC_STATUS,
   });
@@ -357,7 +349,6 @@ async function move(
     .update(task)
     .set({
       projectId: input.projectId,
-      document: reprojectedDocument(task.document, input.projectId),
       updatedAt: new Date(),
     })
     .where(and(eq(task.workspaceId, scope), inArray(task.streamId, streamsOfEpic)));
@@ -365,26 +356,12 @@ async function move(
     .update(stream)
     .set({
       projectId: input.projectId,
-      document: reprojectedDocument(stream.document, input.projectId),
       updatedAt: new Date(),
     })
     .where(and(eq(stream.workspaceId, scope), eq(stream.epicId, current.id)));
 
   return { ok: true, row };
 }
-
-/**
- * `meta.project_id` rewritten in place, server-side.
- *
- * In SQL rather than read-modify-write in TypeScript: a subtree is unbounded in
- * size, and one statement per row would turn a move into N round trips inside the
- * lock. `jsonb_set` leaves a document without a `meta` object untouched rather than
- * failing, which is the right behaviour for a denormalised copy.
- */
-const reprojectedDocument = (
-  column: typeof stream.document | typeof task.document,
-  projectId: string,
-) => sql`jsonb_set(${column}, '{meta,project_id}', to_jsonb(${projectId}::text))`;
 
 /**
  * Zero affected rows. Either the revision moved under us or the row is not in this
@@ -415,10 +392,9 @@ async function writeRevision(
   // Safe because the `WHERE` below only matches when `revision` really is
   // `expectedRevision`; if it is not, nothing is written and the value is unused.
   const revision = input.expectedRevision + 1;
-  const stamped = stampServerOwnedMeta(scope, input.document, {
+  const stamped = stampServerOwnedMeta(input.document, {
     id: current.id,
     key: current.key,
-    projectId: current.projectId,
     revision,
     statuses: EPIC_STATUS,
     sections: input.sections,

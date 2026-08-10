@@ -3,7 +3,7 @@ import { DomainError } from "../../_/errors";
 import { db } from "../../integration/drizzle/client";
 import { entityLink } from "../../integration/drizzle/schema/entityLink";
 import type { WorkspaceScope } from "../auth/workspaceScope";
-import type { EntityType, RelationshipType } from "../enums";
+import type { LinkableEntityType, RelationshipType } from "../enums";
 import type { DependencyEdge } from "../graph/cycle";
 import type { DbExecutor } from "./entity";
 
@@ -31,7 +31,7 @@ export type EntityLink = typeof entityLink.$inferSelect;
 
 /** One end of a relationship. Polymorphic, so the type travels with the id. */
 export type LinkEndpoint = {
-  readonly type: EntityType;
+  readonly type: LinkableEntityType;
   readonly id: string;
 };
 
@@ -68,18 +68,18 @@ export type SubtreeLinkMoveResult =
  */
 export type ProjectDependencyEdge = DependencyEdge & {
   /** The blocked entity's type. */
-  readonly fromType: EntityType;
+  readonly fromType: LinkableEntityType;
   /** The blocker's type. */
-  readonly toType: EntityType;
+  readonly toType: LinkableEntityType;
 };
 
 /** The direction the table stores. Everything else is normalised into it. */
 const STORED_INVERSE: RelationshipType = "blocked_by";
 
 type NormalizedLink = {
-  readonly sourceType: EntityType;
+  readonly sourceType: LinkableEntityType;
   readonly sourceId: string;
-  readonly targetType: EntityType;
+  readonly targetType: LinkableEntityType;
   readonly targetId: string;
   readonly relationshipType: RelationshipType;
 };
@@ -118,7 +118,7 @@ async function link(
   scope: WorkspaceScope,
   input: LinkInput,
   executor: DbExecutor = db,
-): Promise<EntityLink> {
+): Promise<{ readonly row: EntityLink; readonly created: boolean }> {
   const normalized = normalize(input);
   const [inserted] = await executor
     .insert(entityLink)
@@ -139,7 +139,7 @@ async function link(
     })
     .returning();
   if (inserted) {
-    return inserted;
+    return { row: inserted, created: true };
   }
   const existing = await find(scope, normalized, executor);
   if (!existing) {
@@ -151,7 +151,7 @@ async function link(
       `A ${normalized.relationshipType} link between those entities exists outside this workspace.`,
     );
   }
-  return existing;
+  return { row: existing, created: false };
 }
 
 /**
@@ -207,6 +207,27 @@ async function unlinkAll(
     )
     .returning({ id: entityLink.id });
   return deleted.length;
+}
+
+async function hasLinks(
+  scope: WorkspaceScope,
+  endpoint: LinkEndpoint,
+  executor: DbExecutor = db,
+): Promise<boolean> {
+  const [row] = await executor
+    .select({ id: entityLink.id })
+    .from(entityLink)
+    .where(
+      and(
+        eq(entityLink.workspaceId, scope),
+        or(
+          and(eq(entityLink.sourceType, endpoint.type), eq(entityLink.sourceId, endpoint.id)),
+          and(eq(entityLink.targetType, endpoint.type), eq(entityLink.targetId, endpoint.id)),
+        ),
+      ),
+    )
+    .limit(1);
+  return row !== undefined;
 }
 
 /**
@@ -318,6 +339,7 @@ export const entityLinkRepository = {
   link,
   unlink,
   unlinkAll,
+  hasLinks,
   moveSubtreeLinks,
   edgesForProject,
 };

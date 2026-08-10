@@ -1,13 +1,15 @@
 import { z } from "zod";
 import {
   assumptions,
-  businessRules,
+  CLAIM_EVIDENCE_SHAPE,
   label,
   MEASURABLE_TARGET_SHAPE,
+  metricId,
   openQuestions,
+  outcomeId,
   prose,
+  ruleApplications,
   scope,
-  sectionId,
   statement,
 } from "../primitives";
 
@@ -20,9 +22,8 @@ import {
  * to a stream, and the whole point of the Epic → Stream split (domain spec §4) is
  * that the epic states the standing "why" while streams state the bounded "what".
  *
- * `scope` and `business_rules` are the shared atoms, not copies: an epic's scope
- * lines and business rules mean the same thing as a stream's, only at a longer
- * horizon.
+ * `scope` and `rule_applications` are shared atoms: an epic applies canonical
+ * project Rules across its streams without copying their text.
  *
  * As with a stream, only `purpose` is structurally required. Epics have no
  * readiness gate at all — `EPIC_STATUS` is `active | paused | archived`, a
@@ -32,10 +33,11 @@ import {
 
 /** A business result the epic is meant to produce. */
 export const epicOutcome = z.strictObject({
-  id: sectionId,
+  id: outcomeId,
   outcome: statement,
   /** How the business would notice this outcome happening. */
   indicator: statement.optional(),
+  ...CLAIM_EVIDENCE_SHAPE,
 });
 
 /**
@@ -46,10 +48,11 @@ export const epicOutcome = z.strictObject({
  * it started.
  */
 export const epicSuccessMetric = z.strictObject({
-  id: sectionId,
+  id: metricId,
   metric: label,
   baseline: z.number().optional(),
   ...MEASURABLE_TARGET_SHAPE,
+  ...CLAIM_EVIDENCE_SHAPE,
 });
 
 export const epicContent = z.strictObject({
@@ -63,8 +66,8 @@ export const epicContent = z.strictObject({
   }),
   outcomes: z.array(epicOutcome).optional(),
   success_metrics: z.array(epicSuccessMetric).optional(),
-  business_rules: businessRules.optional().meta({
-    description: "Rules that hold across every stream in this epic.",
+  rule_applications: ruleApplications.optional().meta({
+    description: "Canonical project Rules that apply across this epic and its streams.",
   }),
   open_questions: openQuestions.optional(),
   assumptions: assumptions.optional(),

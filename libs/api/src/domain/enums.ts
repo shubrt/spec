@@ -38,10 +38,9 @@ export type StreamStatus = (typeof STREAM_STATUS)[number];
 export const streamStatusSchema = z.enum(STREAM_STATUS);
 
 /**
- * All seven stream types from the domain spec §3.2 are legal values here. Only
- * three of them get a dedicated Zod content schema in the MVP (B7); the other
- * four fall back to the base stream schema, which is why the type union is
- * complete even though the schema registry is not.
+ * All seven stream types from the domain spec §3.2 are legal values here and
+ * each has its own content schema. Shared fields live in the base schema; the
+ * registry selects the matching specialised schema without a large union.
  */
 export const STREAM_TYPE = [
   "feature",
@@ -83,15 +82,58 @@ export const TASK_TYPE = [
 export type TaskType = (typeof TASK_TYPE)[number];
 export const taskTypeSchema = z.enum(TASK_TYPE);
 
+/** Who can carry out a task, independent of who is currently assigned to it. */
+export const EXECUTOR_KIND = ["human", "agent", "either"] as const;
+export type ExecutorKind = (typeof EXECUTOR_KIND)[number];
+export const executorKindSchema = z.enum(EXECUTOR_KIND);
+
+/** Lifecycle of a canonical project Rule. Deprecated Rules remain addressable. */
+export const RULE_STATUS = ["draft", "active", "deprecated"] as const;
+export type RuleStatus = (typeof RULE_STATUS)[number];
+export const ruleStatusSchema = z.enum(RULE_STATUS);
+
+/** Advisory roadmap lifecycle; hard prerequisites remain dependency edges. */
+export const MILESTONE_STATUS = ["draft", "planned", "active", "completed", "cancelled"] as const;
+export type MilestoneStatus = (typeof MILESTONE_STATUS)[number];
+export const milestoneStatusSchema = z.enum(MILESTONE_STATUS);
+
+/** Completion state of one locally identified Milestone exit criterion. */
+export const EXIT_CRITERION_STATUS = ["open", "met", "waived"] as const;
+export type ExitCriterionStatus = (typeof EXIT_CRITERION_STATUS)[number];
+export const exitCriterionStatusSchema = z.enum(EXIT_CRITERION_STATUS);
+
 /**
- * The entity kinds that carry a validated `document`, a `revision` counter and
- * a generated key. `workspace` and `project` are organisational containers
- * (domain spec §3) with no document, so they are not entity types: they never
- * appear in `entity_revision` or as a link endpoint.
+ * Every entity kind that owns a validated, revisioned document and a generated
+ * project-scoped key. `workspace` and `project` remain organisational
+ * containers rather than versioned entities.
+ *
+ * This set deliberately says nothing about hierarchy, moves or dependencies.
+ * Rules and milestones are versioned documents, but neither is a work-tree node
+ * or a legal dependency endpoint.
  */
-export const ENTITY_TYPE = ["epic", "stream", "task"] as const;
-export type EntityType = (typeof ENTITY_TYPE)[number];
-export const entityTypeSchema = z.enum(ENTITY_TYPE);
+export const VERSIONED_ENTITY_TYPE = ["epic", "stream", "task", "milestone", "rule"] as const;
+export type VersionedEntityType = (typeof VERSIONED_ENTITY_TYPE)[number];
+export const versionedEntityTypeSchema = z.enum(VERSIONED_ENTITY_TYPE);
+
+/** The strict planning hierarchy: Project → Epic → Stream → Task. */
+export const HIERARCHY_ENTITY_TYPE = ["epic", "stream", "task"] as const;
+export type HierarchyEntityType = (typeof HIERARCHY_ENTITY_TYPE)[number];
+export const hierarchyEntityTypeSchema = z.enum(HIERARCHY_ENTITY_TYPE);
+
+/** Entities whose parent may be changed by a move operation. */
+export const MOVABLE_ENTITY_TYPE = HIERARCHY_ENTITY_TYPE;
+export type MovableEntityType = HierarchyEntityType;
+export const movableEntityTypeSchema = hierarchyEntityTypeSchema;
+
+/** The only entity kinds that may participate in a hard `blocked_by` edge. */
+export const DEPENDENCY_ENDPOINT_TYPE = ["stream", "task"] as const;
+export type DependencyEndpointType = (typeof DEPENDENCY_ENDPOINT_TYPE)[number];
+export const dependencyEndpointTypeSchema = z.enum(DEPENDENCY_ENDPOINT_TYPE);
+
+/** Versioned entities that may participate in the relationship graph. */
+export const LINKABLE_ENTITY_TYPE = ["epic", "stream", "task", "rule"] as const;
+export type LinkableEntityType = (typeof LINKABLE_ENTITY_TYPE)[number];
+export const linkableEntityTypeSchema = z.enum(LINKABLE_ENTITY_TYPE);
 
 /**
  * Link relationships, normalised to exactly one direction per pair. The domain
@@ -110,6 +152,8 @@ export const RELATIONSHIP_TYPE = [
   "extends",
   "fixes",
   "supersedes",
+  "derived_from",
+  "exception_to",
 ] as const;
 export type RelationshipType = (typeof RELATIONSHIP_TYPE)[number];
 export const relationshipTypeSchema = z.enum(RELATIONSHIP_TYPE);

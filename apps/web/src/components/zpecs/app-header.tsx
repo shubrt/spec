@@ -23,10 +23,12 @@ import { projectChangedSearch } from "~/lib/search";
 const NAV = [
   { to: "/", label: "Overview", exact: true },
   { to: "/epics", label: "Epics", exact: false },
+  { to: "/roadmap", label: "Roadmap", exact: false },
+  { to: "/rules", label: "Rules", exact: false },
   { to: "/connection", label: "Connection", exact: false },
 ] as const;
 
-const ENTITY_DETAIL_PATH = /^\/(?:epic|stream|task)\/[^/]+\/?$/;
+const ENTITY_DETAIL_PATH = /^\/(?:epic|stream|task|milestone|rule)\/[^/]+\/?$/;
 
 export function AppHeader() {
   const board = useLoaderData({ from: "__root__" });
@@ -83,7 +85,10 @@ export function AppHeader() {
 
       <nav className="order-last flex w-full items-center gap-1 border-t pt-2 sm:order-none sm:w-auto sm:border-0 sm:pt-0">
         {NAV.map((item) => {
-          const representsEntityDetail = item.to === "/epics" && isEntityDetail;
+          const representsEntityDetail =
+            (item.to === "/epics" && /^\/(?:epic|stream|task)\//.test(pathname)) ||
+            (item.to === "/roadmap" && pathname.startsWith("/milestone/")) ||
+            (item.to === "/rules" && pathname.startsWith("/rule/"));
 
           return (
             <Link

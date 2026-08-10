@@ -8,7 +8,7 @@
     },
     "schema_version": {
       "type": "string",
-      "const": "pm.task.v1"
+      "const": "pm.task.v2"
     },
     "meta": {
       "type": "object",
@@ -55,20 +55,104 @@
               "type": "array",
               "items": {
                 "type": "string",
-                "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                "pattern": "^(?:FR|NFR)-[1-9][0-9]*$"
               }
             },
             "acceptance_criteria_ids": {
               "type": "array",
               "items": {
                 "type": "string",
-                "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                "pattern": "^AC-[1-9][0-9]*$"
+              }
+            },
+            "behavior_case_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^BC-[1-9][0-9]*$"
+              }
+            },
+            "change_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^CHG-[1-9][0-9]*$"
+              }
+            },
+            "hypothesis_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^HYP-[1-9][0-9]*$"
+              }
+            },
+            "research_question_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^RQ-[1-9][0-9]*$"
+              }
+            },
+            "success_criteria_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^SC-[1-9][0-9]*$"
+              }
+            },
+            "decision_rule_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^DR-[1-9][0-9]*$"
+              }
+            },
+            "investigation_question_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^IQ-[1-9][0-9]*$"
+              }
+            },
+            "refactor_target_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^REF-[1-9][0-9]*$"
+              }
+            },
+            "invariant_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^INV-[1-9][0-9]*$"
+              }
+            },
+            "quality_goal_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^QG-[1-9][0-9]*$"
+              }
+            },
+            "maintenance_goal_ids": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^MG-[1-9][0-9]*$"
               }
             }
           },
           "required": ["stream_id"],
           "additionalProperties": false,
-          "description": "[task_references_business_requirements] A task at status ready or beyond must reference the business work it implements: content.implements.stream_id plus at least one requirement id or acceptance criterion id."
+          "description": "[task_references_business_requirements] A Task at ready or beyond must carry its server-canonical parent stream_id and at least one typed target id allowed by that Stream type. Rule constraints alone do not satisfy readiness."
+        },
+        "constrained_by_rule_keys": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "pattern": "^(?:R-[1-9][0-9]*|\\$[a-z][a-z0-9_]{0,39})$"
+          }
         },
         "technical_scope": {
           "type": "object",
@@ -180,7 +264,7 @@
             "properties": {
               "id": {
                 "type": "string",
-                "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                "pattern": "^VER-[1-9][0-9]*$"
               },
               "type": {
                 "type": "string",
@@ -225,12 +309,50 @@
             "maxLength": 2000
           }
         },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^ASM-[1-9][0-9]*$"
+              },
+              "statement": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "source_ids": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^SRC-[1-9][0-9]*$"
+                }
+              }
+            },
+            "required": ["id", "statement"],
+            "additionalProperties": false
+          }
+        },
         "open_questions": {
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 2000
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^OQ-[1-9][0-9]*$"
+              },
+              "question": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["id", "question"],
+            "additionalProperties": false
           }
         }
       },
@@ -257,6 +379,10 @@
           "items": {
             "type": "object",
             "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^SRC-[1-9][0-9]*$"
+              },
               "type": {
                 "type": "string",
                 "enum": [
@@ -264,8 +390,7 @@
                   "conversation",
                   "existing_code",
                   "documentation",
-                  "external_reference",
-                  "inference"
+                  "external_reference"
                 ]
               },
               "reference": {
@@ -273,66 +398,31 @@
                 "minLength": 1,
                 "maxLength": 2000
               },
-              "confidence": {
+              "snapshot": {
                 "type": "string",
-                "enum": ["explicit", "implied", "inferred", "assumed"]
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "observed_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "supersedes_source_ids": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^SRC-[1-9][0-9]*$"
+                }
               }
             },
-            "required": ["type", "confidence"],
+            "required": ["id", "type", "reference"],
             "additionalProperties": false
           }
-        },
-        "inferred_fields": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 2000
-          }
-        },
-        "open_questions": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 2000
-          }
-        },
-        "assumptions": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 2000
-          }
-        },
-        "created_from": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          }
-        },
-        "created_by": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "enum": ["user", "agent", "planner_agent", "executor_agent", "system"]
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128
-            }
-          },
-          "required": ["type", "id"],
-          "additionalProperties": false
         }
       },
       "additionalProperties": false,
-      "description": "[unknowns_must_be_marked] Never write a guess as if the user had stated it. Anything unknown goes into content.open_questions, content.assumptions or provenance.inferred_fields, and provenance.sources records how firmly each source supports what was written."
+      "description": "Immutable local Sources cited by claim evidence. Put uncertainty in addressable content assumptions or open_questions, never in inferred document paths."
     },
     "execution": {
       "type": "object",
@@ -371,6 +461,10 @@
           },
           "required": ["type", "id"],
           "additionalProperties": false
+        },
+        "executor_kind": {
+          "type": "string",
+          "enum": ["human", "agent", "either"]
         },
         "execution_context": {
           "type": "object",

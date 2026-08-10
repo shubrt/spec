@@ -2,6 +2,8 @@ import { z } from "zod";
 import {
   DEFAULT_NEXT_WORK_LIMIT,
   MAX_NEXT_WORK_LIMIT,
+  NEXT_WORK_EXECUTOR_FILTER,
+  type NextWorkItem,
   type NextWorkResult,
   type NextWorkSubject,
   nextWorkService,
@@ -11,83 +13,114 @@ import { defineTool } from "../defineTool";
 import { TOOL_ERROR_CODE, keyLookupError, textResult, toolError } from "../results";
 
 /**
- * The open, unblocked tasks of one stream or one epic, most urgent first.
- *
- * `project` is the key qualifier, for the same reason it exists on `get_context`:
- * keys are unique per project, so a bare key is resolved by asking every project
- * in the workspace and two answers is a refusal rather than a guess.
- *
- * Which statuses count as workable, what "unblocked" means, and why the ordering
- * happens in TypeScript rather than SQL are all decided — and argued — in
- * `service/nextWork.ts`. This file only turns a key into a subject and renders
- * the answer.
+ * Selects executable Tasks and Streams that need planning from a Project,
+ * Milestone, Epic, or Stream. Roadmap scope filters and sorts; it never becomes
+ * a dependency.
  */
 const getNextWorkInput = z.strictObject({
-  key: z
-    .string()
-    .min(1)
-    .max(64)
-    .describe("Key of the stream or epic to pull work from. An epic spans all of its streams."),
-  project: z
-    .string()
-    .min(1)
-    .max(200)
-    .optional()
-    .describe("Which project the key is in, by name. Needed only if two projects share a key."),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(MAX_NEXT_WORK_LIMIT)
-    .default(DEFAULT_NEXT_WORK_LIMIT)
-    .describe("Maximum number of tasks."),
+  key: z.string().min(1).max(64).optional(),
+  project: z.string().min(1).max(200).optional(),
+  executor: z.enum(NEXT_WORK_EXECUTOR_FILTER).optional(),
+  limit: z.number().int().min(1).max(MAX_NEXT_WORK_LIMIT).default(DEFAULT_NEXT_WORK_LIMIT),
 });
 
-/**
- * Rendered as text rather than `structuredContent` on purpose: the plan gives
- * `outputSchema` to `search_context` and `get_context` only, and every byte of a
- * declared output schema is re-sent inside the 12 KB `tools/list` budget on every
- * turn.
- *
- * `blockedCount` is reported even though the blocked tasks themselves are not.
- * An empty answer has two very different causes — nothing left to do, or
- * everything is waiting on something — and a model that cannot tell them apart
- * will either invent work or report the stream finished.
- */
-export const renderNextWork = (subject: NextWorkSubject, result: NextWorkResult): string => {
-  const scopeLine =
-    subject.entity === "epic"
-      ? `${subject.key} (epic, ${String(result.streamCount)} stream(s))`
-      : `${subject.key} (stream)`;
+const renderItem = (item: NextWorkItem): string => {
+  const priority = item.priority ?? "unprioritised";
+  if (item.kind === "stream_planning") {
+    return `- ${item.key} [stream_planning, ${item.streamType}, ${item.status}, ${priority}] ${item.title} — ${item.reason}`;
+  }
+  const executor = item.executorKind ?? "executor_unknown";
+  return `- ${item.key} [task_execution, ${item.taskType}, ${item.status}, ${executor}, ${priority}] ${item.title} — in ${item.streamKey} [${item.streamStatus}] ${item.streamTitle}`;
+};
 
-  if (result.tasks.length === 0) {
-    const reason =
-      result.blockedCount > 0
-        ? `${String(result.blockedCount)} workable task(s) exist but every one of them is blocked by a task that is not done. Read their dependencies with get_context before starting anything.`
-        : "No task is currently ready or in progress. Remaining tasks, if any, are in another non-workable state: draft, explicitly blocked, in review, done, or cancelled.";
-    return [`No available work in ${scopeLine}.`, reason].join("\n");
+const renderCauses = (result: NextWorkResult): string[] => {
+  const lines: string[] = [];
+  const add = (code: string, count: number, explanation: string): void => {
+    if (count > 0) {
+      lines.push(`- ${code}: ${String(count)} — ${explanation}`);
+    }
+  };
+
+  add(
+    "subject_unavailable",
+    result.causes.subjectUnavailable,
+    "the requested entity or its required parent disappeared during the read",
+  );
+  add(
+    "parent_epic_not_active",
+    result.causes.parentEpicNotActive,
+    "the parent Epic is paused or archived, so no descendant work is available",
+  );
+  for (const status of ["draft", "planned", "blocked", "completed", "cancelled"] as const) {
+    add(
+      `stream_status_${status}`,
+      result.causes.streamStatus[status],
+      "the Stream itself is not ready or in progress",
+    );
+  }
+  add(
+    "stream_dependency_blocked",
+    result.causes.streamDependencyBlocked,
+    "an unfinished Stream blocker hides the Stream and all of its Tasks",
+  );
+  for (const status of ["draft", "blocked", "in_review", "done", "cancelled"] as const) {
+    add(
+      `task_status_${status}`,
+      result.causes.taskStatus[status],
+      "the Task is not in ready or in_progress",
+    );
+  }
+  add(
+    "task_dependency_blocked",
+    result.causes.taskDependencyBlocked,
+    "an unfinished Task blocker prevents execution",
+  );
+  add(
+    "unknown_executor_task",
+    result.causes.taskExecutorUnknown,
+    "the persona filter cannot safely classify a Task without executor_kind",
+  );
+  add(
+    "executor_mismatch",
+    result.causes.taskExecutorMismatch,
+    "executor_kind does not match the requested persona",
+  );
+  add(
+    "unknown_executor_planning",
+    result.causes.planningExecutorUnknown,
+    "Stream planning has no executor_kind and was not guessed to be either",
+  );
+  if (result.streamCount === 0 && result.causes.subjectUnavailable === 0) {
+    lines.push("- scope_has_no_streams: 1 — the requested scope currently contains no Streams");
+  }
+  return lines;
+};
+
+/** Text-only to keep the permanent MCP tool-list schema compact. */
+export const renderNextWork = (subject: NextWorkSubject, result: NextWorkResult): string => {
+  const scopeLine = `${subject.key} (${subject.entity}, ${String(result.streamCount)} stream(s))`;
+  const causes = renderCauses(result);
+
+  if (result.items.length === 0) {
+    return [
+      `No available work in ${scopeLine}.`,
+      ...(causes.length === 0
+        ? ["No task_execution or stream_planning item satisfies the current selection."]
+        : ["Reasons:", ...causes]),
+    ].join("\n");
   }
 
-  const lines = result.tasks.map((task) => {
-    const priority = task.priority ?? "unprioritised";
-    return `- ${task.key} [${task.taskType}, ${task.status}, ${priority}] ${task.title} — in ${task.streamKey}`;
-  });
-
-  const footer =
-    result.blockedCount > 0
-      ? `${String(result.blockedCount)} further ready or in-progress task(s) are hidden by an unfinished task dependency.`
-      : "No additional ready or in-progress task is hidden by an unfinished task dependency.";
-
+  const header = result.truncated
+    ? `Showing ${String(result.items.length)} of ${String(result.availableCount)} available work item(s) in ${scopeLine}:`
+    : `${String(result.availableCount)} available work item(s) in ${scopeLine} (${String(result.taskExecutionCount)} task_execution, ${String(result.streamPlanningCount)} stream_planning):`;
   return [
-    result.truncated
-      ? `Showing ${String(result.tasks.length)} of ${String(result.availableCount)} available task(s) in ${scopeLine}, most urgent first.`
-      : `${String(result.availableCount)} available task(s) in ${scopeLine}, most urgent first.`,
-    ...lines,
+    header,
+    ...result.items.map(renderItem),
     ...(result.truncated
-      ? ["Only the most urgent prefix is shown because of the requested limit (maximum 20)."]
+      ? ["The requested limit truncated this result; increase limit up to 20 for a larger prefix."]
       : []),
-    footer,
-    "For a ready task, start it with a change set that updates status to in_progress using expected_revision from get_context. An in-progress task is already started.",
+    ...(causes.length > 0 ? ["Not offered:", ...causes] : []),
+    "For a ready task_execution, start the Task and its ready parent Stream in the same atomic change set; the server does not change parent status implicitly. A stream_planning item needs Tasks created or brought out of draft before execution.",
   ].join("\n");
 };
 
@@ -97,6 +130,32 @@ export const getNextWorkTool = defineTool({
   annotations: { readOnlyHint: true },
   input: getNextWorkInput,
   run: async ({ input, scope }) => {
+    if (input.key === undefined) {
+      if (input.project === undefined) {
+        return toolError(
+          TOOL_ERROR_CODE.invalidArguments,
+          "Provide project for project-wide work, or provide an M-, E-, or S-key.",
+        );
+      }
+      const resolvedProject = await referenceService.resolveProject(scope, input.project);
+      if (!resolvedProject.ok) {
+        return toolError(
+          TOOL_ERROR_CODE.invalidArguments,
+          `Project ${input.project} was not found in this workspace.`,
+        );
+      }
+      const subject: NextWorkSubject = {
+        entity: "project",
+        id: resolvedProject.project.id,
+        key: resolvedProject.project.name,
+      };
+      const result = await nextWorkService.listNextWork(scope, subject, {
+        limit: input.limit,
+        executor: input.executor,
+      });
+      return textResult(renderNextWork(subject, result));
+    }
+
     const resolved = await referenceService.resolveEntityByKey(scope, {
       key: input.key,
       project: input.project,
@@ -106,13 +165,14 @@ export const getNextWorkTool = defineTool({
     }
 
     const reference = resolved.reference;
-    if (reference.entity === "task") {
-      // A task is the answer this tool gives, never the question it takes.
-      // Refused rather than quietly reinterpreted as "the stream containing it",
-      // because that would answer a question the caller did not ask.
+    if (
+      reference.entity !== "milestone" &&
+      reference.entity !== "epic" &&
+      reference.entity !== "stream"
+    ) {
       return toolError(
         TOOL_ERROR_CODE.invalidArguments,
-        `${reference.key} is a task. get_next_work takes the stream or epic to pull work from — pass ${reference.key}'s stream, or call get_context on the task itself.`,
+        `${reference.key} is a ${reference.entity}. get_next_work accepts a Milestone, Epic, Stream, or project scope; use get_context to read ${reference.key}.`,
       );
     }
 
@@ -121,7 +181,10 @@ export const getNextWorkTool = defineTool({
       id: reference.id,
       key: reference.key,
     };
-    const result = await nextWorkService.listNextWork(scope, subject, { limit: input.limit });
+    const result = await nextWorkService.listNextWork(scope, subject, {
+      limit: input.limit,
+      executor: input.executor,
+    });
 
     return textResult(renderNextWork(subject, result));
   },

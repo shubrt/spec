@@ -1,12 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import {
   Field,
-  ListSection,
   Panel,
   PanelTitle,
   ProseSection,
-  RuledBlock,
+  RuleApplicationsSection,
   Section,
+  UnknownsSections,
 } from "~/components/zpecs/document-sections";
 import {
   EntityDetailHeader,
@@ -14,7 +14,14 @@ import {
   type EntityDetailSurface,
 } from "~/components/zpecs/entity-detail-header";
 import { EntityKey, StatusBadge, StatusDot, TypeTag } from "~/components/zpecs/tokens";
-import { asArray, asNumber, asRecord, asText, contentOf } from "~/lib/document";
+import {
+  asArray,
+  asNumber,
+  asRecord,
+  asText,
+  contentOf,
+  type RuleApplication,
+} from "~/lib/document";
 import { epicStatus, label, streamStatus } from "~/lib/vocabulary";
 import type { EpicNode } from "~/server/board";
 
@@ -38,7 +45,7 @@ export function EpicDetail({
   const excluded = asArray(scope.excluded);
   const outcomes = asArray(content.outcomes);
   const metrics = asArray(content.success_metrics);
-  const rules = asArray(content.business_rules);
+  const ruleApplications = asArray<RuleApplication>(content.rule_applications);
 
   return (
     <EntityDetailSurfaceProvider surface={surface}>
@@ -114,31 +121,9 @@ export function EpicDetail({
           </Section>
         ) : null}
 
-        {rules.length > 0 ? (
-          <Section title="Business rules">
-            {rules.map((value, index) => {
-              const rule = asRecord(value);
-              return (
-                <RuledBlock key={asText(rule.id) || index} label={asText(rule.id)}>
-                  <div className="text-[13px] leading-relaxed">{asText(rule.rule)}</div>
-                  {asText(rule.impact) ? (
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      Impact: {asText(rule.impact)}
-                    </div>
-                  ) : null}
-                  {asText(rule.consequence) ? (
-                    <div className="mt-1 text-xs text-muted-foreground">
-                      → {asText(rule.consequence)}
-                    </div>
-                  ) : null}
-                </RuledBlock>
-              );
-            })}
-          </Section>
-        ) : null}
+        <RuleApplicationsSection applications={ruleApplications} />
 
-        <ListSection title="Open questions" items={asArray(content.open_questions)} />
-        <ListSection title="Assumptions" items={asArray(content.assumptions)} muted />
+        <UnknownsSections questions={content.open_questions} assumptions={content.assumptions} />
 
         {epic.streams.length > 0 ? (
           <Section title={`Streams · ${epic.streams.length}`}>

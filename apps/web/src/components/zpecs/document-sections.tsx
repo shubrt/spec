@@ -1,7 +1,8 @@
+import { Link } from "@tanstack/react-router";
 import type { ReactNode } from "react";
 import { useEntityDetailSurface } from "~/components/zpecs/entity-detail-surface";
 import { SectionId } from "~/components/zpecs/tokens";
-import { asText } from "~/lib/document";
+import { asArray, asRecord, asText, type RuleApplication } from "~/lib/document";
 
 /**
  * The presentational vocabulary the two detail views share.
@@ -96,12 +97,54 @@ export function OrderedList({ items }: { items: string[] }) {
   );
 }
 
+/** Structured unknowns shared by every v2 document that can carry them. */
+export function UnknownsSections({
+  questions,
+  assumptions,
+}: {
+  questions: unknown;
+  assumptions: unknown;
+}) {
+  const questionItems = asArray(questions).map(asRecord);
+  const assumptionItems = asArray(assumptions).map(asRecord);
+  return (
+    <>
+      {questionItems.length > 0 ? (
+        <Section title="Open questions">
+          {questionItems.map((question, index) => (
+            <Panel key={asText(question.id) || index}>
+              <PanelTitle id={asText(question.id)}>{asText(question.question)}</PanelTitle>
+            </Panel>
+          ))}
+        </Section>
+      ) : null}
+      {assumptionItems.length > 0 ? (
+        <Section title="Assumptions">
+          {assumptionItems.map((assumption, index) => {
+            const sourceIds = asArray(assumption.source_ids).map(asText).filter(Boolean);
+            return (
+              <Panel key={asText(assumption.id) || index}>
+                <PanelTitle id={asText(assumption.id)}>{asText(assumption.statement)}</PanelTitle>
+                {sourceIds.length > 0 ? (
+                  <div className="text-xs text-muted-foreground">
+                    Sources: {sourceIds.join(", ")}
+                  </div>
+                ) : null}
+              </Panel>
+            );
+          })}
+        </Section>
+      ) : null}
+    </>
+  );
+}
+
 /** A bordered block, used wherever one item of a structured list needs grouping. */
 export function Panel({ children }: { children: ReactNode }) {
   return <div className="mb-3 rounded-xl border p-4">{children}</div>;
 }
 
-/** A panel heading that may carry a section id such as `WF-001` or `EDGE-002`. */
+/** A panel heading that may carry a section id such as `WF-1` or `EC-2`. */
 export function PanelTitle({ id, children }: { id?: string; children: ReactNode }) {
   return (
     <div className="mb-2 flex flex-wrap items-center gap-2 text-[13px] font-semibold">
@@ -138,7 +181,7 @@ export function Field({ name, children }: { name: string; children: ReactNode })
 /**
  * A left-ruled block for a rule or a decision.
  */
-export function RuledBlock({ label, children }: { label?: string; children: ReactNode }) {
+export function RuledBlock({ label, children }: { label?: ReactNode; children: ReactNode }) {
   return (
     <div className="mb-3.5 border-l-[3px] border-accent pl-3.5">
       {label ? (
@@ -146,5 +189,52 @@ export function RuledBlock({ label, children }: { label?: string; children: Reac
       ) : null}
       {children}
     </div>
+  );
+}
+
+/** Local context for canonical project Rules, without duplicating their text. */
+export function RuleApplicationsSection({ applications }: { applications: RuleApplication[] }) {
+  if (applications.length === 0) return null;
+
+  return (
+    <Section title="Rule applications">
+      {applications.map((application, index) => {
+        const id = asText(application.id);
+        const ruleKey = asText(application.rule_key);
+        const appliesWhen = asText(application.applies_when);
+        const localApplication = asText(application.application);
+        const reference = [ruleKey, id].filter(Boolean).join(" · ");
+
+        return (
+          <RuledBlock
+            key={id || `${ruleKey}-${index}`}
+            label={
+              ruleKey ? (
+                <Link
+                  to="/rule/$ruleKey"
+                  params={{ ruleKey }}
+                  search={(previous) => ({
+                    project: previous.project,
+                    workspace: previous.workspace,
+                  })}
+                  className="hover:underline"
+                >
+                  {reference}
+                </Link>
+              ) : (
+                reference || undefined
+              )
+            }
+          >
+            {localApplication ? (
+              <div className="text-[13px] leading-relaxed">{localApplication}</div>
+            ) : null}
+            {appliesWhen ? (
+              <div className="mt-1 text-xs text-muted-foreground">Applies when: {appliesWhen}</div>
+            ) : null}
+          </RuledBlock>
+        );
+      })}
+    </Section>
   );
 }

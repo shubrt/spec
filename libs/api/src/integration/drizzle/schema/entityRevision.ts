@@ -8,7 +8,7 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
-import type { EntityType } from "../../../domain/enums";
+import type { VersionedEntityType } from "../../../domain/enums";
 import { project } from "./project";
 import { workspace } from "./workspace";
 
@@ -46,7 +46,7 @@ import { workspace } from "./workspace";
 export const entityRevision = pgTable(
   "entity_revision",
   {
-    entityType: text().$type<EntityType>().notNull(),
+    entityType: text().$type<VersionedEntityType>().notNull(),
     entityId: uuid().notNull(),
     revision: integer().notNull(),
     workspaceId: uuid()

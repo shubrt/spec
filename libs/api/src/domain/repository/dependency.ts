@@ -2,11 +2,15 @@ import { type SQL, and, eq, inArray, ne, sql } from "drizzle-orm";
 import { db } from "../../integration/drizzle/client";
 import { executeRows } from "../../integration/drizzle/executeRows";
 import { entityLink } from "../../integration/drizzle/schema/entityLink";
-import { epic } from "../../integration/drizzle/schema/epic";
 import { stream } from "../../integration/drizzle/schema/stream";
 import { task } from "../../integration/drizzle/schema/task";
 import type { WorkspaceScope } from "../auth/workspaceScope";
-import { ENTITY_TYPE, type EntityType, type TaskStatus } from "../enums";
+import {
+  DEPENDENCY_ENDPOINT_TYPE,
+  type DependencyEndpointType,
+  type StreamStatus,
+  type TaskStatus,
+} from "../enums";
 import type { DbExecutor } from "./entity";
 
 /**
@@ -39,7 +43,7 @@ import type { DbExecutor } from "./entity";
 export type DependencyRow = {
   /** `blocked_by` — the other entity blocks this one. `blocks` — the reverse. */
   readonly direction: "blocked_by" | "blocks";
-  readonly entity: EntityType;
+  readonly entity: DependencyEndpointType;
   readonly key: string;
   readonly title: string;
   readonly status: string;
@@ -47,14 +51,14 @@ export type DependencyRow = {
 };
 
 export type DependencyEndpoint = {
-  readonly entity: EntityType;
+  readonly entity: DependencyEndpointType;
   readonly id: string;
 };
 
 const BLOCKED_BY = "blocked_by";
 
-const isEntityType = (value: unknown): value is EntityType =>
-  ENTITY_TYPE.some((candidate) => candidate === value);
+const isDependencyEndpointType = (value: unknown): value is DependencyEndpointType =>
+  DEPENDENCY_ENDPOINT_TYPE.some((candidate) => candidate === value);
 
 /**
  * One row as the driver hands it back. The statement below is in this file, so every
@@ -71,7 +75,7 @@ type RawDependencyRow = {
 };
 
 const toDependencyRow = (row: RawDependencyRow): DependencyRow => {
-  if (!isEntityType(row.entity)) {
+  if (!isDependencyEndpointType(row.entity)) {
     throw new Error(
       `dependency lookup returned an unknown entity kind: ${JSON.stringify(row.entity)}`,
     );
@@ -114,18 +118,16 @@ const dependencyStatement = (scope: WorkspaceScope, endpoint: DependencyEndpoint
   )
   select edge.direction as direction,
          edge.other_type as entity,
-         coalesce(${epic.key}, ${stream.key}, ${task.key}) as key,
-         coalesce(${epic.title}, ${stream.title}, ${task.title}) as title,
-         coalesce(${epic.status}, ${stream.status}, ${task.status}) as status,
+         coalesce(${stream.key}, ${task.key}) as key,
+         coalesce(${stream.title}, ${task.title}) as title,
+         coalesce(${stream.status}, ${task.status}) as status,
          edge.reason as reason
     from edge
-    left join ${epic}
-      on edge.other_type = 'epic' and ${epic.id} = edge.other_id and ${epic.workspaceId} = ${scope}
     left join ${stream}
       on edge.other_type = 'stream' and ${stream.id} = edge.other_id and ${stream.workspaceId} = ${scope}
     left join ${task}
       on edge.other_type = 'task' and ${task.id} = edge.other_id and ${task.workspaceId} = ${scope}
-   where coalesce(${epic.id}, ${stream.id}, ${task.id}) is not null
+   where coalesce(${stream.id}, ${task.id}) is not null
    order by edge.direction, edge.created_at, edge.id`;
 
 /**
@@ -145,50 +147,71 @@ async function forEntity(
 }
 
 /**
- * Which of `taskIds` are still blocked by a task that is not `done`.
+ * Which candidate work entities are still blocked by an unfinished entity at
+ * the same level.
  *
- * `get_next_work`'s definition of "unblocked", answered in one statement for the
- * whole candidate list rather than one per task. `entity_link` stores only
- * `blocked_by`, source-is-blocked, so "what blocks me" is the rows where I am the
- * source — and the blocker's own status has to be read, which is the join.
+ * `get_next_work` asks once for every candidate Stream and once for every
+ * candidate Task, never once per item. `entity_link` stores only `blocked_by`,
+ * source-is-blocked, so "what blocks me" is the rows where I am the source — and
+ * the blocker's own status has to be read, which is the join.
  *
  * The tenant filter is on **both** tables. The edge table's filter alone would let
  * a blocker row from another workspace decide whether this workspace's task is
  * workable, and a foreign blocker that happened not to be `done` would silently
  * hide work.
  *
- * Only *task* blockers count, because only a task has a `done`. A stream or an
- * epic on the far end of a `blocked_by` edge does not hold work up here — see the
- * note in `service/nextWork.ts`.
+ * Source and target type are both constrained to `input.entity`. A Task can only
+ * wait on a Task (`done` clears it); a Stream can only wait on a Stream
+ * (`completed` clears it). `cancelled` is intentionally not a completion state,
+ * so it continues to block until the relationship is consciously removed or
+ * replaced.
  */
-async function blockedTaskIds(
+async function blockedIds(
   scope: WorkspaceScope,
-  taskIds: readonly string[],
+  input: { readonly entity: DependencyEndpointType; readonly ids: readonly string[] },
   executor: DbExecutor = db,
 ): Promise<ReadonlySet<string>> {
-  if (taskIds.length === 0) {
+  if (input.ids.length === 0) {
     return new Set();
   }
-  const rows = await executor
-    .selectDistinct({ id: entityLink.sourceId })
-    .from(entityLink)
-    .innerJoin(
-      task,
-      and(eq(task.id, entityLink.targetId), eq(task.workspaceId, scope), ne(task.status, DONE)),
-    )
-    .where(
-      and(
-        eq(entityLink.workspaceId, scope),
-        eq(entityLink.relationshipType, BLOCKED_BY),
-        eq(entityLink.sourceType, "task"),
-        inArray(entityLink.sourceId, [...taskIds]),
-        eq(entityLink.targetType, "task"),
-      ),
-    );
+  const endpointFilter = and(
+    eq(entityLink.workspaceId, scope),
+    eq(entityLink.relationshipType, BLOCKED_BY),
+    eq(entityLink.sourceType, input.entity),
+    inArray(entityLink.sourceId, [...input.ids]),
+    eq(entityLink.targetType, input.entity),
+  );
+  const rows =
+    input.entity === "task"
+      ? await executor
+          .selectDistinct({ id: entityLink.sourceId })
+          .from(entityLink)
+          .innerJoin(
+            task,
+            and(
+              eq(task.id, entityLink.targetId),
+              eq(task.workspaceId, scope),
+              ne(task.status, TASK_COMPLETED),
+            ),
+          )
+          .where(endpointFilter)
+      : await executor
+          .selectDistinct({ id: entityLink.sourceId })
+          .from(entityLink)
+          .innerJoin(
+            stream,
+            and(
+              eq(stream.id, entityLink.targetId),
+              eq(stream.workspaceId, scope),
+              ne(stream.status, STREAM_COMPLETED),
+            ),
+          )
+          .where(endpointFilter);
   return new Set(rows.map((row) => row.id));
 }
 
-/** The one task status that clears a `blocked_by` edge. */
-const DONE: TaskStatus = "done";
+/** The only statuses that satisfy a hard dependency at their respective level. */
+const TASK_COMPLETED: TaskStatus = "done";
+const STREAM_COMPLETED: StreamStatus = "completed";
 
-export const dependencyRepository = { forEntity, blockedTaskIds };
+export const dependencyRepository = { forEntity, blockedIds };

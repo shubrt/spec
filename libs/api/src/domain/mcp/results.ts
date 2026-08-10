@@ -101,7 +101,7 @@ export function textResult(text: string): CallToolResult {
  * ways, and each message has to be actionable on its own — a model does not get to
  * ask a follow-up question. `ambiguous` is the important one: it names the projects
  * that answered and the argument that resolves it, because a workspace with two
- * projects is otherwise unable to address `EPIC-1` at all.
+ * projects is otherwise unable to address `E-1` at all.
  */
 export function keyLookupError(resolution: {
   reason: "not_a_key" | "unknown_project" | "not_found" | "ambiguous";
@@ -113,7 +113,7 @@ export function keyLookupError(resolution: {
     case "not_a_key": {
       return toolError(
         TOOL_ERROR_CODE.invalidArguments,
-        `${resolution.key ?? ""} is not an entity key. Keys look like EPIC-1, STR-12 or TASK-45, and search_context returns them. Do not guess one.`,
+        `${resolution.key ?? ""} is not a versioned entity key. Keys look like E-1, S-12, T-45, M-2 or R-7, and search_context returns them. Do not guess one.`,
       );
     }
     case "unknown_project": {

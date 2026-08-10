@@ -5,32 +5,18 @@ import { defineTool } from "../defineTool";
 import { keyLookupError, structuredResult } from "../results";
 
 /**
- * One entity by key, plus the domain spec §7 bundle — the parent stream's purpose,
- * the requirements the entity references, the acceptance criteria that verify them,
- * the business rules and edge cases that apply, and the dependencies.
+ * One versioned entity by key. Work entities include projected Stream context and
+ * canonical Rule definitions; Rules include direct consumers; Milestones include
+ * assigned Streams. Every projection stays compact and batch-resolved.
  *
- * `project` is the key qualifier. Keys are unique per project, so a bare key is
- * resolved by asking every project in the workspace and two answers is a refusal;
- * without this argument a two-project workspace could not address `EPIC-1` at all.
+ * `project` is the key qualifier. Keys are unique per project, so a compact
+ * workspace-wide candidate lookup refuses a bare key when more than one project
+ * contains it; the qualifier makes that key unambiguous.
  */
 const getContextInput = z.strictObject({
-  key: z
-    .string()
-    .min(1)
-    .max(64)
-    .describe("Entity key as returned by search_context, for example TASK-123."),
-  project: z
-    .string()
-    .min(1)
-    .max(200)
-    .optional()
-    .describe("Which project the key is in, by name. Needed only if two projects share a key."),
-  include_bundle: z
-    .boolean()
-    .default(true)
-    // The bundle's contents are listed once, in this tool's description. Repeating
-    // them here paid for the same sentence twice in every `tools/list`.
-    .describe("Set false only when the raw document is all that is wanted."),
+  key: z.string().min(1).max(64),
+  project: z.string().min(1).max(200).optional(),
+  include_bundle: z.boolean().default(true),
 });
 
 /**
@@ -48,13 +34,8 @@ const getContextOutput = z.strictObject({
   key: z.string(),
   title: z.string(),
   status: z.string(),
-  // The only two output fields carrying a description: both say something a
-  // caller cannot infer from the field name, and both are load-bearing — the
-  // revision is what the next write must send back, and the project name is the
-  // qualifier for the next key lookup. The rest are self-describing, and every
-  // byte here is re-sent on every `tools/list`.
-  revision: z.number().int().describe("Send back as expected_revision when updating."),
-  project: z.string().describe("Pass as project to qualify this key."),
+  revision: z.number().int(),
+  project: z.string(),
   document: z.record(z.string(), z.unknown()),
   bundle: z.record(z.string(), z.unknown()).nullable(),
 });
@@ -71,6 +52,9 @@ const toSubject = (reference: EntityReference): BundleSubject => {
     id: reference.id,
     key: reference.key,
     title: reference.title,
+    status: reference.status,
+    revision: reference.revision,
+    projectId: reference.projectId,
     document: reference.document,
   };
   switch (reference.entity) {
@@ -78,12 +62,28 @@ const toSubject = (reference: EntityReference): BundleSubject => {
       return { entity: "epic", ...common };
     }
     case "stream": {
-      return { entity: "stream", ...common };
+      return {
+        entity: "stream",
+        ...common,
+        epicId: reference.epicId ?? "",
+        milestoneId: reference.milestoneId,
+        roadmapRank: reference.roadmapRank,
+      };
     }
     case "task": {
       // `streamId` is the column, not `links.parent_stream_id`: the column is what
       // the FK and the cascade are on, so it cannot disagree with reality.
       return { entity: "task", ...common, streamId: reference.streamId ?? "" };
+    }
+    case "milestone": {
+      return {
+        entity: "milestone",
+        ...common,
+        roadmapOrder: reference.roadmapOrder ?? 0,
+      };
+    }
+    case "rule": {
+      return { entity: "rule", ...common };
     }
   }
 };
@@ -98,17 +98,92 @@ const summarise = (
     `project: ${projectName} · revision: ${String(reference.revision)} — send this as expected_revision when you update it.`,
   ];
   if (bundle) {
-    lines.push(
-      `context: stream ${bundle.stream?.key ?? "(none)"} · ` +
-        `${String(bundle.requirements.functional.length + bundle.requirements.nonFunctional.length)} requirement(s) · ` +
-        `${String(bundle.acceptanceCriteria.length)} acceptance criteri(a) · ` +
-        `${String(bundle.businessRules.length)} business rule(s) · ` +
-        `${String(bundle.edgeCases.length)} edge case(s) · ` +
-        `${String(bundle.dependencies.blockedBy.length)} blocker(s), ${String(bundle.dependencies.blocks.length)} blocked by this.`,
-    );
-    if (bundle.unresolvedReferences.length > 0) {
+    if (bundle.kind === "hierarchy") {
+      const pinned = bundle.rules.definitions.filter(
+        (definition) => definition.revisionSource === "task_pin",
+      ).length;
+      const streamLabel =
+        bundle.stream === null
+          ? "(none)"
+          : `${bundle.stream.key}${bundle.stream.revision === null ? "" : `@${String(bundle.stream.revision)}`} (${bundle.stream.revisionSource})`;
       lines.push(
-        `unresolved references: ${bundle.unresolvedReferences.join(", ")} — this entity names ids its stream does not define. Report that rather than inventing them.`,
+        bundle.sectionsOmittedAsDocumentDuplicate
+          ? `context: stream ${streamLabel} · own Stream sections are in document and are not duplicated in bundle · ` +
+              `${String(bundle.rules.definitions.length)} canonical Rule definition(s) · ` +
+              `${String(bundle.dependencies.blockedBy.length)} blocker(s), ${String(bundle.dependencies.blocks.length)} blocked by this · ` +
+              `${String(bundle.relations.length)} soft relation(s).`
+          : `context: stream ${streamLabel} · ` +
+              `${String(bundle.requirements.functional.length + bundle.requirements.nonFunctional.length)} requirement(s) · ` +
+              `${String(bundle.acceptanceCriteria.length)} acceptance criteri(a) · ` +
+              `${String(bundle.rules.definitions.length)} canonical Rule definition(s) (${String(pinned)} task-pinned, ${String(bundle.rules.definitions.length - pinned)} current) · ` +
+              `${String(bundle.edgeCases.length)} edge case(s) · ` +
+              `${String(bundle.dependencies.blockedBy.length)} blocker(s), ${String(bundle.dependencies.blocks.length)} blocked by this · ` +
+              `${String(bundle.relations.length)} soft relation(s).`,
+      );
+      if (
+        bundle.stream !== null &&
+        (bundle.stream.revisionSource === "missing_task_started" ||
+          bundle.stream.revisionSource === "missing_task_used" ||
+          bundle.stream.revisionSource === "not_recorded")
+      ) {
+        lines.push(
+          `historical Stream context unavailable: ${bundle.stream.revisionSource}` +
+            (bundle.stream.revision === null
+              ? " — no revision was recorded; today's Stream was not substituted."
+              : ` at revision ${String(bundle.stream.revision)} — today's Stream was not substituted.`),
+        );
+      }
+      if (bundle.stream?.revisionSource === "not_applicable") {
+        lines.push(
+          "historical Stream context not applicable — this Task was cancelled before it recorded a start snapshot.",
+        );
+      }
+      if (bundle.milestone !== null) {
+        lines.push(
+          `roadmap: ${bundle.milestone.key} [${bundle.milestone.status}, order ${String(bundle.milestone.roadmapOrder)}] · Stream rank ${String(bundle.milestone.streamRank ?? "unranked")}.`,
+        );
+      }
+      if (bundle.unresolvedReferences.length > 0) {
+        lines.push(
+          `unresolved references: ${bundle.unresolvedReferences.join(", ")} — this entity names ids its stream does not define. Report that rather than inventing them.`,
+        );
+      }
+      if (bundle.rules.unresolvedKeys.length > 0) {
+        lines.push(`unresolved Rule keys: ${bundle.rules.unresolvedKeys.join(", ")}.`);
+      }
+      if (bundle.rules.unpinnedHistoricalKeys.length > 0) {
+        lines.push(
+          `missing terminal Rule pins: ${bundle.rules.unpinnedHistoricalKeys.join(", ")} — current definitions were not substituted.`,
+        );
+      }
+      if (bundle.rules.unresolvedPinnedRevisions.length > 0) {
+        lines.push(
+          `missing pinned Rule revisions: ${bundle.rules.unresolvedPinnedRevisions
+            .map((pin) => `${pin.key}@${String(pin.revision)}`)
+            .join(", ")} — no current definition was substituted for the missing snapshot.`,
+        );
+      }
+    } else if (bundle.kind === "milestone") {
+      lines.push(
+        `roadmap order: ${String(bundle.roadmapOrder)} · ${String(bundle.streams.length)} assigned Stream(s).`,
+      );
+    } else {
+      lines.push(
+        `${String(bundle.consumers.length)} direct Rule consumer(s) · ${String(bundle.relations.length)} relation(s).`,
+      );
+    }
+    const sources =
+      bundle.kind === "hierarchy"
+        ? [
+            ...bundle.evidenceSources.flatMap((catalog) => catalog.sources),
+            ...bundle.rules.definitions.flatMap((definition) => definition.sources),
+          ]
+        : bundle.sources;
+    const stale = sources.filter((source) => source.freshness === "stale").length;
+    const unknown = sources.filter((source) => source.freshness === "unknown").length;
+    if (stale > 0 || unknown > 0) {
+      lines.push(
+        `source freshness: ${String(stale)} stale · ${String(unknown)} unknown. Unknown is reported, never guessed to be stale or fresh.`,
       );
     }
   }

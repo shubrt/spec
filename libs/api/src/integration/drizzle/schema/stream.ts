@@ -12,6 +12,7 @@ import {
 import type { StreamStatus, StreamType } from "../../../domain/enums";
 import { tsvector } from "../customTypes";
 import { epic } from "./epic";
+import { milestone } from "./milestone";
 import { project } from "./project";
 import { workspace } from "./workspace";
 
@@ -41,7 +42,11 @@ export const stream = pgTable(
     epicId: uuid()
       .notNull()
       .references(() => epic.id, { onDelete: "cascade" }),
-    /** `STR-12`, from `project.stream_counter`. Unique per project, never reused. */
+    /** Optional roadmap placement; Milestone deletion returns the Stream to the backlog. */
+    milestoneId: uuid().references(() => milestone.id, { onDelete: "set null" }),
+    /** Advisory ordering inside one Milestone. Equal ranks deliberately mean parallel work. */
+    roadmapRank: integer(),
+    /** `S-12`, from `project.stream_counter`. Unique per project, never reused. */
     key: text().notNull(),
     streamType: text().$type<StreamType>().notNull(),
     status: text().$type<StreamStatus>().notNull().default("draft"),
@@ -60,6 +65,7 @@ export const stream = pgTable(
     uniqueIndex("stream_project_key_uniq").on(t.projectId, t.key),
     index("stream_scope_status_idx").on(t.workspaceId, t.projectId, t.status),
     index("stream_epic_idx").on(t.workspaceId, t.epicId),
+    index("stream_milestone_rank_idx").on(t.workspaceId, t.projectId, t.milestoneId, t.roadmapRank),
     index("stream_search_idx").using("gin", t.searchVector),
   ],
 );

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ENTITY_TYPE } from "../../enums";
+import { VERSIONED_ENTITY_TYPE } from "../../enums";
 import { referenceService } from "../../service/reference";
 import {
   DEFAULT_SEARCH_LIMIT,
@@ -11,7 +11,7 @@ import { defineTool } from "../defineTool";
 import { TOOL_ERROR_CODE, structuredResult, toolError } from "../results";
 
 /**
- * The scan tool: five short fields per hit, so a model can look at twenty of them
+ * The scan tool: six short fields per hit, so a model can look at twenty of them
  * and then spend its context on the one it wants through `get_context`.
  *
  * `project` is resolved by **name** (an id is accepted too). A project row has no
@@ -21,28 +21,10 @@ import { TOOL_ERROR_CODE, structuredResult, toolError } from "../results";
  * question nobody asked.
  */
 const searchContextInput = z.strictObject({
-  query: z
-    .string()
-    .min(1)
-    .max(200)
-    .describe("Words to search for in titles and document text. Not a boolean query language."),
-  entity: z
-    .enum(ENTITY_TYPE)
-    .optional()
-    .describe("Restrict to one entity kind. Omit to search epics, streams and tasks together."),
-  project: z
-    .string()
-    .min(1)
-    .max(200)
-    .optional()
-    .describe("Restrict to one project, by its name. Omit to search the whole workspace."),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(MAX_SEARCH_LIMIT)
-    .default(DEFAULT_SEARCH_LIMIT)
-    .describe("Maximum number of hits."),
+  query: z.string().min(1).max(200),
+  entity: z.enum(VERSIONED_ENTITY_TYPE).optional(),
+  project: z.string().min(1).max(200).optional(),
+  limit: z.number().int().min(1).max(MAX_SEARCH_LIMIT).default(DEFAULT_SEARCH_LIMIT),
 });
 
 /**
@@ -55,22 +37,21 @@ const searchContextInput = z.strictObject({
 const searchContextOutput = z.strictObject({
   hits: z.array(
     z.strictObject({
+      project: z.string(),
       key: z.string(),
       title: z.string(),
-      type: z.string().describe("Entity kind, plus the stream type for a stream."),
+      type: z.string(),
       status: z.string(),
-      snippet: z.string().describe("Matching text, matched words in **bold**."),
+      snippet: z.string(),
     }),
   ),
-  matching: z
-    .enum(["exact", "fuzzy"])
-    .describe("fuzzy: nothing contained your words, so these are the closest names."),
+  matching: z.enum(["exact", "fuzzy"]),
 });
 
 const summarise = (result: SearchContextResult): string => {
   if (result.hits.length === 0) {
     return (
-      "No epic, stream or task in this workspace matches that. Widen the words, or ask the " +
+      "No Epic, Stream, Task, Milestone or Rule in this workspace matches that. Widen the words, or ask the " +
       "user whether this work exists yet — do not create anything on the strength of an " +
       "empty search."
     );
@@ -80,7 +61,8 @@ const summarise = (result: SearchContextResult): string => {
       ? `${String(result.hits.length)} approximate hit(s): no document contains those words, so these are the closest names. Confirm one is what you meant before acting on it.`
       : `${String(result.hits.length)} hit(s):`;
   const lines = result.hits.map(
-    (hit) => `${hit.key} [${hit.type}, ${hit.status}] ${hit.title} — ${hit.snippet}`,
+    (hit) =>
+      `${hit.key} [${hit.type}, ${hit.status}, project ${hit.project}] ${hit.title} — ${hit.snippet}`,
   );
   return [header, ...lines].join("\n");
 };

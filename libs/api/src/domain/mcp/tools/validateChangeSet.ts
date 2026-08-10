@@ -47,7 +47,7 @@ function renderOutcome(mode: ChangeSetMode, outcome: ChangeSetOutcome): CallTool
     mode === "validate"
       ? `Valid. ${String(outcome.applied.length)} operation(s) would be applied, and nothing was written. Created keys below are provisional: a concurrent writer can advance the counters, so the apply_change_set result is authoritative.`
       : `Applied ${String(outcome.applied.length)} operation(s).`;
-  const lines = outcome.applied.map((applied) => {
+  const lines = outcome.applied.flatMap((applied) => {
     const parts = [`operations[${String(applied.index)}] ${applied.operation}`];
     if (applied.entity !== null) {
       parts.push(applied.entity);
@@ -67,13 +67,75 @@ function renderOutcome(mode: ChangeSetMode, outcome: ChangeSetOutcome): CallTool
     if (applied.revision !== null) {
       parts.push(`revision ${String(applied.revision)}`);
     }
-    return `- ${parts.join(" ")}`;
+    const operationLine = `- ${parts.join(" ")}`;
+    const shown = applied.diff.slice(0, 20).map((change) => `  ${renderDiff(change)}`);
+    const omitted = applied.diff.length - shown.length;
+    return [
+      operationLine,
+      ...shown,
+      ...(omitted > 0 ? [`  … ${String(omitted)} more change(s)`] : []),
+    ];
   });
   const footer =
     mode === "validate"
-      ? "To write it, call apply_change_set with this proposal; add confirm: true to every archive, delete or move the user explicitly approves. Then use apply's committed ids, keys and revisions."
+      ? "To write it, call apply_change_set with this proposal; add confirm: true to every approved archive, delete, move, id-removing update, or Rule update with reported downstream impact. Then use apply's committed ids, keys and revisions."
       : "Report the ids and keys to the user. Use the revisions above as expected_revision on your next update.";
   return textResult([header, ...lines, footer].join("\n"));
+}
+
+type SuccessfulOutcome = Extract<ChangeSetOutcome, { ok: true }>;
+type RenderedDiff = SuccessfulOutcome["applied"][number]["diff"][number];
+
+function renderDiff(change: RenderedDiff): string {
+  switch (change.kind) {
+    case "entity": {
+      return `${change.change}: ${change.entity} ${change.key}${change.title === null ? "" : ` “${change.title}”`}`;
+    }
+    case "field": {
+      return `${change.path}: ${renderValue(change.before)} → ${renderValue(change.after)}`;
+    }
+    case "id_collection": {
+      const details = [
+        change.added.length > 0 ? `added ${change.added.join(", ")}` : null,
+        change.removed.length > 0 ? `removed ${change.removed.join(", ")}` : null,
+        change.changed.length > 0 ? `changed ${change.changed.join(", ")}` : null,
+        change.orderChanged ? "order changed" : null,
+      ].filter((part): part is string => part !== null);
+      return `${change.path}: ${String(change.beforeCount)} → ${String(change.afterCount)}${details.length === 0 ? "" : `; ${details.join("; ")}`}`;
+    }
+    case "relationship": {
+      return `${change.changed ? change.change : "unchanged"}: ${change.source} -[${change.relationship}]-> ${change.target}`;
+    }
+    case "cascade": {
+      const shown = change.deleted.slice(0, 12).map(({ entity, key }) => `${entity} ${key}`);
+      const omitted = change.deleted.length - shown.length;
+      return `cascade: ${String(change.deleted.length)} descendant(s) deleted (${shown.join(", ")}${omitted > 0 ? `, … ${String(omitted)} more` : ""})`;
+    }
+    case "impact": {
+      const shown = change.affected.slice(0, 12);
+      const omitted = change.affected.length - shown.length;
+      return `downstream impact: ${shown.join(", ")}${omitted > 0 ? `, … ${String(omitted)} more` : ""}`;
+    }
+  }
+}
+
+function renderValue(value: unknown): string {
+  if (value === undefined) {
+    return "∅";
+  }
+  if (typeof value === "bigint") {
+    return `${value.toString()}n`;
+  }
+  let rendered: string | undefined;
+  try {
+    rendered = JSON.stringify(value);
+  } catch {
+    return `<unserializable ${typeof value}>`;
+  }
+  if (rendered === undefined) {
+    return `<${typeof value}>`;
+  }
+  return rendered.length <= 160 ? rendered : `${rendered.slice(0, 157)}…`;
 }
 
 function renderRefusal(outcome: Extract<ChangeSetOutcome, { ok: false }>): CallToolResult {

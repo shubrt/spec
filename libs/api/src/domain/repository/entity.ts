@@ -1,32 +1,32 @@
-import { type SQL, and, eq, sql } from "drizzle-orm";
+import { type SQL, and, eq, inArray, sql } from "drizzle-orm";
 import type { PgColumn, PgTable } from "drizzle-orm/pg-core";
 import { DomainError } from "../../_/errors";
-import type { Db } from "../../integration/drizzle/client";
+import { db, type Db } from "../../integration/drizzle/client";
 import { entityRevision } from "../../integration/drizzle/schema/entityRevision";
 import { epic } from "../../integration/drizzle/schema/epic";
 import { project } from "../../integration/drizzle/schema/project";
 import { stream } from "../../integration/drizzle/schema/stream";
 import { task } from "../../integration/drizzle/schema/task";
 import type { WorkspaceScope } from "../auth/workspaceScope";
-import type { EntityType } from "../enums";
+import type { HierarchyEntityType, VersionedEntityType } from "../enums";
 import { formatKey } from "../keys";
 
 /**
- * What `repository/{epic,stream,task}.ts` share: the transaction types, the shape
- * of a scoped write's outcome, the key counter, the revision log and the stamping
- * of server-owned document fields.
+ * What the versioned entity repositories share: the transaction types, the
+ * shape of a scoped write's outcome, the key counter, the revision log and the
+ * stamping of server-owned document fields.
  *
- * The three entity repositories are separate files because their columns, their
- * status enums and their parents differ, and a table-generic factory over Drizzle
- * needs casts in exactly the code path where a cast is least acceptable — the
- * tenant filter. What is shared here is instead the part where three copies would
- * be three chances to get concurrency wrong.
+ * The entity repositories are separate files because their columns, status
+ * enums and relationships differ, and a table-generic factory over Drizzle needs
+ * casts in exactly the code path where a cast is least acceptable — the tenant
+ * filter. What is shared here is instead the part where copies would create
+ * multiple chances to get concurrency wrong.
  *
  * Everything exported from `src/domain/repository/` takes `scope: WorkspaceScope`
  * first, including these helpers, and each one really does use it:
- * `issueKey` locates the project row inside the scope, `recordRevision` writes the
- * scope onto the audit row, and `stampServerOwnedMeta` stamps it into the
- * document's `meta.workspace_id`.
+ * `issueKey` locates the project row inside the scope and `recordRevision` writes
+ * the scope and project onto the audit row. Document JSON carries identity and
+ * revision, while relational columns remain the sole ownership authority.
  */
 
 /**
@@ -85,7 +85,9 @@ const COUNTER_FIELD = {
   epic: "epicCounter",
   stream: "streamCounter",
   task: "taskCounter",
-} as const satisfies Record<EntityType, keyof typeof project.$inferSelect>;
+  milestone: "milestoneCounter",
+  rule: "ruleCounter",
+} as const satisfies Record<VersionedEntityType, keyof typeof project.$inferSelect>;
 
 /**
  * Issues the next key for an entity in a project, or `null` when the project is
@@ -105,7 +107,7 @@ const COUNTER_FIELD = {
 export async function issueKey(
   scope: WorkspaceScope,
   tx: DbTransaction,
-  input: { readonly entity: EntityType; readonly projectId: string },
+  input: { readonly entity: VersionedEntityType; readonly projectId: string },
 ): Promise<string | null> {
   const [row] = await tx
     .select()
@@ -129,7 +131,7 @@ export async function issueKey(
 async function incrementCounter(
   scope: WorkspaceScope,
   tx: DbTransaction,
-  entity: EntityType,
+  entity: VersionedEntityType,
   projectId: string,
   sequence: number,
 ): Promise<void> {
@@ -148,14 +150,91 @@ async function incrementCounter(
       await tx.update(project).set({ taskCounter: sequence, updatedAt }).where(where);
       return;
     }
+    case "milestone": {
+      await tx.update(project).set({ milestoneCounter: sequence, updatedAt }).where(where);
+      return;
+    }
+    case "rule": {
+      await tx.update(project).set({ ruleCounter: sequence, updatedAt }).where(where);
+      return;
+    }
   }
 }
 
 /** One entity, in the polymorphic form `entity_link` addresses an endpoint by. */
 export type EntityEndpoint = {
-  readonly type: EntityType;
+  readonly type: HierarchyEntityType;
   readonly id: string;
 };
+
+export type DescendantEndpoint = EntityEndpoint & { readonly key: string };
+
+export type HierarchyKeyCollision = {
+  readonly type: HierarchyEntityType;
+  readonly key: string;
+};
+
+/**
+ * Existing destination rows that would collide with a moved subtree's stable
+ * project-scoped keys. At most three fixed queries run, never one per entity.
+ */
+export async function findHierarchyKeyCollisions(
+  scope: WorkspaceScope,
+  executor: DbExecutor,
+  input: {
+    readonly projectId: string;
+    readonly endpoints: readonly (EntityEndpoint & { readonly key: string })[];
+  },
+): Promise<readonly HierarchyKeyCollision[]> {
+  const keys = <Type extends HierarchyEntityType>(type: Type): string[] =>
+    input.endpoints.filter((endpoint) => endpoint.type === type).map((endpoint) => endpoint.key);
+  const epicKeys = keys("epic");
+  const streamKeys = keys("stream");
+  const taskKeys = keys("task");
+  const [epics, streams, tasks] = await Promise.all([
+    epicKeys.length === 0
+      ? Promise.resolve([])
+      : executor
+          .select({ key: epic.key })
+          .from(epic)
+          .where(
+            and(
+              eq(epic.workspaceId, scope),
+              eq(epic.projectId, input.projectId),
+              inArray(epic.key, epicKeys),
+            ),
+          ),
+    streamKeys.length === 0
+      ? Promise.resolve([])
+      : executor
+          .select({ key: stream.key })
+          .from(stream)
+          .where(
+            and(
+              eq(stream.workspaceId, scope),
+              eq(stream.projectId, input.projectId),
+              inArray(stream.key, streamKeys),
+            ),
+          ),
+    taskKeys.length === 0
+      ? Promise.resolve([])
+      : executor
+          .select({ key: task.key })
+          .from(task)
+          .where(
+            and(
+              eq(task.workspaceId, scope),
+              eq(task.projectId, input.projectId),
+              inArray(task.key, taskKeys),
+            ),
+          ),
+  ]);
+  return [
+    ...epics.map((row) => ({ type: "epic" as const, key: row.key })),
+    ...streams.map((row) => ({ type: "stream" as const, key: row.key })),
+    ...tasks.map((row) => ({ type: "task" as const, key: row.key })),
+  ].sort((left, right) => left.key.localeCompare(right.key));
+}
 
 /**
  * Everything the database will cascade-delete along with one entity.
@@ -180,23 +259,27 @@ export async function listDescendants(
   scope: WorkspaceScope,
   tx: DbTransaction,
   endpoint: EntityEndpoint,
-): Promise<readonly EntityEndpoint[]> {
+): Promise<readonly DescendantEndpoint[]> {
   if (endpoint.type === "task") {
     return [];
   }
   if (endpoint.type === "stream") {
     const tasks = await tx
-      .select({ id: task.id })
+      .select({ id: task.id, key: task.key })
       .from(task)
       .where(and(eq(task.workspaceId, scope), eq(task.streamId, endpoint.id)));
-    return tasks.map((row) => ({ type: "task", id: row.id }));
+    return tasks.map((row) => ({ type: "task", id: row.id, key: row.key }));
   }
 
   const streams = await tx
-    .select({ id: stream.id })
+    .select({ id: stream.id, key: stream.key })
     .from(stream)
     .where(and(eq(stream.workspaceId, scope), eq(stream.epicId, endpoint.id)));
-  const descendants: EntityEndpoint[] = streams.map((row) => ({ type: "stream", id: row.id }));
+  const descendants: DescendantEndpoint[] = streams.map((row) => ({
+    type: "stream",
+    id: row.id,
+    key: row.key,
+  }));
   if (streams.length === 0) {
     return descendants;
   }
@@ -204,12 +287,12 @@ export async function listDescendants(
   // than one query per stream: an epic with thirty streams would otherwise cost
   // thirty round trips inside the delete's transaction.
   const tasks = await tx
-    .select({ id: task.id })
+    .select({ id: task.id, key: task.key })
     .from(task)
     .innerJoin(stream, eq(task.streamId, stream.id))
     .where(and(eq(task.workspaceId, scope), eq(stream.epicId, endpoint.id)));
   for (const row of tasks) {
-    descendants.push({ type: "task", id: row.id });
+    descendants.push({ type: "task", id: row.id, key: row.key });
   }
   return descendants;
 }
@@ -232,13 +315,14 @@ const highestIssuedSequence = (
   sql`coalesce((select max(split_part(${keyColumn}, '-', 2)::int) from ${table} where ${workspaceColumn} = ${scope} and ${projectColumn} = ${projectId}), 0)`;
 
 /**
- * Raises a project's three key counters to the highest key each table actually
- * holds for it. Never lowers one.
+ * Raises a project's three hierarchy key counters to the highest key each table
+ * actually holds for it. Never lowers one. Rule and Milestone are not movable
+ * hierarchy nodes, so their counters need no equivalent repair here.
  *
  * This exists because of `move`. Keys are unique per project and are never
  * rewritten, so moving a subtree into another project imports keys that project's
- * counters have never heard of: move `STR-1..STR-3` into a project whose
- * `stream_counter` is `0` and the next stream created there is issued `STR-1`,
+ * counters have never heard of: move `S-1..S-3` into a project whose
+ * `stream_counter` is `0` and the next stream created there is issued `S-1`,
  * which collides with a row that is already sitting in the table. The change set
  * fails loudly on `stream_project_key_uniq` rather than corrupting anything, but
  * the target project's stream creation stays wedged until someone notices.
@@ -271,6 +355,31 @@ export async function raiseKeyCounters(
     .where(and(eq(project.workspaceId, scope), eq(project.id, projectId)));
 }
 
+/** One exact audit snapshot, used when a terminal Task pins parent context. */
+export async function findRevisionDocument(
+  scope: WorkspaceScope,
+  input: {
+    readonly entity: VersionedEntityType;
+    readonly id: string;
+    readonly revision: number;
+  },
+  executor: DbExecutor = db,
+): Promise<Record<string, unknown> | null> {
+  const [row] = await executor
+    .select({ document: entityRevision.document })
+    .from(entityRevision)
+    .where(
+      and(
+        eq(entityRevision.workspaceId, scope),
+        eq(entityRevision.entityType, input.entity),
+        eq(entityRevision.entityId, input.id),
+        eq(entityRevision.revision, input.revision),
+      ),
+    )
+    .limit(1);
+  return row?.document ?? null;
+}
+
 /**
  * Appends the full document snapshot for one revision — the system's only audit
  * trail (domain spec §11 `every_change_is_recorded`).
@@ -284,7 +393,7 @@ export async function recordRevision(
   scope: WorkspaceScope,
   tx: DbTransaction,
   input: {
-    readonly entityType: EntityType;
+    readonly entityType: VersionedEntityType;
     readonly entityId: string;
     readonly projectId: string;
     readonly revision: number;
@@ -306,7 +415,6 @@ export async function recordRevision(
 export type StampInput<Status extends string> = {
   readonly id: string;
   readonly key: string;
-  readonly projectId: string;
   readonly revision: number;
   /**
    * The status values this entity accepts, so the value that lands in the `status`
@@ -343,16 +451,16 @@ const asRecord = (value: unknown): Record<string, unknown> =>
     : {};
 
 /**
- * Writes the five server-owned `meta` fields into the document, and reads back the
- * two fields the row denormalises.
+ * Writes the three server-owned identity/revision fields into the document, and
+ * reads back the two fields the row denormalises.
  *
  * This runs on every insert and every revision bump, last, unconditionally. That
- * is what makes `meta.id`, `meta.key`, `meta.project_id`, `meta.workspace_id` and
- * `meta.revision` unforgeable end to end: the agent-tier schema rejects them on
- * the way in, and anything that still reached the document — from a merge, from a
- * document read back at store tier, from a future caller — is overwritten here
- * with the values of the row actually being written. One authority, at the point
- * where the true values exist.
+ * is what makes `meta.id`, `meta.key` and `meta.revision` unforgeable end to end:
+ * the agent-tier schema rejects them on the way in, and anything that still
+ * reached the document — from a merge, from a document read back at store tier,
+ * from a future caller — is overwritten here with the values of the row actually
+ * being written. Project and workspace ownership are intentionally absent from
+ * document JSON; their relational columns are the single authority.
  *
  * `title` and `status` are returned rather than accepted as parameters for the
  * same reason in reverse: they are *derived* from the document, so the column and
@@ -360,7 +468,6 @@ const asRecord = (value: unknown): Record<string, unknown> =>
  * in. A caller that could pass them separately could make them disagree.
  */
 export function stampServerOwnedMeta<Status extends string>(
-  scope: WorkspaceScope,
   document: Record<string, unknown>,
   input: StampInput<Status>,
 ): StampedDocument<Status> {
@@ -376,10 +483,12 @@ export function stampServerOwnedMeta<Status extends string>(
     ...asRecord(next.meta),
     id: input.id,
     key: input.key,
-    project_id: input.projectId,
-    workspace_id: scope,
     revision: input.revision,
   };
+  // A legacy location copy must not survive into a v2 revision. Descendant rows
+  // can then move projects without rewriting their immutable document history.
+  delete meta.project_id;
+  delete meta.workspace_id;
   next.meta = meta;
 
   const { title, status } = meta;

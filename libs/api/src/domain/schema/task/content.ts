@@ -1,16 +1,32 @@
 import { z } from "zod";
+import { executorKindSchema } from "../../enums";
 import {
+  acceptanceCriterionId,
   actorRef,
+  assumptions,
+  behaviorCaseId,
+  changeId,
+  decisionRuleId,
   entityId,
   estimateConfidenceSchema,
   estimateUnitSchema,
+  hypothesisId,
+  invariantId,
+  investigationQuestionId,
   label,
+  maintenanceGoalId,
   openQuestions,
   prose,
-  sectionId,
-  sectionIdList,
+  qualityGoalId,
+  refactorTargetId,
+  requirementId,
+  researchQuestionId,
+  ruleKey,
   statement,
   statementList,
+  streamKey,
+  successCriterionId,
+  verificationId,
   verificationMethodSchema,
 } from "../primitives";
 import { ruleText } from "../rules";
@@ -26,16 +42,26 @@ import { ruleText } from "../rules";
  */
 
 /**
- * Which business work this task carries out. The ids point into the parent
- * stream's `requirements` and `acceptance_criteria`; whether they resolve is a
- * cross-document question the service layer answers, so the rule is also spelled
- * out in the description where the model can see it.
+ * Which business work this Task carries out. Each field accepts exactly one
+ * semantic local-id namespace; the service additionally checks that the field is
+ * legal for, and resolves inside, the parent Stream type.
  */
 export const taskImplements = z
   .strictObject({
     stream_id: entityId,
-    requirement_ids: sectionIdList.optional(),
-    acceptance_criteria_ids: sectionIdList.optional(),
+    requirement_ids: z.array(requirementId).optional(),
+    acceptance_criteria_ids: z.array(acceptanceCriterionId).optional(),
+    behavior_case_ids: z.array(behaviorCaseId).optional(),
+    change_ids: z.array(changeId).optional(),
+    hypothesis_ids: z.array(hypothesisId).optional(),
+    research_question_ids: z.array(researchQuestionId).optional(),
+    success_criteria_ids: z.array(successCriterionId).optional(),
+    decision_rule_ids: z.array(decisionRuleId).optional(),
+    investigation_question_ids: z.array(investigationQuestionId).optional(),
+    refactor_target_ids: z.array(refactorTargetId).optional(),
+    invariant_ids: z.array(invariantId).optional(),
+    quality_goal_ids: z.array(qualityGoalId).optional(),
+    maintenance_goal_ids: z.array(maintenanceGoalId).optional(),
   })
   .meta({ description: ruleText("task_references_business_requirements") });
 
@@ -72,7 +98,7 @@ export const taskImplementation = z.strictObject({
 
 /** How the task will be shown to work. */
 export const taskVerification = z.strictObject({
-  id: sectionId,
+  id: verificationId,
   type: verificationMethodSchema,
   procedure: statement,
   expected: statement,
@@ -83,6 +109,8 @@ export const taskContent = z.strictObject({
     description: "The technical goal, in one or two sentences. The one section a task cannot omit.",
   }),
   implements: taskImplements.optional(),
+  /** Rule constraints are not implementation targets and never satisfy Task readiness alone. */
+  constrained_by_rule_keys: z.array(ruleKey).optional(),
   technical_scope: technicalScope.optional(),
   implementation: taskImplementation.optional(),
   /** Technical prerequisites in prose. Task-to-task ordering belongs in `links`, not here. */
@@ -95,6 +123,7 @@ export const taskContent = z.strictObject({
     .optional()
     .meta({ description: ruleText("ready_task_needs_definition_of_done") }),
   artifacts: statementList.optional(),
+  assumptions: assumptions.optional(),
   open_questions: openQuestions.optional(),
 });
 
@@ -123,6 +152,26 @@ export const taskExecutionContext = z.strictObject({
   notes: statementList.optional(),
 });
 
+/** The exact parent Stream snapshot a terminal Task says it implemented. */
+export const usedStreamRevision = z.strictObject({
+  stream_key: streamKey,
+  revision: z.int().min(1),
+});
+
+/** One canonical Rule snapshot whose constraint a terminal Task used. */
+export const usedRuleRevision = z.strictObject({
+  rule_key: ruleKey,
+  revision: z.int().min(1),
+});
+
+/**
+ * A terminal Task imported from v1 whose historical execution context cannot be
+ * reconstructed without guessing. The migration is the only writer of this
+ * marker; normal Task input deliberately has no corresponding field.
+ */
+export const PRE_V2_TRACE_NOT_RECORDED = "pre_v2_not_recorded" as const;
+export const taskTraceState = z.literal(PRE_V2_TRACE_NOT_RECORDED);
+
 /**
  * The task-only fourth content section (domain spec §7), a sibling of `content`
  * rather than part of it. It is separate because it is *operational* rather than
@@ -130,9 +179,27 @@ export const taskExecutionContext = z.strictObject({
  * task says to build, and keeping the two apart means a scheduler can read
  * `execution` without loading the whole technical body.
  */
-export const taskExecution = z.strictObject({
+const TASK_EXECUTION_INPUT_SHAPE = {
   estimate: taskEstimate.optional(),
   assignee: actorRef.optional(),
+  /** Absent means the executor kind has not been decided, not `either`. */
+  executor_kind: executorKindSchema.optional(),
   execution_context: taskExecutionContext.optional(),
   long_running: z.boolean().optional(),
+} as const;
+
+/** Operational fields an author may set. Trace pins are server-owned. */
+export const taskExecutionInput = z.strictObject(TASK_EXECUTION_INPUT_SHAPE);
+
+/** Stored execution state, including the trace snapshots stamped by the server. */
+export const taskExecutionStored = z.strictObject({
+  ...TASK_EXECUTION_INPUT_SHAPE,
+  /** Server-owned migration marker; current context must never fill this historical gap. */
+  trace_state: taskTraceState.optional(),
+  /** Server-stamped parent revision when the Task first enters `in_progress`. */
+  stream_revision_started: z.int().min(1).optional(),
+  /** Server-stamped terminal snapshot for completed or started-then-cancelled work. */
+  stream_revision_used: usedStreamRevision.optional(),
+  /** Server-stamped terminal Rule snapshots, one per effective canonical Rule. */
+  rule_revisions_used: z.array(usedRuleRevision).optional(),
 });

@@ -117,8 +117,8 @@ export type Board = Awaited<ReturnType<typeof getBoard>>;
 export type LoadedBoard = Extract<Board, { status: "ok" }>;
 
 /**
- * The project tree and its three levels, named so components can take them as
- * props.
+ * The ownership tree and the two project-level catalogues, named so components
+ * can take them as props.
  *
  * These are projections of the API's own response type rather than
  * hand-written interfaces, so a field the server renames or drops becomes a
@@ -128,3 +128,6 @@ export type Aggregate = NonNullable<LoadedBoard["aggregate"]>;
 export type EpicNode = Aggregate["epics"][number];
 export type StreamNode = EpicNode["streams"][number];
 export type TaskNode = StreamNode["tasks"][number];
+export type MilestoneNode = Aggregate["milestones"][number];
+export type MilestoneStreamNode = MilestoneNode["streams"][number];
+export type RuleNode = Aggregate["rules"][number];

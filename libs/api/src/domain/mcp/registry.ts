@@ -3,6 +3,7 @@ import { applyChangeSetTool } from "./tools/applyChangeSet";
 import { getContextTool } from "./tools/getContext";
 import { getEntitySchemaTool } from "./tools/getEntitySchema";
 import { getNextWorkTool } from "./tools/getNextWork";
+import { listContextTool } from "./tools/listContext";
 import { searchContextTool } from "./tools/searchContext";
 import { validateChangeSetTool } from "./tools/validateChangeSet";
 
@@ -14,14 +15,15 @@ import { validateChangeSetTool } from "./tools/validateChangeSet";
  * be added here to exist at all, and it can only be built by the factory.
  *
  * Order is the order a client sees in `tools/list`, so it reads as the intended
- * workflow — find, load, learn the shape, dry-run, apply — with `get_next_work`
- * last as the separate "what now" entry point.
+ * workflow — list or search, load, learn the shape, dry-run, apply — with
+ * `get_next_work` last as the separate "what now" entry point.
  *
- * Only `search_context` declares an `outputSchema`; the plan's tool table
- * specifies `structuredContent` for that tool alone, and the remaining five get
- * their result shapes with their bodies in workstream B.
+ * Discovery and context tools declare shallow output schemas. Their compact
+ * shapes belong in `tools/list`; full entity-document schemas remain on demand
+ * through `get_entity_schema`.
  */
 export const zpecsTools: readonly ZpecsTool[] = [
+  listContextTool,
   searchContextTool,
   getContextTool,
   getEntitySchemaTool,

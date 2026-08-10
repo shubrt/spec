@@ -36,7 +36,7 @@ export const task = pgTable(
     streamId: uuid()
       .notNull()
       .references(() => stream.id, { onDelete: "cascade" }),
-    /** `TASK-45`, from `project.task_counter`. Unique per project, never reused. */
+    /** `T-45`, from `project.task_counter`. Unique per project, never reused. */
     key: text().notNull(),
     taskType: text().$type<TaskType>().notNull(),
     status: text().$type<TaskStatus>().notNull().default("draft"),

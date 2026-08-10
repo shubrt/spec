@@ -1,20 +1,37 @@
 import { z } from "zod";
-import { ENTITY_TYPE, STREAM_TYPE, type EntityType, type StreamType } from "../enums";
+import {
+  STREAM_TYPE,
+  VERSIONED_ENTITY_TYPE,
+  type StreamType,
+  type VersionedEntityType,
+} from "../enums";
 import { epicContent } from "./epic/content";
 import {
   documentEnvelope,
   epicLinks,
   epicMeta,
+  milestoneLinks,
+  milestoneMeta,
+  ruleLinks,
+  ruleMeta,
   streamLinks,
   streamMeta,
   STORED_ONLY_META_KEYS,
   taskLinks,
   taskMeta,
 } from "./envelope";
-import { streamReadinessIssues, taskReadinessIssues } from "./readiness";
+import { documentIntegrityIssues } from "./integrity";
+import { milestoneContent } from "./milestone/content";
+import { milestoneReadinessIssues, streamReadinessIssues, taskReadinessIssues } from "./readiness";
+import { ruleContent } from "./rule/content";
 import { ruleIssue, shapeIssue, type DocumentIssue } from "./rules";
 import { STREAM_CONTENT } from "./stream/registry";
-import { taskContent, taskExecution } from "./task/content";
+import {
+  PRE_V2_TRACE_NOT_RECORDED,
+  taskContent,
+  taskExecutionInput,
+  taskExecutionStored,
+} from "./task/content";
 
 /**
  * `parseDocument` — the only way into this layer.
@@ -36,9 +53,11 @@ import { taskContent, taskExecution } from "./task/content";
  * concrete schema ingredients directly.
  */
 
-export const EPIC_SCHEMA_VERSION = "pm.epic.v1";
-export const STREAM_SCHEMA_VERSION = "pm.stream.v1";
-export const TASK_SCHEMA_VERSION = "pm.task.v1";
+export const EPIC_SCHEMA_VERSION = "pm.epic.v2";
+export const STREAM_SCHEMA_VERSION = "pm.stream.v2";
+export const TASK_SCHEMA_VERSION = "pm.task.v2";
+export const RULE_SCHEMA_VERSION = "pm.rule.v2";
+export const MILESTONE_SCHEMA_VERSION = "pm.milestone.v2";
 
 /**
  * Where the document came from.
@@ -66,6 +85,40 @@ const epicDocument = {
     meta: epicMeta.stored,
     content: epicContent,
     links: epicLinks.stored,
+  }),
+} as const;
+
+const ruleDocument = {
+  agent: documentEnvelope({
+    entity: "rule",
+    schemaVersion: RULE_SCHEMA_VERSION,
+    meta: ruleMeta.input,
+    content: ruleContent,
+    links: ruleLinks.input,
+  }),
+  store: documentEnvelope({
+    entity: "rule",
+    schemaVersion: RULE_SCHEMA_VERSION,
+    meta: ruleMeta.stored,
+    content: ruleContent,
+    links: ruleLinks.stored,
+  }),
+} as const;
+
+const milestoneDocument = {
+  agent: documentEnvelope({
+    entity: "milestone",
+    schemaVersion: MILESTONE_SCHEMA_VERSION,
+    meta: milestoneMeta.input,
+    content: milestoneContent,
+    links: milestoneLinks.input,
+  }),
+  store: documentEnvelope({
+    entity: "milestone",
+    schemaVersion: MILESTONE_SCHEMA_VERSION,
+    meta: milestoneMeta.stored,
+    content: milestoneContent,
+    links: milestoneLinks.stored,
   }),
 } as const;
 
@@ -122,14 +175,14 @@ const taskDocument = {
     meta: taskMeta.input,
     content: taskContent,
     links: taskLinks.input,
-  }).extend({ execution: taskExecution.optional() }),
+  }).extend({ execution: taskExecutionInput.optional() }),
   store: documentEnvelope({
     entity: "task",
     schemaVersion: TASK_SCHEMA_VERSION,
     meta: taskMeta.stored,
     content: taskContent,
     links: taskLinks.stored,
-  }).extend({ execution: taskExecution.optional() }),
+  }).extend({ execution: taskExecutionStored.optional() }),
 } as const;
 
 /**
@@ -151,6 +204,8 @@ export const DOCUMENT_SCHEMAS = {
   "stream.refactor": streamDocuments.refactor,
   "stream.maintenance": streamDocuments.maintenance,
   task: taskDocument,
+  rule: ruleDocument,
+  milestone: milestoneDocument,
 } as const satisfies Record<string, Record<DocumentSource, z.ZodType>>;
 
 export type DocumentSchemaTarget = keyof typeof DOCUMENT_SCHEMAS;
@@ -178,24 +233,42 @@ export type StreamDocument = z.infer<(typeof streamDocuments)[StreamType]["store
 
 export type TaskDocumentInput = z.infer<typeof taskDocument.agent>;
 export type TaskDocument = z.infer<typeof taskDocument.store>;
+export type RuleDocumentInput = z.infer<typeof ruleDocument.agent>;
+export type RuleDocument = z.infer<typeof ruleDocument.store>;
+export type MilestoneDocumentInput = z.infer<typeof milestoneDocument.agent>;
+export type MilestoneDocument = z.infer<typeof milestoneDocument.store>;
 
 /** A validated document as it is stored. Discriminated on `entity`. */
-export type ZpecsStoredDocument = EpicDocument | StreamDocument | TaskDocument;
+export type ZpecsStoredDocument =
+  | EpicDocument
+  | StreamDocument
+  | TaskDocument
+  | RuleDocument
+  | MilestoneDocument;
 
 /** Any validated document, either tier. What `parseDocument` returns. */
 export type ZpecsDocument =
   | ZpecsStoredDocument
   | EpicDocumentInput
   | StreamDocumentInput
-  | TaskDocumentInput;
+  | TaskDocumentInput
+  | RuleDocumentInput
+  | MilestoneDocumentInput;
 
 /* ------------------------------------------------------------- selection */
 
-const isEntityType = (value: unknown): value is EntityType =>
-  ENTITY_TYPE.some((candidate) => candidate === value);
+const isVersionedEntityType = (value: unknown): value is VersionedEntityType =>
+  VERSIONED_ENTITY_TYPE.some((candidate) => candidate === value);
 
 const isStreamType = (value: unknown): value is StreamType =>
   STREAM_TYPE.some((candidate) => candidate === value);
+
+const STORED_ONLY_TASK_EXECUTION_KEYS = [
+  "trace_state",
+  "stream_revision_started",
+  "stream_revision_used",
+  "rule_revisions_used",
+] as const;
 
 const property = (value: unknown, key: string): unknown =>
   typeof value === "object" && value !== null ? (value as Record<string, unknown>)[key] : undefined;
@@ -231,13 +304,72 @@ const toIssues = (error: z.ZodError): readonly DocumentIssue[] =>
     if (issue.code === "unrecognized_keys") {
       return issue.keys.map((key) => {
         const keyPath = path === "" ? key : `${path}.${key}`;
-        return path === "meta" && STORED_ONLY_META_KEYS.includes(key)
+        return (path === "meta" && STORED_ONLY_META_KEYS.includes(key)) ||
+          (path === "execution" && STORED_ONLY_TASK_EXECUTION_KEYS.some((field) => field === key))
           ? ruleIssue("server_owned_meta_is_not_writable", keyPath)
           : ruleIssue("no_invented_fields", keyPath);
       });
     }
     return [shapeIssue(path, issue.message)];
   });
+
+const RULE_REFERENCE_FIELDS = new Set(["rule_key", "rule_keys", "constrained_by_rule_keys"]);
+
+/** `$temp` references are an input convenience, never a valid persisted value. */
+const storedRuleReferenceIssues = (value: unknown, path = ""): readonly DocumentIssue[] => {
+  if (Array.isArray(value)) {
+    return value.flatMap((item, index) =>
+      storedRuleReferenceIssues(item, `${path}[${String(index)}]`),
+    );
+  }
+  if (typeof value !== "object" || value === null) return [];
+
+  return Object.entries(value as Record<string, unknown>).flatMap(([key, child]) => {
+    const childPath = path.length === 0 ? key : `${path}.${key}`;
+    if (RULE_REFERENCE_FIELDS.has(key)) {
+      const values = Array.isArray(child) ? child : [child];
+      return values.flatMap((candidate, index) =>
+        typeof candidate === "string" && candidate.startsWith("$")
+          ? [
+              shapeIssue(
+                Array.isArray(child) ? `${childPath}[${String(index)}]` : childPath,
+                `${candidate} is an unresolved change-set temp reference; stored documents require a canonical R-* key.`,
+              ),
+            ]
+          : [],
+      );
+    }
+    return storedRuleReferenceIssues(child, childPath);
+  });
+};
+
+const storedOnlyIssues = (source: DocumentSource, document: unknown): readonly DocumentIssue[] =>
+  source === "store" ? storedRuleReferenceIssues(document) : [];
+
+const taskTraceIssues = (status: string, execution: unknown): readonly DocumentIssue[] => {
+  const trace = property(execution, "trace_state");
+  if (trace !== PRE_V2_TRACE_NOT_RECORDED) return [];
+  const issues: DocumentIssue[] = [];
+  if (status !== "done" && status !== "cancelled") {
+    issues.push(
+      shapeIssue(
+        "execution.trace_state",
+        `${PRE_V2_TRACE_NOT_RECORDED} is valid only for a terminal Task imported from v1.`,
+      ),
+    );
+  }
+  for (const field of ["stream_revision_started", "stream_revision_used", "rule_revisions_used"]) {
+    if (property(execution, field) !== undefined) {
+      issues.push(
+        shapeIssue(
+          `execution.${field}`,
+          `${field} cannot be recorded when trace_state says the pre-v2 history is unavailable.`,
+        ),
+      );
+    }
+  }
+  return issues;
+};
 
 export type ParseDocumentOptions = {
   /** Defaults to `"agent"`, the strict tier, so a forgotten option fails closed. */
@@ -249,7 +381,7 @@ export type ParseDocumentResult =
   | { readonly ok: false; readonly issues: readonly DocumentIssue[] };
 
 /**
- * Validates one epic, stream or task document.
+ * Validates one versioned Zpecs document.
  *
  * The order is load-bearing: read the discriminators, select the schema, parse
  * the shape, then run the readiness gates. Gates only run on a document that
@@ -263,13 +395,13 @@ export const parseDocument = (
   const source = options.source ?? "agent";
   const entity = property(candidate, "entity");
 
-  if (!isEntityType(entity)) {
+  if (!isVersionedEntityType(entity)) {
     return {
       ok: false,
       issues: [
         shapeIssue(
           "entity",
-          `Invalid input: expected one of ${ENTITY_TYPE.join(", ")}, received ${JSON.stringify(entity)}`,
+          `Invalid input: expected one of ${VERSIONED_ENTITY_TYPE.join(", ")}, received ${JSON.stringify(entity)}`,
         ),
       ],
     };
@@ -280,15 +412,64 @@ export const parseDocument = (
 
   if (entity === "epic") {
     const result = epicDocument[source].safeParse(candidate);
-    return result.success
-      ? { ok: true, document: result.data }
-      : { ok: false, issues: toIssues(result.error) };
+    if (!result.success) return { ok: false, issues: toIssues(result.error) };
+    const issues = [
+      ...documentIntegrityIssues({
+        entity: "epic",
+        status: String(status),
+        content: result.data.content,
+        provenance: result.data.provenance,
+      }),
+      ...storedOnlyIssues(source, result.data),
+    ];
+    return issues.length > 0 ? { ok: false, issues } : { ok: true, document: result.data };
+  }
+
+  if (entity === "rule") {
+    const result = ruleDocument[source].safeParse(candidate);
+    if (!result.success) return { ok: false, issues: toIssues(result.error) };
+    const issues = [
+      ...documentIntegrityIssues({
+        entity: "rule",
+        status: String(status),
+        content: result.data.content,
+        provenance: result.data.provenance,
+      }),
+      ...storedOnlyIssues(source, result.data),
+    ];
+    return issues.length > 0 ? { ok: false, issues } : { ok: true, document: result.data };
+  }
+
+  if (entity === "milestone") {
+    const result = milestoneDocument[source].safeParse(candidate);
+    if (!result.success) return { ok: false, issues: toIssues(result.error) };
+    const issues = [
+      ...documentIntegrityIssues({
+        entity: "milestone",
+        status: String(status),
+        content: result.data.content,
+        provenance: result.data.provenance,
+      }),
+      ...milestoneReadinessIssues(String(status), result.data.content),
+      ...storedOnlyIssues(source, result.data),
+    ];
+    return issues.length > 0 ? { ok: false, issues } : { ok: true, document: result.data };
   }
 
   if (entity === "task") {
     const result = taskDocument[source].safeParse(candidate);
     if (!result.success) return { ok: false, issues: toIssues(result.error) };
-    const issues = taskReadinessIssues(String(status), result.data.content);
+    const issues = [
+      ...documentIntegrityIssues({
+        entity: "task",
+        status: String(status),
+        content: result.data.content,
+        provenance: result.data.provenance,
+      }),
+      ...taskReadinessIssues(String(status), result.data.content),
+      ...taskTraceIssues(String(status), result.data.execution),
+      ...storedOnlyIssues(source, result.data),
+    ];
     return issues.length > 0 ? { ok: false, issues } : { ok: true, document: result.data };
   }
 
@@ -307,6 +488,16 @@ export const parseDocument = (
 
   const result = streamSchemaFor(source, streamType).safeParse(candidate);
   if (!result.success) return { ok: false, issues: toIssues(result.error) };
-  const issues = streamReadinessIssues(streamType, String(status), result.data.content);
+  const issues = [
+    ...documentIntegrityIssues({
+      entity: "stream",
+      status: String(status),
+      streamType,
+      content: result.data.content,
+      provenance: result.data.provenance,
+    }),
+    ...streamReadinessIssues(streamType, String(status), result.data.content),
+    ...storedOnlyIssues(source, result.data),
+  ];
   return issues.length > 0 ? { ok: false, issues } : { ok: true, document: result.data };
 };

@@ -1,16 +1,19 @@
 import { z } from "zod";
 import {
   assumptions,
-  businessRules,
+  CLAIM_EVIDENCE_SHAPE,
+  edgeCaseId,
   label,
   openQuestions,
   prose,
+  ruleApplications,
   scope,
-  sectionId,
   severitySchema,
   statement,
   statementList,
   title,
+  workflowId,
+  workflowStepId,
 } from "../primitives";
 
 /**
@@ -33,17 +36,17 @@ import {
  *
  * ## Why this is a schema and not just a shape
  *
- * `streamBaseContent` is directly usable, and `stream/registry.ts` maps the four
- * stream types with no dedicated schema yet straight onto it. The three variants
- * `.extend()` it, which (measured on Zod 4.4.3) preserves the `strictObject`
- * behaviour and therefore `additionalProperties: false`.
+ * Every concrete variant in `stream/registry.ts` extends this schema. Measured
+ * on Zod 4.4.3, `.extend()` preserves the `strictObject` behaviour and therefore
+ * `additionalProperties: false`.
  */
 
 /** One step in a business workflow (domain spec §6). */
 export const workflowStep = z.strictObject({
-  id: sectionId,
+  id: workflowStepId,
   action: statement,
   result: statement.optional(),
+  ...CLAIM_EVIDENCE_SHAPE,
 });
 
 /**
@@ -52,11 +55,12 @@ export const workflowStep = z.strictObject({
  * not be naming the workflow yet.
  */
 export const workflow = z.strictObject({
-  id: sectionId,
+  id: workflowId,
   workflow_name: title,
   actor: label.optional(),
   preconditions: statementList.optional(),
   steps: z.array(workflowStep),
+  ...CLAIM_EVIDENCE_SHAPE,
 });
 
 /**
@@ -65,11 +69,12 @@ export const workflow = z.strictObject({
  * a specification.
  */
 export const edgeCase = z.strictObject({
-  id: sectionId,
+  id: edgeCaseId,
   trigger: statement,
   scenario: statement.optional(),
   expected_behavior: statement,
   severity: severitySchema.optional(),
+  ...CLAIM_EVIDENCE_SHAPE,
 });
 
 /**
@@ -90,11 +95,11 @@ export const verticalSlice = z.strictObject({
   delivers_alone: statement,
   needs_no_other_stream: z.boolean().optional(),
   prerequisites: statementList.optional(),
+  ...CLAIM_EVIDENCE_SHAPE,
 });
 
 /**
- * The invariant stream sections. The three variants in this directory extend
- * this; the other four stream types use it unchanged.
+ * The invariant Stream sections shared by all seven type-specific schemas.
  */
 export const streamBaseContent = z.strictObject({
   purpose: prose.meta({
@@ -103,7 +108,7 @@ export const streamBaseContent = z.strictObject({
   scope: scope.optional(),
   actor: streamActor.optional(),
   workflows: z.array(workflow).optional(),
-  business_rules: businessRules.optional(),
+  rule_applications: ruleApplications.optional(),
   edge_cases: z.array(edgeCase).optional(),
   vertical_slice: verticalSlice.optional(),
   open_questions: openQuestions.optional(),

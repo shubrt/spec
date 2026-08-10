@@ -38,11 +38,13 @@
 
 ## :star2: About the Project
 
-Zpecs stores a workspace's project hierarchy as Projects → Epics → Streams →
-Tasks. Coding agents read that context through MCP resources and focused tools;
-all writes pass through the same validated, atomic change-set pipeline. The web
-app presents the project board, entity detail pages, workspace selection, and
-the client connection instructions.
+Zpecs stores a workspace's planning context as a Project-scoped work tree
+(Epic `E-*` → Stream `S-*` → Task `T-*`), a canonical Rule catalogue (`R-*`),
+and an advisory Milestone roadmap (`M-*`). Coding agents discover and read that
+context through focused MCP tools; all versioned-entity writes pass through the
+same validated, atomic change-set pipeline. The web app presents the project
+board, entity detail pages, workspace selection, and client connection
+instructions.
 
 Two workspaces make up one deployable service:
 

@@ -15,6 +15,7 @@
     "schema:generate": "bun scripts/generateSchemas.ts --write",
     "schema:check": "bun scripts/generateSchemas.ts --check",
     "project:bootstrap": "bun --env-file=../../.env scripts/bootstrapProject.ts",
+    "migrate:v2": "bun --env-file=../../.env scripts/migrateV2.ts",
     "db:deploy": "pnpm run db:setup:before && pnpm run db:push && pnpm run db:setup:after",
     "db:push": "bun --env-file=../../.env drizzle-kit push",
     "db:setup:before": "bun --env-file=../../.env run node scripts/applyDatabaseSetup.mjs before",

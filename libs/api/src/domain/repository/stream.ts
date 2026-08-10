@@ -1,7 +1,8 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, inArray } from "drizzle-orm";
 import { DomainError } from "../../_/errors";
 import { db } from "../../integration/drizzle/client";
 import { epic } from "../../integration/drizzle/schema/epic";
+import { milestone } from "../../integration/drizzle/schema/milestone";
 import { stream } from "../../integration/drizzle/schema/stream";
 import { task } from "../../integration/drizzle/schema/task";
 import type { WorkspaceScope } from "../auth/workspaceScope";
@@ -29,6 +30,12 @@ import {
  */
 
 export type Stream = typeof stream.$inferSelect;
+
+export type StreamRoadmapPosition = {
+  readonly streamId: string;
+  readonly milestoneOrder: number | null;
+  readonly streamOrder: number | null;
+};
 
 export type InsertStreamInput = RevisionAuthor & {
   readonly projectId: string;
@@ -60,6 +67,14 @@ export type MoveStreamInput = RevisionAuthor & {
   readonly expectedRevision: number;
   /** The epic the stream moves under; its project comes with it. */
   readonly epicId: string;
+};
+
+export type ScheduleStreamInput = RevisionAuthor & {
+  readonly id: string;
+  readonly expectedRevision: number;
+  readonly milestoneId: string | null;
+  readonly milestoneKey: string | null;
+  readonly roadmapRank: number | null;
 };
 
 /**
@@ -147,6 +162,49 @@ async function listByEpic(
     .orderBy(asc(stream.createdAt), asc(stream.key));
 }
 
+async function listByMilestone(
+  scope: WorkspaceScope,
+  milestoneId: string,
+  executor: DbExecutor = db,
+): Promise<Stream[]> {
+  return await executor
+    .select()
+    .from(stream)
+    .where(and(eq(stream.workspaceId, scope), eq(stream.milestoneId, milestoneId)))
+    .orderBy(asc(stream.roadmapRank), asc(stream.createdAt), asc(stream.key));
+}
+
+/**
+ * Advisory Roadmap positions for a set of Streams in one query. An unscheduled
+ * Stream has no joined Milestone and therefore returns null orders; equal values
+ * remain equal because Roadmap order is not a dependency.
+ */
+async function listRoadmapPositions(
+  scope: WorkspaceScope,
+  streamIds: readonly string[],
+  executor: DbExecutor = db,
+): Promise<StreamRoadmapPosition[]> {
+  if (streamIds.length === 0) {
+    return [];
+  }
+  return await executor
+    .select({
+      streamId: stream.id,
+      milestoneOrder: milestone.roadmapOrder,
+      streamOrder: stream.roadmapRank,
+    })
+    .from(stream)
+    .leftJoin(
+      milestone,
+      and(
+        eq(milestone.workspaceId, scope),
+        eq(milestone.projectId, stream.projectId),
+        eq(milestone.id, stream.milestoneId),
+      ),
+    )
+    .where(and(eq(stream.workspaceId, scope), inArray(stream.id, [...streamIds])));
+}
+
 async function insert(
   scope: WorkspaceScope,
   input: InsertStreamInput,
@@ -157,10 +215,9 @@ async function insert(
     return { ok: false, reason: "not_found" };
   }
   const id = crypto.randomUUID();
-  const stamped = stampServerOwnedMeta(scope, input.document, {
+  const stamped = stampServerOwnedMeta(input.document, {
     id,
     key,
-    projectId: input.projectId,
     revision: FIRST_REVISION,
     statuses: STREAM_STATUS,
     sections: { links: { parent_epic_id: input.epicId } },
@@ -225,6 +282,64 @@ async function archive(
 }
 
 /**
+ * Changes only the advisory roadmap overlay, under the Stream's OCC revision.
+ * The canonical M-key/rank are mirrored into stored meta so revision history can
+ * reconstruct the planning judgment without turning it into a dependency.
+ */
+async function schedule(
+  scope: WorkspaceScope,
+  input: ScheduleStreamInput,
+  tx: DbTransaction,
+): Promise<WriteResult<Stream>> {
+  const current = await findById(scope, input.id, tx);
+  if (!current) return { ok: false, reason: "not_found" };
+  const revision = input.expectedRevision + 1;
+  const stamped = stampServerOwnedMeta(current.document, {
+    id: current.id,
+    key: current.key,
+    revision,
+    statuses: STREAM_STATUS,
+    sections: {
+      meta: {
+        milestone_key: input.milestoneKey,
+        roadmap_rank: input.roadmapRank,
+      },
+    },
+  });
+  const [row] = await tx
+    .update(stream)
+    .set({
+      milestoneId: input.milestoneId,
+      roadmapRank: input.roadmapRank,
+      revision,
+      title: stamped.title,
+      status: stamped.status,
+      streamType: readStreamType(stamped.document, current.key),
+      document: stamped.document,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(stream.workspaceId, scope),
+        eq(stream.id, current.id),
+        eq(stream.revision, input.expectedRevision),
+      ),
+    )
+    .returning();
+  if (!row) return await conflict(scope, current.id, tx);
+  await recordRevision(scope, tx, {
+    entityType: "stream",
+    entityId: row.id,
+    projectId: row.projectId,
+    revision: row.revision,
+    document: row.document,
+    changedBy: input.changedBy,
+    changeReason: input.changeReason,
+  });
+  return { ok: true, row };
+}
+
+/**
  * Hard delete under the optimistic-concurrency clause. The cascade takes the
  * stream's tasks; `entity_revision` and `entity_link` rows survive, for the reasons
  * `repository/epic.ts` states.
@@ -254,13 +369,14 @@ async function deleteStream(
  * Re-hangs a stream under another epic, taking its tasks with it.
  *
  * Three things move together and none of them is enforced by a constraint: the
- * `epic_id` column, the `project_id` denormalised onto the stream and every task
- * below it, and `links.parent_epic_id` inside the document. The target epic's
- * project is the source of the new project id — an epic cannot be in two projects,
- * so asking it is more reliable than accepting one.
+ * `epic_id` column, the `project_id` relationally denormalised onto the stream and
+ * every task below it, and `links.parent_epic_id` inside the Stream document. The
+ * target epic's project is the source of the new project id — an epic cannot be
+ * in two projects, so asking it is more reliable than accepting one.
  *
  * The tasks' revisions are not bumped; see `repository/epic.ts`'s `move` for why.
- * The same key-uniqueness limitation applies when the move crosses projects.
+ * Cross-project key collisions are rejected by the service before this write;
+ * the table's unique constraint remains the final invariant.
  */
 async function move(
   scope: WorkspaceScope,
@@ -281,10 +397,9 @@ async function move(
   }
 
   const revision = input.expectedRevision + 1;
-  const stamped = stampServerOwnedMeta(scope, current.document, {
+  const stamped = stampServerOwnedMeta(current.document, {
     id: current.id,
     key: current.key,
-    projectId: target.projectId,
     revision,
     statuses: STREAM_STATUS,
     sections: { links: { parent_epic_id: target.id } },
@@ -327,8 +442,6 @@ async function move(
       .update(task)
       .set({
         projectId: target.projectId,
-        // `meta.project_id` rewritten server-side: see `repository/epic.ts`.
-        document: sql`jsonb_set(${task.document}, '{meta,project_id}', to_jsonb(${target.projectId}::text))`,
         updatedAt: new Date(),
       })
       .where(and(eq(task.workspaceId, scope), eq(task.streamId, current.id)));
@@ -382,10 +495,9 @@ async function writeRevision(
   },
 ): Promise<WriteResult<Stream>> {
   const revision = input.expectedRevision + 1;
-  const stamped = stampServerOwnedMeta(scope, input.document, {
+  const stamped = stampServerOwnedMeta(input.document, {
     id: current.id,
     key: current.key,
-    projectId: current.projectId,
     revision,
     statuses: STREAM_STATUS,
     sections: input.sections,
@@ -429,8 +541,11 @@ export const streamRepository = {
   findByKey,
   listByProject,
   listByEpic,
+  listByMilestone,
+  listRoadmapPositions,
   insert,
   bumpRevision,
+  schedule,
   archive,
   delete: deleteStream,
   move,

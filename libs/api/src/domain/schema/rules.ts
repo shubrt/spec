@@ -63,7 +63,7 @@ export const RULES = {
     spec: "§5.3, §12",
     enforcement: "zod",
     message:
-      "meta.id, meta.key, meta.project_id, meta.workspace_id, meta.revision, the timestamps and meta.created_by/updated_by are assigned by the server and must not be sent. Pass the current revision as expected_revision on the change set instead of writing meta.revision.",
+      "meta.id, meta.key and meta.revision are assigned by the server and must not be sent. Project and workspace ownership come from relational hierarchy and authentication, while timestamps and authorship live in the row and revision log rather than document meta. Pass the current revision as expected_revision on the change set instead of writing meta.revision.",
   },
 
   /* ----------------------------------------------------------- readiness */
@@ -72,7 +72,7 @@ export const RULES = {
     spec: "§11",
     enforcement: "readiness",
     message:
-      "A stream at status ready or beyond needs at least one business success criterion. Provide content.acceptance_criteria, or for an experiment content.success_criteria, or keep the stream at draft or planned.",
+      "A Stream at ready or beyond needs the required target sections for its type: acceptance criteria, behavior cases, changes, experiment targets, investigation questions/results, refactor targets/invariants, or maintenance goals. Otherwise keep it draft or planned.",
   },
 
   ready_task_needs_definition_of_done: {
@@ -101,14 +101,14 @@ export const RULES = {
     spec: "§11",
     enforcement: "readiness",
     message:
-      "A bug stream at status ready or beyond needs both content.actual_behavior and content.expected_behavior. While either is still unknown, keep the stream at draft and record the gap in content.open_questions.",
+      "A bug Stream at ready or beyond needs at least one content.behavior_cases entry pairing actual and expected behavior. While either side is unknown, keep it draft or planned and record the gap in content.open_questions.",
   },
 
   task_references_business_requirements: {
     spec: "§11, §14",
     enforcement: "readiness",
     message:
-      "A task at status ready or beyond must reference the business work it implements: content.implements.stream_id plus at least one requirement id or acceptance criterion id.",
+      "A Task at ready or beyond must carry its server-canonical parent stream_id and at least one typed target id allowed by that Stream type. Rule constraints alone do not satisfy readiness.",
   },
 
   /* --------------------------------------------------------- description */
@@ -117,33 +117,31 @@ export const RULES = {
     spec: "§11, §14",
     enforcement: "description",
     message:
-      "Never write a guess as if the user had stated it. Anything unknown goes into content.open_questions, content.assumptions or provenance.inferred_fields, and provenance.sources records how firmly each source supports what was written.",
+      "Never write a guess as if the user had stated it. Put unknowns in addressable content.open_questions or content.assumptions. Claims record basis and local source_ids; provenance.sources holds immutable source observations.",
   },
 
-  /* ------------------------------------------------------------------ db */
+  /* ------------------------------------------------------------- service */
 
   stream_belongs_to_one_epic: {
     spec: "§11",
-    enforcement: "db",
+    enforcement: "service",
     message:
       "A stream belongs to exactly one existing epic. links.parent_epic_id must name an epic in the same project.",
   },
 
   task_belongs_to_one_stream: {
     spec: "§11",
-    enforcement: "db",
+    enforcement: "service",
     message:
       "A task belongs to exactly one existing stream. links.parent_stream_id must name a stream in the same project.",
   },
 
   every_change_is_recorded: {
     spec: "§11, §12",
-    enforcement: "db",
+    enforcement: "service",
     message:
-      "Every versioned document create, update, archive or move appends an entity_revision snapshot with author and revision; hard delete preserves prior snapshots. Link/unlink audit is not part of this MVP.",
+      "Every Epic, Stream, Task, Rule, or Milestone document create, update, archive/cancel, move, or schedule appends an entity_revision snapshot with author and revision; hard delete preserves prior snapshots. Link/unlink audit is separate.",
   },
-
-  /* ------------------------------------------------------------- service */
 
   every_operation_carries_workspace_scope: {
     spec: "§11",
@@ -163,7 +161,7 @@ export const RULES = {
     spec: "§11",
     enforcement: "service",
     message:
-      "Requirement ids and acceptance criterion ids referenced from a task must exist in the parent stream document.",
+      "Every typed local id must resolve in its owning document, every Task target in its parent Stream, and every R-key in the same project. References may not silently change namespace.",
   },
 
   dependencies_must_be_acyclic: {
@@ -176,7 +174,7 @@ export const RULES = {
     spec: "§11",
     enforcement: "service",
     message:
-      "Deleting, archiving or moving an entity requires confirm: true on that operation. Without it the whole change set is refused and nothing is written.",
+      "Archive, delete, move, removal of id-bearing content, and a Rule update affecting active consumers require confirm: true on that operation. Without it the whole change set is refused and nothing is written.",
   },
 } as const satisfies Record<string, Rule>;
 

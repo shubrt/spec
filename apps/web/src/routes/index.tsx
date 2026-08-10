@@ -11,7 +11,14 @@ import {
   taskCompletion,
   type StatusCount,
 } from "~/lib/summary";
-import { epicStatus, formatDate, streamStatus, taskStatus } from "~/lib/vocabulary";
+import {
+  epicStatus,
+  formatDate,
+  milestoneStatus,
+  ruleStatus,
+  streamStatus,
+  taskStatus,
+} from "~/lib/vocabulary";
 
 /**
  * The project overview: how much work exists, and what state it is in.
@@ -31,7 +38,7 @@ function OverviewPage() {
   if (board.status !== "ok") return <BoardFailure failure={board} />;
   if (!board.aggregate) return <EmptyWorkspace workspaceName={board.workspace.name} />;
 
-  const { project, epics } = board.aggregate;
+  const { project, epics, milestones, rules } = board.aggregate;
   const streams = allStreams(epics);
   const tasks = allTasks(epics);
   const completion = taskCompletion(tasks);
@@ -47,10 +54,12 @@ function OverviewPage() {
       </Toolbar>
 
       <div className="flex flex-col gap-6 px-8 pb-16 pt-6">
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
           <Figure caption="Epics" value={epics.length} />
           <Figure caption="Streams" value={streams.length} />
           <Figure caption="Tasks" value={tasks.length} />
+          <Figure caption="Milestones" value={milestones.length} />
+          <Figure caption="Rules" value={rules.length} />
           <Card className="p-4">
             <Caption>Tasks done</Caption>
             <div className="mt-1 text-2xl font-bold tabular-nums tracking-tight">
@@ -65,26 +74,49 @@ function OverviewPage() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
           <Breakdown title="Epics by status" rows={countByStatus(epics, epicStatus)} />
           <Breakdown title="Streams by status" rows={countByStatus(streams, streamStatus)} />
           <Breakdown title="Tasks by status" rows={countByStatus(tasks, taskStatus)} />
+          <Breakdown
+            title="Milestones by status"
+            rows={countByStatus(milestones, milestoneStatus)}
+          />
+          <Breakdown title="Rules by status" rows={countByStatus(rules, ruleStatus)} />
         </div>
 
-        {epics.length > 0 ? (
+        <div className="flex flex-wrap gap-x-6 gap-y-2">
+          {epics.length > 0 ? (
+            <Link
+              to="/epics"
+              search={(prev) => ({ project: prev.project, workspace: prev.workspace })}
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Browse all {epics.length} {epics.length === 1 ? "epic" : "epics"} and their streams →
+            </Link>
+          ) : null}
           <Link
-            to="/epics"
+            to="/roadmap"
             search={(prev) => ({ project: prev.project, workspace: prev.workspace })}
             className="text-sm font-medium text-primary hover:underline"
           >
-            Browse all {epics.length} {epics.length === 1 ? "epic" : "epics"} and their streams →
+            View roadmap →
           </Link>
-        ) : (
+          <Link
+            to="/rules"
+            search={(prev) => ({ project: prev.project, workspace: prev.workspace })}
+            className="text-sm font-medium text-primary hover:underline"
+          >
+            Browse Rule catalogue →
+          </Link>
+        </div>
+
+        {epics.length === 0 ? (
           <p className="text-sm text-muted-foreground">
             This project has no epics yet. Every entity in zpecs is written through the MCP server,
             so ask your agent to plan one.
           </p>
-        )}
+        ) : null}
       </div>
     </>
   );

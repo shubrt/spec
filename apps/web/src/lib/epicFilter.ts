@@ -36,7 +36,7 @@ export const NO_CRITERIA: EpicCriteria = {
 /**
  * The text a free-text query searches within one entity.
  *
- * `key` is included because `EPIC-3` is how a person refers to an epic in
+ * `key` is included because `E-3` is how a person refers to an epic in
  * conversation, and `purpose` because the title alone is rarely enough to find
  * something again a week later.
  */
@@ -92,8 +92,8 @@ export function filterEpics(epics: readonly EpicNode[], criteria: EpicCriteria):
     .map(({ epic, streams }) => ({ ...epic, streams }));
 
   // "default" is the server's order, which is creation order at every level.
-  // Sorting by key would read as wrong: keys go EPIC-1 … EPIC-10 and sort
-  // lexicographically, so EPIC-10 would land between EPIC-1 and EPIC-2.
+  // Sorting by key would read as wrong: keys go E-1 … E-10 and sort
+  // lexicographically, so E-10 would land between E-1 and E-2.
   return criteria.sort === "title"
     ? [...kept].sort((left, right) => left.title.localeCompare(right.title))
     : kept;

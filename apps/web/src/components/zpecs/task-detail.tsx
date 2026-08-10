@@ -8,6 +8,7 @@ import {
   ProseSection,
   RuledBlock,
   Section,
+  UnknownsSections,
 } from "~/components/zpecs/document-sections";
 import {
   EntityDetailHeader,
@@ -30,9 +31,9 @@ import type { StreamNode, TaskNode } from "~/server/board";
 /**
  * Task detail — the task document.
  *
- * A task is the technical "how". It carries no business requirements of its own;
- * it *references* the parent stream's through `implements`, which is why the
- * traceability ids get their own section rather than being buried.
+ * A task is the technical "how". It carries no business targets of its own; it
+ * *references* the parent stream's typed anchors through `implements`, which is
+ * why the traceability ids get their own section rather than being buried.
  *
  * `execution` is a sibling of `content` in the envelope, not part of it, because
  * it is operational rather than specifying — re-estimating a task does not change
@@ -53,8 +54,9 @@ export function TaskDetail({
   const content = contentOf(task.document);
 
   const implementsRef = asRecord(content.implements);
-  const requirementIds = asArray(implementsRef.requirement_ids).map(asText).filter(Boolean);
-  const criteriaIds = asArray(implementsRef.acceptance_criteria_ids).map(asText).filter(Boolean);
+  const implementationTargetIds = IMPLEMENTS_TARGET_FIELDS.flatMap((field) =>
+    asArray(implementsRef[field]).map(asText).filter(Boolean),
+  );
 
   const technicalScope = Object.entries(asRecord(content.technical_scope));
   const implementation = asRecord(content.implementation);
@@ -63,17 +65,8 @@ export function TaskDetail({
 
   // A sibling of `content`, so read from the envelope rather than through it.
   const execution = Object.entries(asRecord(task.document.execution));
-  const links = asRecord(task.document.links);
-  const blockedBy = asArray(links.blocked_by);
-  const blocks = asArray(links.blocks);
-  const relatedTasks = asArray(links.related_tasks);
   const provenance = asRecord(task.document.provenance);
   const sources = asArray(provenance.sources);
-  const inferredFields = asArray(provenance.inferred_fields).map(asText).filter(Boolean);
-  const provenanceQuestions = asArray(provenance.open_questions).map(asText).filter(Boolean);
-  const provenanceAssumptions = asArray(provenance.assumptions).map(asText).filter(Boolean);
-  const createdFrom = asArray(provenance.created_from).map(asText).filter(Boolean);
-  const createdBy = asRecord(provenance.created_by);
 
   return (
     <EntityDetailSurfaceProvider surface={surface}>
@@ -129,13 +122,12 @@ export function TaskDetail({
 
         <ProseSection title="Objective" value={content.objective} />
 
-        {requirementIds.length + criteriaIds.length > 0 ? (
+        {implementationTargetIds.length > 0 ? (
           <Section title="Implements">
-            {/* The link back to the business "what". A task with no reference to a
-                requirement is the failure the readiness gate exists to catch, so
-                when the reference is there it is worth showing plainly. */}
+            {/* Links back to the parent Stream's typed business anchors. Their
+                namespace prefixes keep the compact list unambiguous. */}
             <div className="flex flex-wrap gap-1.5">
-              {[...requirementIds, ...criteriaIds].map((id) => (
+              {implementationTargetIds.map((id) => (
                 <SectionId key={id}>{id}</SectionId>
               ))}
             </div>
@@ -215,68 +207,45 @@ export function TaskDetail({
         ) : null}
 
         <ListSection title="Artifacts" items={asArray(content.artifacts)} />
-        <ListSection title="Open questions" items={asArray(content.open_questions)} />
+        <UnknownsSections questions={content.open_questions} assumptions={content.assumptions} />
 
-        {blockedBy.length + blocks.length + relatedTasks.length > 0 ? (
-          <Section title="Links">
-            <EntityReferences title="Blocked by" references={blockedBy} />
-            <EntityReferences title="Blocks" references={blocks} />
-            <EntityReferences title="Related tasks" references={relatedTasks} />
-          </Section>
-        ) : null}
-
-        {sources.length +
-          inferredFields.length +
-          provenanceQuestions.length +
-          provenanceAssumptions.length +
-          createdFrom.length >
-          0 || Object.keys(createdBy).length > 0 ? (
+        {sources.length > 0 ? (
           <Section title="Provenance">
-            {sources.length > 0 ? (
-              <div className="mb-3">
-                <div className="mb-1 text-xs font-semibold text-secondary-foreground">Sources</div>
-                {sources.map((value, index) => {
-                  const source = asRecord(value);
-                  const type = asText(source.type);
-                  const reference = asText(source.reference);
-                  const confidence = asText(source.confidence);
-                  return (
-                    <RuledBlock key={`${type}-${reference}-${index}`} label={type || undefined}>
-                      {reference ? (
-                        <div className="text-[13px] leading-relaxed">{reference}</div>
-                      ) : null}
-                      {confidence ? (
-                        <div className="mt-1 text-xs text-muted-foreground">
-                          Confidence: {label(confidence)}
-                        </div>
-                      ) : null}
-                    </RuledBlock>
-                  );
-                })}
-              </div>
-            ) : null}
-            <ListSection title="Inferred fields" items={inferredFields} />
-            <ListSection title="Open questions" items={provenanceQuestions} />
-            <ListSection title="Assumptions" items={provenanceAssumptions} muted />
-            {createdFrom.length > 0 ? (
-              <div className="mb-3">
-                <div className="mb-1 text-xs font-semibold text-secondary-foreground">
-                  Created from
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {createdFrom.map((id) => (
-                    <SectionId key={id}>{id}</SectionId>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            {Object.keys(createdBy).length > 0 ? (
-              <div className="rounded-xl border p-4">
-                <Field name="created by">
-                  {[asText(createdBy.type), asText(createdBy.id)].filter(Boolean).join(" · ")}
-                </Field>
-              </div>
-            ) : null}
+            <div className="mb-3">
+              <div className="mb-1 text-xs font-semibold text-secondary-foreground">Sources</div>
+              {sources.map((value, index) => {
+                const source = asRecord(value);
+                const type = asText(source.type);
+                const reference = asText(source.reference);
+                const snapshot = asText(source.snapshot);
+                const observedAt = asText(source.observed_at);
+                const superseded = asArray(source.supersedes_source_ids)
+                  .map(asText)
+                  .filter(Boolean);
+                return (
+                  <RuledBlock key={`${type}-${reference}-${index}`} label={type || undefined}>
+                    {reference ? (
+                      <div className="text-[13px] leading-relaxed">{reference}</div>
+                    ) : null}
+                    {snapshot || observedAt ? (
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {[snapshot ? `Snapshot: ${snapshot}` : "", observedAt]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </div>
+                    ) : null}
+                    {superseded.length > 0 ? (
+                      <div className="mt-1 flex flex-wrap items-center gap-1 text-xs text-muted-foreground">
+                        <span>Supersedes</span>
+                        {superseded.map((id) => (
+                          <SectionId key={id}>{id}</SectionId>
+                        ))}
+                      </div>
+                    ) : null}
+                  </RuledBlock>
+                );
+              })}
+            </div>
           </Section>
         ) : null}
 
@@ -296,23 +265,18 @@ export function TaskDetail({
   );
 }
 
-function EntityReferences({ title, references }: { title: string; references: unknown[] }) {
-  if (references.length === 0) return null;
-  return (
-    <div className="mb-3">
-      <div className="mb-1 text-xs font-semibold text-secondary-foreground">{title}</div>
-      {references.map((value, index) => {
-        const reference = asRecord(value);
-        const targetType = asText(reference.target_type);
-        const targetId = asText(reference.target_id);
-        const reason = asText(reference.reason);
-        return (
-          <RuledBlock key={`${targetType}-${targetId}-${index}`} label={targetType || undefined}>
-            <div className="font-mono text-[13px] leading-relaxed">{targetId}</div>
-            {reason ? <div className="mt-1 text-xs text-muted-foreground">{reason}</div> : null}
-          </RuledBlock>
-        );
-      })}
-    </div>
-  );
-}
+const IMPLEMENTS_TARGET_FIELDS = [
+  "requirement_ids",
+  "acceptance_criteria_ids",
+  "behavior_case_ids",
+  "change_ids",
+  "hypothesis_ids",
+  "research_question_ids",
+  "success_criteria_ids",
+  "decision_rule_ids",
+  "investigation_question_ids",
+  "refactor_target_ids",
+  "invariant_ids",
+  "quality_goal_ids",
+  "maintenance_goal_ids",
+] as const;

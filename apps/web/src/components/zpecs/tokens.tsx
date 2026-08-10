@@ -35,7 +35,7 @@ export function TypeTag({ children }: { children: ReactNode }) {
 }
 
 /**
- * A generated entity key — `EPIC-1`, `STR-3`, `TASK-12`.
+ * A generated entity key — `E-1`, `S-3`, `T-12`.
  *
  * Monospaced and coloured because it is the handle a person uses to refer to the
  * entity in conversation with the agent, so it needs to be scannable.
@@ -46,7 +46,7 @@ export function EntityKey({ children }: { children: ReactNode }) {
   );
 }
 
-/** A document section id — `FR-001`, `AC-002`, `BR-001`. */
+/** A local document-section id — `FR-1`, `AC-2`, `RA-1`. */
 export function SectionId({ children }: { children: ReactNode }) {
   return <span className="rule-tag">{children}</span>;
 }

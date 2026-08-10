@@ -6,9 +6,10 @@ This runbook covers the database invariant and the deliberately narrow
 session-authenticated `POST /workspace/projects` write in the shared Elysia
 library. The route is called in-process by TanStack server functions and is not
 published as an external REST endpoint. A Project is an empty, unversioned
-container. Epic, Stream and Task writes remain MCP-only, through the externally
-exposed `/mcp` endpoint and its validated, atomic change-set path. The admin
-`project:bootstrap` command remains an idempotent operations tool.
+container. Epic, Stream, Task, Rule and Milestone writes remain MCP-only,
+through the externally exposed `/mcp` endpoint and its validated, atomic
+change-set path. The admin `project:bootstrap` command remains an idempotent
+operations tool.
 
 ## Before the schema push
 

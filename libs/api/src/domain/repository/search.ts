@@ -2,23 +2,23 @@ import { type AnyColumn, type SQL, sql } from "drizzle-orm";
 import { db } from "../../integration/drizzle/client";
 import { executeRows } from "../../integration/drizzle/executeRows";
 import { epic } from "../../integration/drizzle/schema/epic";
+import { milestone } from "../../integration/drizzle/schema/milestone";
+import { project } from "../../integration/drizzle/schema/project";
+import { rule } from "../../integration/drizzle/schema/rule";
 import { stream } from "../../integration/drizzle/schema/stream";
 import { task } from "../../integration/drizzle/schema/task";
 import type { WorkspaceScope } from "../auth/workspaceScope";
-import { ENTITY_TYPE, type EntityType } from "../enums";
+import { VERSIONED_ENTITY_TYPE, type VersionedEntityType } from "../enums";
 import type { DbExecutor } from "./entity";
 
 /**
- * Full-text search across epics, streams and tasks (plan task B15).
+ * Full-text search across all versioned entity kinds (plan task B15).
  *
- * ## Why one statement and not three
+ * ## Why one statement and not five
  *
- * The three entity tables are searched in a single `UNION ALL` so that the
- * `LIMIT` and the ranking apply to the *combined* result. Three separate queries
- * with a limit each would return the best ten epics, the best ten streams and the
- * best ten tasks, and the caller would then have to re-rank across incomparable
- * result sets — or, worse, would show ten epics when the one relevant row is a
- * task.
+ * The five entity tables are searched in a single `UNION ALL` so that the `LIMIT`
+ * and ranking apply to the *combined* result. Separate queries with a limit each
+ * would over-fetch and leave the caller to re-rank incomparable result sets.
  *
  * ## The two query-shape constraints, both measured with `EXPLAIN`
  *
@@ -52,9 +52,10 @@ import type { DbExecutor } from "./entity";
  * report a sequential scan caused by the pending list rather than the query.
  */
 
-/** What one hit carries out of SQL. `subtype` is the stream/task type; null for an epic. */
+/** What one hit carries out of SQL. `subtype` exists only for Streams and Tasks. */
 export type SearchHitRow = {
-  readonly entity: EntityType;
+  readonly project: string;
+  readonly entity: VersionedEntityType;
   readonly key: string;
   readonly title: string;
   readonly status: string;
@@ -66,8 +67,8 @@ export type SearchHitRow = {
 export type SearchQueryOptions = {
   /** Raw words from the agent. Not a query language — see `websearch_to_tsquery`. */
   readonly query: string;
-  /** Restrict to one entity kind. Omitted searches all three. */
-  readonly entity?: EntityType;
+  /** Restrict to one entity kind. Omitted searches all five. */
+  readonly entity?: VersionedEntityType;
   /** Restrict to one project. Omitted searches the whole workspace. */
   readonly projectId?: string;
   readonly limit: number;
@@ -99,20 +100,19 @@ const projectFilter = (column: AnyColumn, projectId: string | undefined): SQL =>
   projectId === undefined ? sql`` : sql` and ${column} = ${projectId}`;
 
 /**
- * The three search branches, written out rather than generated from a table list.
+ * The five search branches, written out rather than generated from a table list.
  *
  * A table-generic helper would need a cast in precisely the expression that carries
  * the tenant filter, which is the one place in this file where a cast is not
  * acceptable: a forgotten or mistyped `workspace_id` comparison still returns
- * plausible-looking rows. Three explicit branches make all three tenant filters
- * readable side by side.
+ * plausible-looking rows. Explicit branches keep every tenant filter readable.
  */
 const matchBranches = (
   scope: WorkspaceScope,
   options: SearchQueryOptions,
   query: SQL,
 ): readonly SQL[] => {
-  const wanted = (entity: EntityType): boolean =>
+  const wanted = (entity: VersionedEntityType): boolean =>
     options.entity === undefined || options.entity === entity;
   const branches: SQL[] = [];
 
@@ -120,6 +120,7 @@ const matchBranches = (
     branches.push(sql`
       select 'epic'::text as entity, ${epic.key} as key, ${epic.title} as title,
              ${epic.summary} as summary, ${epic.status} as status, null::text as subtype,
+             ${epic.projectId} as project_id,
              ts_rank(${epic.searchVector}, ${query}) as rank, ${epic.updatedAt} as updated_at
         from ${epic}
        where ${epic.workspaceId} = ${scope}
@@ -129,6 +130,7 @@ const matchBranches = (
     branches.push(sql`
       select 'stream'::text as entity, ${stream.key} as key, ${stream.title} as title,
              ${stream.summary} as summary, ${stream.status} as status, ${stream.streamType} as subtype,
+             ${stream.projectId} as project_id,
              ts_rank(${stream.searchVector}, ${query}) as rank, ${stream.updatedAt} as updated_at
         from ${stream}
        where ${stream.workspaceId} = ${scope}
@@ -138,16 +140,37 @@ const matchBranches = (
     branches.push(sql`
       select 'task'::text as entity, ${task.key} as key, ${task.title} as title,
              ${task.summary} as summary, ${task.status} as status, ${task.taskType} as subtype,
+             ${task.projectId} as project_id,
              ts_rank(${task.searchVector}, ${query}) as rank, ${task.updatedAt} as updated_at
         from ${task}
        where ${task.workspaceId} = ${scope}
          and ${task.searchVector} @@ ${query}${projectFilter(task.projectId, options.projectId)}`);
   }
+  if (wanted("milestone")) {
+    branches.push(sql`
+      select 'milestone'::text as entity, ${milestone.key} as key, ${milestone.title} as title,
+             ${milestone.summary} as summary, ${milestone.status} as status, null::text as subtype,
+             ${milestone.projectId} as project_id,
+             ts_rank(${milestone.searchVector}, ${query}) as rank, ${milestone.updatedAt} as updated_at
+        from ${milestone}
+       where ${milestone.workspaceId} = ${scope}
+         and ${milestone.searchVector} @@ ${query}${projectFilter(milestone.projectId, options.projectId)}`);
+  }
+  if (wanted("rule")) {
+    branches.push(sql`
+      select 'rule'::text as entity, ${rule.key} as key, ${rule.title} as title,
+             ${rule.summary} as summary, ${rule.status} as status, null::text as subtype,
+             ${rule.projectId} as project_id,
+             ts_rank(${rule.searchVector}, ${query}) as rank, ${rule.updatedAt} as updated_at
+        from ${rule}
+       where ${rule.workspaceId} = ${scope}
+         and ${rule.searchVector} @@ ${query}${projectFilter(rule.projectId, options.projectId)}`);
+  }
   return branches;
 };
 
 /**
- * The same three branches for the trigram fallback.
+ * The same five branches for the trigram fallback.
  *
  * `<%` is `pg_trgm`'s word-similarity operator: it compares the query against the
  * best-matching run of words inside the target rather than against the whole
@@ -157,7 +180,7 @@ const matchBranches = (
  * fallback dead code.
  */
 const fuzzyBranches = (scope: WorkspaceScope, options: SearchQueryOptions): readonly SQL[] => {
-  const wanted = (entity: EntityType): boolean =>
+  const wanted = (entity: VersionedEntityType): boolean =>
     options.entity === undefined || options.entity === entity;
   const branches: SQL[] = [];
   const text = (title: AnyColumn, summary: AnyColumn): SQL =>
@@ -168,6 +191,7 @@ const fuzzyBranches = (scope: WorkspaceScope, options: SearchQueryOptions): read
     branches.push(sql`
       select 'epic'::text as entity, ${epic.key} as key, ${epic.title} as title,
              ${epic.summary} as summary, ${epic.status} as status, null::text as subtype,
+             ${epic.projectId} as project_id,
              word_similarity(${options.query}, ${haystack}) as rank, ${epic.updatedAt} as updated_at
         from ${epic}
        where ${epic.workspaceId} = ${scope}
@@ -178,6 +202,7 @@ const fuzzyBranches = (scope: WorkspaceScope, options: SearchQueryOptions): read
     branches.push(sql`
       select 'stream'::text as entity, ${stream.key} as key, ${stream.title} as title,
              ${stream.summary} as summary, ${stream.status} as status, ${stream.streamType} as subtype,
+             ${stream.projectId} as project_id,
              word_similarity(${options.query}, ${haystack}) as rank, ${stream.updatedAt} as updated_at
         from ${stream}
        where ${stream.workspaceId} = ${scope}
@@ -188,10 +213,33 @@ const fuzzyBranches = (scope: WorkspaceScope, options: SearchQueryOptions): read
     branches.push(sql`
       select 'task'::text as entity, ${task.key} as key, ${task.title} as title,
              ${task.summary} as summary, ${task.status} as status, ${task.taskType} as subtype,
+             ${task.projectId} as project_id,
              word_similarity(${options.query}, ${haystack}) as rank, ${task.updatedAt} as updated_at
         from ${task}
        where ${task.workspaceId} = ${scope}
          and ${options.query} <% ${haystack}${projectFilter(task.projectId, options.projectId)}`);
+  }
+  if (wanted("milestone")) {
+    const haystack = text(milestone.title, milestone.summary);
+    branches.push(sql`
+      select 'milestone'::text as entity, ${milestone.key} as key, ${milestone.title} as title,
+             ${milestone.summary} as summary, ${milestone.status} as status, null::text as subtype,
+             ${milestone.projectId} as project_id,
+             word_similarity(${options.query}, ${haystack}) as rank, ${milestone.updatedAt} as updated_at
+        from ${milestone}
+       where ${milestone.workspaceId} = ${scope}
+         and ${options.query} <% ${haystack}${projectFilter(milestone.projectId, options.projectId)}`);
+  }
+  if (wanted("rule")) {
+    const haystack = text(rule.title, rule.summary);
+    branches.push(sql`
+      select 'rule'::text as entity, ${rule.key} as key, ${rule.title} as title,
+             ${rule.summary} as summary, ${rule.status} as status, null::text as subtype,
+             ${rule.projectId} as project_id,
+             word_similarity(${options.query}, ${haystack}) as rank, ${rule.updatedAt} as updated_at
+        from ${rule}
+       where ${rule.workspaceId} = ${scope}
+         and ${options.query} <% ${haystack}${projectFilter(rule.projectId, options.projectId)}`);
   }
   return branches;
 };
@@ -200,16 +248,25 @@ const fuzzyBranches = (scope: WorkspaceScope, options: SearchQueryOptions): read
  * Wraps the ranked, limited union so the expensive projection sits above the limit.
  * `snippet` is the only difference between the two callers.
  */
-const limitedUnion = (branches: readonly SQL[], limit: number, snippet: SQL): SQL => sql`
-  select m.entity, m.key, m.title, m.status, m.subtype, m.rank, ${snippet} as snippet
+const limitedUnion = (
+  scope: WorkspaceScope,
+  branches: readonly SQL[],
+  limit: number,
+  snippet: SQL,
+): SQL => sql`
+  select ${project.name} as project, m.entity, m.key, m.title, m.status, m.subtype, m.rank,
+         ${snippet} as snippet
     from (
       ${sql.join([...branches], sql` union all `)}
       order by rank desc, updated_at desc, key asc
       limit ${limit}
-    ) as m`;
+    ) as m
+    join ${project}
+      on ${project.id} = m.project_id
+     and ${project.workspaceId} = ${scope}`;
 
-const isEntityType = (value: unknown): value is EntityType =>
-  ENTITY_TYPE.some((candidate) => candidate === value);
+const isEntityType = (value: unknown): value is VersionedEntityType =>
+  VERSIONED_ENTITY_TYPE.some((candidate) => candidate === value);
 
 /**
  * One row as the driver hands it back.
@@ -221,6 +278,7 @@ const isEntityType = (value: unknown): value is EntityType =>
  * the one field checked at runtime.
  */
 type RawSearchRow = {
+  readonly project: string;
   readonly entity: unknown;
   readonly key: string;
   readonly title: string;
@@ -235,6 +293,7 @@ const toHitRow = (row: RawSearchRow): SearchHitRow => {
     throw new Error(`search returned an unknown entity kind: ${JSON.stringify(row.entity)}`);
   }
   return {
+    project: row.project,
     entity: row.entity,
     key: row.key,
     title: row.title,
@@ -257,7 +316,7 @@ const run = async (executor: DbExecutor, statement: SQL): Promise<readonly Searc
 export function searchStatement(scope: WorkspaceScope, options: SearchQueryOptions): SQL {
   const query = tsQuery(options.query);
   const headline = sql`ts_headline('simple', coalesce(m.summary, m.title), ${query}, ${HEADLINE_OPTIONS}::text)`;
-  return limitedUnion(matchBranches(scope, options, query), options.limit, headline);
+  return limitedUnion(scope, matchBranches(scope, options, query), options.limit, headline);
 }
 
 async function search(
@@ -286,7 +345,10 @@ async function searchFuzzy(
   executor: DbExecutor = db,
 ): Promise<readonly SearchHitRow[]> {
   const snippet = sql`left(coalesce(m.summary, m.title), ${FUZZY_SNIPPET_CHARS})`;
-  return await run(executor, limitedUnion(fuzzyBranches(scope, options), options.limit, snippet));
+  return await run(
+    executor,
+    limitedUnion(scope, fuzzyBranches(scope, options), options.limit, snippet),
+  );
 }
 
 export const searchRepository = { search, searchFuzzy };

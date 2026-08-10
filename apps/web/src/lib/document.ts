@@ -109,11 +109,12 @@ export interface Scope {
   excluded?: ScopeItem[];
 }
 
-export interface BusinessRule {
+/** A local use of one canonical project Rule. Rule text lives on the `R-*` entity. */
+export interface RuleApplication {
   id?: string;
-  rule?: string;
-  impact?: string;
-  consequence?: string;
+  rule_key?: string;
+  applies_when?: string;
+  application?: string;
 }
 
 export interface WorkflowStep {
@@ -145,7 +146,10 @@ export interface AcceptanceCriterion {
   given?: string;
   when?: string;
   then?: string;
-  verifies?: string[];
+  verifies?: {
+    requirement_ids?: string[];
+    rule_keys?: string[];
+  };
   verification?: string;
 }
 
@@ -195,6 +199,93 @@ export interface SuccessCriterion {
   id?: string;
   criterion?: string;
   measurement?: string;
+}
+
+export interface BehaviorCase {
+  id?: string;
+  reproduction?: string[];
+  actual_behavior?: string;
+  expected_behavior?: string;
+  severity?: string;
+}
+
+export interface ChangeTarget {
+  id?: string;
+  trigger?: string;
+  current_state?: string;
+  desired_state?: string;
+  success_measure?: string;
+}
+
+export interface ExperimentHypothesis {
+  id?: string;
+  hypothesis?: string;
+}
+
+export interface ResearchQuestion {
+  id?: string;
+  question?: string;
+  why_it_matters?: string;
+}
+
+export interface DecisionRule {
+  id?: string;
+  condition?: string;
+  decision?: string;
+}
+
+export interface RefactorTarget {
+  id?: string;
+  current_state?: string;
+  target_state?: string;
+}
+
+export interface RefactorInvariant {
+  id?: string;
+  statement?: string;
+}
+
+export interface QualityGoal {
+  id?: string;
+  goal?: string;
+  measurement?: string;
+}
+
+export interface MaintenanceGoal {
+  id?: string;
+  goal?: string;
+  done_when?: string;
+}
+
+export interface MaintenanceRisk {
+  id?: string;
+  risk?: string;
+  mitigation?: string;
+  severity?: string;
+}
+
+export interface ClaimEvidence {
+  basis?: string;
+  source_ids?: string[];
+}
+
+export interface OpenQuestion {
+  id?: string;
+  question?: string;
+}
+
+export interface Assumption {
+  id?: string;
+  statement?: string;
+  source_ids?: string[];
+}
+
+export interface MilestoneExitCriterion {
+  id?: string;
+  criterion?: string;
+  status?: string;
+  waiver_reason?: string;
+  evidence?: ClaimEvidence;
 }
 
 export interface TechnicalDecision {

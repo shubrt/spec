@@ -23,15 +23,15 @@ const ECMASCRIPT_TRIM_CHARACTERS = sql.raw(
  * A project is a technical container inside a workspace (domain spec §3), not a
  * planning object: it has no `document`, no `revision` and no status, because
  * none of its planning content is versioned. Its name is still validated as the
- * container's human-facing identity. The three counter columns are the reason
+ * container's human-facing identity. The five counter columns are the reason
  * it is a table of its own rather than a column on `workspace`.
  *
- * `epic_counter` / `stream_counter` / `task_counter` are the key sequences
- * behind `EPIC-1`, `STR-12`, `TASK-45`. They live on this row, not in a
- * Postgres sequence, so the change-set transaction can take `SELECT … FOR
- * UPDATE` on the project row and hand out keys race-free without retry logic —
- * and so a rolled-back change-set does not burn a key the way a sequence would.
- * Each column holds the last key issued; B11 owns the increment.
+ * The entity counters are the key sequences behind `E-1`, `S-12`, `T-45`,
+ * `M-2` and `R-7`. They live on this row, not in a Postgres sequence, so the
+ * change-set transaction can take `SELECT … FOR UPDATE` on the project row and
+ * hand out keys race-free without retry logic — and so a rolled-back change-set
+ * does not burn a key the way a sequence would. Each column holds the last key
+ * issued; `domain/repository/entity.ts` owns the increment.
  */
 export const project = pgTable(
   "project",
@@ -44,6 +44,8 @@ export const project = pgTable(
     epicCounter: integer().notNull().default(0),
     streamCounter: integer().notNull().default(0),
     taskCounter: integer().notNull().default(0),
+    milestoneCounter: integer().notNull().default(0),
+    ruleCounter: integer().notNull().default(0),
     createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
   },

@@ -1,0 +1,201 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "entity": {
+      "type": "string",
+      "const": "milestone"
+    },
+    "schema_version": {
+      "type": "string",
+      "const": "pm.milestone.v2"
+    },
+    "meta": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200
+        },
+        "priority": {
+          "type": "string",
+          "enum": ["low", "medium", "high", "critical"]
+        },
+        "status": {
+          "type": "string",
+          "enum": ["draft", "planned", "active", "completed", "cancelled"]
+        }
+      },
+      "required": ["title", "status"],
+      "additionalProperties": false
+    },
+    "content": {
+      "type": "object",
+      "properties": {
+        "goal": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 8000
+        },
+        "exit_criteria": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^EXIT-[1-9][0-9]*$"
+              },
+              "criterion": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "status": {
+                "default": "open",
+                "type": "string",
+                "enum": ["open", "met", "waived"]
+              },
+              "waiver_reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "evidence": {
+                "type": "object",
+                "properties": {
+                  "basis": {
+                    "type": "string",
+                    "enum": ["stated", "verified", "inferred", "assumed"]
+                  },
+                  "source_ids": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^SRC-[1-9][0-9]*$"
+                    }
+                  }
+                },
+                "required": ["basis"],
+                "additionalProperties": false,
+                "description": "Claim provenance. stated, verified and inferred require at least one source_ids entry; assumed may omit it. Source ids resolve in this document's provenance.sources."
+              }
+            },
+            "required": ["id", "criterion"],
+            "additionalProperties": false
+          }
+        },
+        "open_questions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^OQ-[1-9][0-9]*$"
+              },
+              "question": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["id", "question"],
+            "additionalProperties": false
+          }
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^ASM-[1-9][0-9]*$"
+              },
+              "statement": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "source_ids": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^SRC-[1-9][0-9]*$"
+                }
+              }
+            },
+            "required": ["id", "statement"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["goal"],
+      "additionalProperties": false
+    },
+    "links": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "provenance": {
+      "type": "object",
+      "properties": {
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^SRC-[1-9][0-9]*$"
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "user_input",
+                  "conversation",
+                  "existing_code",
+                  "documentation",
+                  "external_reference"
+                ]
+              },
+              "reference": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "snapshot": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "observed_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "supersedes_source_ids": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^SRC-[1-9][0-9]*$"
+                }
+              }
+            },
+            "required": ["id", "type", "reference"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "additionalProperties": false,
+      "description": "Immutable local Sources cited by claim evidence. Put uncertainty in addressable content assumptions or open_questions, never in inferred document paths."
+    }
+  },
+  "required": ["entity", "schema_version", "meta", "content", "links", "provenance"],
+  "additionalProperties": false
+}

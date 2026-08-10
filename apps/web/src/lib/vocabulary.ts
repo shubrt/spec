@@ -1,4 +1,4 @@
-import type { EpicNode, StreamNode, TaskNode } from "~/server/board";
+import type { EpicNode, MilestoneNode, RuleNode, StreamNode, TaskNode } from "~/server/board";
 
 /**
  * How the API's closed scalars are shown to a human: the three status
@@ -82,9 +82,27 @@ export const taskStatus = vocabulary<TaskNode["status"]>({
   cancelled: "none",
 });
 
+/** Canonical Rules remain visible after deprecation so references stay explainable. */
+export const ruleStatus = vocabulary<RuleNode["status"]>({
+  draft: "none",
+  active: "in_progress",
+  deprecated: "none",
+});
+
+/** A roadmap lifecycle; position is advisory and deliberately carries no date. */
+export const milestoneStatus = vocabulary<MilestoneNode["status"]>({
+  draft: "none",
+  planned: "none",
+  active: "in_progress",
+  completed: "done",
+  cancelled: "none",
+});
+
 export type EpicStatus = EpicNode["status"];
 export type StreamStatus = StreamNode["status"];
 export type TaskStatus = TaskNode["status"];
+export type RuleStatus = RuleNode["status"];
+export type MilestoneStatus = MilestoneNode["status"];
 
 /**
  * Turns a `snake_case` domain value into a label.

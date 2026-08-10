@@ -12,7 +12,11 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ConnectionRouteImport } from './routes/connection'
 import { Route as EpicsRouteImport } from './routes/epics'
+import { Route as RoadmapRouteImport } from './routes/roadmap'
+import { Route as RulesRouteImport } from './routes/rules'
 import { Route as EpicEpicKeyRouteImport } from './routes/epic.$epicKey'
+import { Route as MilestoneMilestoneKeyRouteImport } from './routes/milestone.$milestoneKey'
+import { Route as RuleRuleKeyRouteImport } from './routes/rule.$ruleKey'
 import { Route as SignInSplatRouteImport } from './routes/sign-in.$'
 import { Route as StreamStreamKeyRouteImport } from './routes/stream.$streamKey'
 import { Route as TaskTaskKeyRouteImport } from './routes/task.$taskKey'
@@ -32,9 +36,29 @@ const EpicsRoute = EpicsRouteImport.update({
   path: '/epics',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RoadmapRoute = RoadmapRouteImport.update({
+  id: '/roadmap',
+  path: '/roadmap',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RulesRoute = RulesRouteImport.update({
+  id: '/rules',
+  path: '/rules',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EpicEpicKeyRoute = EpicEpicKeyRouteImport.update({
   id: '/epic/$epicKey',
   path: '/epic/$epicKey',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MilestoneMilestoneKeyRoute = MilestoneMilestoneKeyRouteImport.update({
+  id: '/milestone/$milestoneKey',
+  path: '/milestone/$milestoneKey',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RuleRuleKeyRoute = RuleRuleKeyRouteImport.update({
+  id: '/rule/$ruleKey',
+  path: '/rule/$ruleKey',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignInSplatRoute = SignInSplatRouteImport.update({
@@ -57,7 +81,11 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/connection': typeof ConnectionRoute
   '/epics': typeof EpicsRoute
+  '/roadmap': typeof RoadmapRoute
+  '/rules': typeof RulesRoute
   '/epic/$epicKey': typeof EpicEpicKeyRoute
+  '/milestone/$milestoneKey': typeof MilestoneMilestoneKeyRoute
+  '/rule/$ruleKey': typeof RuleRuleKeyRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/stream/$streamKey': typeof StreamStreamKeyRoute
   '/task/$taskKey': typeof TaskTaskKeyRoute
@@ -66,7 +94,11 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/connection': typeof ConnectionRoute
   '/epics': typeof EpicsRoute
+  '/roadmap': typeof RoadmapRoute
+  '/rules': typeof RulesRoute
   '/epic/$epicKey': typeof EpicEpicKeyRoute
+  '/milestone/$milestoneKey': typeof MilestoneMilestoneKeyRoute
+  '/rule/$ruleKey': typeof RuleRuleKeyRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/stream/$streamKey': typeof StreamStreamKeyRoute
   '/task/$taskKey': typeof TaskTaskKeyRoute
@@ -76,7 +108,11 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/connection': typeof ConnectionRoute
   '/epics': typeof EpicsRoute
+  '/roadmap': typeof RoadmapRoute
+  '/rules': typeof RulesRoute
   '/epic/$epicKey': typeof EpicEpicKeyRoute
+  '/milestone/$milestoneKey': typeof MilestoneMilestoneKeyRoute
+  '/rule/$ruleKey': typeof RuleRuleKeyRoute
   '/sign-in/$': typeof SignInSplatRoute
   '/stream/$streamKey': typeof StreamStreamKeyRoute
   '/task/$taskKey': typeof TaskTaskKeyRoute
@@ -87,7 +123,11 @@ export interface FileRouteTypes {
     | '/'
     | '/connection'
     | '/epics'
+    | '/roadmap'
+    | '/rules'
     | '/epic/$epicKey'
+    | '/milestone/$milestoneKey'
+    | '/rule/$ruleKey'
     | '/sign-in/$'
     | '/stream/$streamKey'
     | '/task/$taskKey'
@@ -96,7 +136,11 @@ export interface FileRouteTypes {
     | '/'
     | '/connection'
     | '/epics'
+    | '/roadmap'
+    | '/rules'
     | '/epic/$epicKey'
+    | '/milestone/$milestoneKey'
+    | '/rule/$ruleKey'
     | '/sign-in/$'
     | '/stream/$streamKey'
     | '/task/$taskKey'
@@ -105,7 +149,11 @@ export interface FileRouteTypes {
     | '/'
     | '/connection'
     | '/epics'
+    | '/roadmap'
+    | '/rules'
     | '/epic/$epicKey'
+    | '/milestone/$milestoneKey'
+    | '/rule/$ruleKey'
     | '/sign-in/$'
     | '/stream/$streamKey'
     | '/task/$taskKey'
@@ -115,7 +163,11 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   ConnectionRoute: typeof ConnectionRoute
   EpicsRoute: typeof EpicsRoute
+  RoadmapRoute: typeof RoadmapRoute
+  RulesRoute: typeof RulesRoute
   EpicEpicKeyRoute: typeof EpicEpicKeyRoute
+  MilestoneMilestoneKeyRoute: typeof MilestoneMilestoneKeyRoute
+  RuleRuleKeyRoute: typeof RuleRuleKeyRoute
   SignInSplatRoute: typeof SignInSplatRoute
   StreamStreamKeyRoute: typeof StreamStreamKeyRoute
   TaskTaskKeyRoute: typeof TaskTaskKeyRoute
@@ -144,11 +196,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EpicsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/roadmap': {
+      id: '/roadmap'
+      path: '/roadmap'
+      fullPath: '/roadmap'
+      preLoaderRoute: typeof RoadmapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rules': {
+      id: '/rules'
+      path: '/rules'
+      fullPath: '/rules'
+      preLoaderRoute: typeof RulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/epic/$epicKey': {
       id: '/epic/$epicKey'
       path: '/epic/$epicKey'
       fullPath: '/epic/$epicKey'
       preLoaderRoute: typeof EpicEpicKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/milestone/$milestoneKey': {
+      id: '/milestone/$milestoneKey'
+      path: '/milestone/$milestoneKey'
+      fullPath: '/milestone/$milestoneKey'
+      preLoaderRoute: typeof MilestoneMilestoneKeyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/rule/$ruleKey': {
+      id: '/rule/$ruleKey'
+      path: '/rule/$ruleKey'
+      fullPath: '/rule/$ruleKey'
+      preLoaderRoute: typeof RuleRuleKeyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sign-in/$': {
@@ -179,7 +259,11 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ConnectionRoute: ConnectionRoute,
   EpicsRoute: EpicsRoute,
+  RoadmapRoute: RoadmapRoute,
+  RulesRoute: RulesRoute,
   EpicEpicKeyRoute: EpicEpicKeyRoute,
+  MilestoneMilestoneKeyRoute: MilestoneMilestoneKeyRoute,
+  RuleRuleKeyRoute: RuleRuleKeyRoute,
   SignInSplatRoute: SignInSplatRoute,
   StreamStreamKeyRoute: StreamStreamKeyRoute,
   TaskTaskKeyRoute: TaskTaskKeyRoute,

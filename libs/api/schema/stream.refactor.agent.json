@@ -8,7 +8,7 @@
     },
     "schema_version": {
       "type": "string",
-      "const": "pm.stream.v1"
+      "const": "pm.stream.v2"
     },
     "meta": {
       "type": "object",
@@ -29,6 +29,10 @@
         "stream_type": {
           "type": "string",
           "const": "refactor"
+        },
+        "size": {
+          "type": "string",
+          "enum": ["small", "medium", "large"]
         }
       },
       "required": ["title", "status", "stream_type"],
@@ -53,12 +57,32 @@
                 "properties": {
                   "id": {
                     "type": "string",
-                    "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                    "pattern": "^SCP-[1-9][0-9]*$"
                   },
                   "statement": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 2000
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "properties": {
+                      "basis": {
+                        "type": "string",
+                        "enum": ["stated", "verified", "inferred", "assumed"]
+                      },
+                      "source_ids": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^SRC-[1-9][0-9]*$"
+                        }
+                      }
+                    },
+                    "required": ["basis"],
+                    "additionalProperties": false,
+                    "description": "Claim provenance. stated, verified and inferred require at least one source_ids entry; assumed may omit it. Source ids resolve in this document's provenance.sources."
                   }
                 },
                 "required": ["id", "statement"],
@@ -72,12 +96,32 @@
                 "properties": {
                   "id": {
                     "type": "string",
-                    "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                    "pattern": "^SCP-[1-9][0-9]*$"
                   },
                   "statement": {
                     "type": "string",
                     "minLength": 1,
                     "maxLength": 2000
+                  },
+                  "evidence": {
+                    "type": "object",
+                    "properties": {
+                      "basis": {
+                        "type": "string",
+                        "enum": ["stated", "verified", "inferred", "assumed"]
+                      },
+                      "source_ids": {
+                        "minItems": 1,
+                        "type": "array",
+                        "items": {
+                          "type": "string",
+                          "pattern": "^SRC-[1-9][0-9]*$"
+                        }
+                      }
+                    },
+                    "required": ["basis"],
+                    "additionalProperties": false,
+                    "description": "Claim provenance. stated, verified and inferred require at least one source_ids entry; assumed may omit it. Source ids resolve in this document's provenance.sources."
                   }
                 },
                 "required": ["id", "statement"],
@@ -115,7 +159,7 @@
             "properties": {
               "id": {
                 "type": "string",
-                "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                "pattern": "^WF-[1-9][0-9]*$"
               },
               "workflow_name": {
                 "type": "string",
@@ -142,7 +186,7 @@
                   "properties": {
                     "id": {
                       "type": "string",
-                      "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                      "pattern": "^STEP-[1-9][0-9]*$"
                     },
                     "action": {
                       "type": "string",
@@ -153,43 +197,102 @@
                       "type": "string",
                       "minLength": 1,
                       "maxLength": 2000
+                    },
+                    "evidence": {
+                      "type": "object",
+                      "properties": {
+                        "basis": {
+                          "type": "string",
+                          "enum": ["stated", "verified", "inferred", "assumed"]
+                        },
+                        "source_ids": {
+                          "minItems": 1,
+                          "type": "array",
+                          "items": {
+                            "type": "string",
+                            "pattern": "^SRC-[1-9][0-9]*$"
+                          }
+                        }
+                      },
+                      "required": ["basis"],
+                      "additionalProperties": false,
+                      "description": "Claim provenance. stated, verified and inferred require at least one source_ids entry; assumed may omit it. Source ids resolve in this document's provenance.sources."
                     }
                   },
                   "required": ["id", "action"],
                   "additionalProperties": false
                 }
+              },
+              "evidence": {
+                "type": "object",
+                "properties": {
+                  "basis": {
+                    "type": "string",
+                    "enum": ["stated", "verified", "inferred", "assumed"]
+                  },
+                  "source_ids": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^SRC-[1-9][0-9]*$"
+                    }
+                  }
+                },
+                "required": ["basis"],
+                "additionalProperties": false,
+                "description": "Claim provenance. stated, verified and inferred require at least one source_ids entry; assumed may omit it. Source ids resolve in this document's provenance.sources."
               }
             },
             "required": ["id", "workflow_name", "steps"],
             "additionalProperties": false
           }
         },
-        "business_rules": {
+        "rule_applications": {
           "type": "array",
           "items": {
             "type": "object",
             "properties": {
               "id": {
                 "type": "string",
-                "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                "pattern": "^RA-[1-9][0-9]*$"
               },
-              "rule": {
+              "rule_key": {
+                "type": "string",
+                "pattern": "^(?:R-[1-9][0-9]*|\\$[a-z][a-z0-9_]{0,39})$"
+              },
+              "applies_when": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 2000
               },
-              "impact": {
+              "application": {
                 "type": "string",
                 "minLength": 1,
                 "maxLength": 2000
               },
-              "consequence": {
-                "type": "string",
-                "minLength": 1,
-                "maxLength": 2000
+              "evidence": {
+                "type": "object",
+                "properties": {
+                  "basis": {
+                    "type": "string",
+                    "enum": ["stated", "verified", "inferred", "assumed"]
+                  },
+                  "source_ids": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^SRC-[1-9][0-9]*$"
+                    }
+                  }
+                },
+                "required": ["basis"],
+                "additionalProperties": false,
+                "description": "Claim provenance. stated, verified and inferred require at least one source_ids entry; assumed may omit it. Source ids resolve in this document's provenance.sources."
               }
             },
-            "required": ["id", "rule"],
+            "required": ["id", "rule_key"],
             "additionalProperties": false
           }
         },
@@ -200,7 +303,7 @@
             "properties": {
               "id": {
                 "type": "string",
-                "pattern": "^[A-Z][A-Z0-9]*(?:-[A-Z0-9]+)*$"
+                "pattern": "^EC-[1-9][0-9]*$"
               },
               "trigger": {
                 "type": "string",
@@ -220,6 +323,26 @@
               "severity": {
                 "type": "string",
                 "enum": ["low", "medium", "high", "critical"]
+              },
+              "evidence": {
+                "type": "object",
+                "properties": {
+                  "basis": {
+                    "type": "string",
+                    "enum": ["stated", "verified", "inferred", "assumed"]
+                  },
+                  "source_ids": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^SRC-[1-9][0-9]*$"
+                    }
+                  }
+                },
+                "required": ["basis"],
+                "additionalProperties": false,
+                "description": "Claim provenance. stated, verified and inferred require at least one source_ids entry; assumed may omit it. Source ids resolve in this document's provenance.sources."
               }
             },
             "required": ["id", "trigger", "expected_behavior"],
@@ -244,6 +367,26 @@
                 "minLength": 1,
                 "maxLength": 2000
               }
+            },
+            "evidence": {
+              "type": "object",
+              "properties": {
+                "basis": {
+                  "type": "string",
+                  "enum": ["stated", "verified", "inferred", "assumed"]
+                },
+                "source_ids": {
+                  "minItems": 1,
+                  "type": "array",
+                  "items": {
+                    "type": "string",
+                    "pattern": "^SRC-[1-9][0-9]*$"
+                  }
+                }
+              },
+              "required": ["basis"],
+              "additionalProperties": false,
+              "description": "Claim provenance. stated, verified and inferred require at least one source_ids entry; assumed may omit it. Source ids resolve in this document's provenance.sources."
             }
           },
           "required": ["delivers_alone"],
@@ -252,17 +395,176 @@
         "open_questions": {
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 2000
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^OQ-[1-9][0-9]*$"
+              },
+              "question": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              }
+            },
+            "required": ["id", "question"],
+            "additionalProperties": false
           }
         },
         "assumptions": {
           "type": "array",
           "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 2000
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^ASM-[1-9][0-9]*$"
+              },
+              "statement": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "source_ids": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^SRC-[1-9][0-9]*$"
+                }
+              }
+            },
+            "required": ["id", "statement"],
+            "additionalProperties": false
+          }
+        },
+        "refactor_targets": {
+          "description": "A refactor needs at least one REF-* target before it may become ready.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^REF-[1-9][0-9]*$"
+              },
+              "current_state": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "target_state": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "evidence": {
+                "type": "object",
+                "properties": {
+                  "basis": {
+                    "type": "string",
+                    "enum": ["stated", "verified", "inferred", "assumed"]
+                  },
+                  "source_ids": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^SRC-[1-9][0-9]*$"
+                    }
+                  }
+                },
+                "required": ["basis"],
+                "additionalProperties": false,
+                "description": "Claim provenance. stated, verified and inferred require at least one source_ids entry; assumed may omit it. Source ids resolve in this document's provenance.sources."
+              }
+            },
+            "required": ["id", "current_state", "target_state"],
+            "additionalProperties": false
+          }
+        },
+        "invariants": {
+          "description": "A refactor needs at least one INV-* invariant before it may become ready.",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^INV-[1-9][0-9]*$"
+              },
+              "statement": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "evidence": {
+                "type": "object",
+                "properties": {
+                  "basis": {
+                    "type": "string",
+                    "enum": ["stated", "verified", "inferred", "assumed"]
+                  },
+                  "source_ids": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^SRC-[1-9][0-9]*$"
+                    }
+                  }
+                },
+                "required": ["basis"],
+                "additionalProperties": false,
+                "description": "Claim provenance. stated, verified and inferred require at least one source_ids entry; assumed may omit it. Source ids resolve in this document's provenance.sources."
+              }
+            },
+            "required": ["id", "statement"],
+            "additionalProperties": false
+          }
+        },
+        "quality_goals": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^QG-[1-9][0-9]*$"
+              },
+              "goal": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "measurement": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "evidence": {
+                "type": "object",
+                "properties": {
+                  "basis": {
+                    "type": "string",
+                    "enum": ["stated", "verified", "inferred", "assumed"]
+                  },
+                  "source_ids": {
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "pattern": "^SRC-[1-9][0-9]*$"
+                    }
+                  }
+                },
+                "required": ["basis"],
+                "additionalProperties": false,
+                "description": "Claim provenance. stated, verified and inferred require at least one source_ids entry; assumed may omit it. Source ids resolve in this document's provenance.sources."
+              }
+            },
+            "required": ["id", "goal"],
+            "additionalProperties": false
           }
         }
       },
@@ -289,6 +591,10 @@
           "items": {
             "type": "object",
             "properties": {
+              "id": {
+                "type": "string",
+                "pattern": "^SRC-[1-9][0-9]*$"
+              },
               "type": {
                 "type": "string",
                 "enum": [
@@ -296,8 +602,7 @@
                   "conversation",
                   "existing_code",
                   "documentation",
-                  "external_reference",
-                  "inference"
+                  "external_reference"
                 ]
               },
               "reference": {
@@ -305,66 +610,31 @@
                 "minLength": 1,
                 "maxLength": 2000
               },
-              "confidence": {
+              "snapshot": {
                 "type": "string",
-                "enum": ["explicit", "implied", "inferred", "assumed"]
+                "minLength": 1,
+                "maxLength": 2000
+              },
+              "observed_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "supersedes_source_ids": {
+                "minItems": 1,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^SRC-[1-9][0-9]*$"
+                }
               }
             },
-            "required": ["type", "confidence"],
+            "required": ["id", "type", "reference"],
             "additionalProperties": false
           }
-        },
-        "inferred_fields": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 2000
-          }
-        },
-        "open_questions": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 2000
-          }
-        },
-        "assumptions": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 2000
-          }
-        },
-        "created_from": {
-          "type": "array",
-          "items": {
-            "type": "string",
-            "minLength": 1,
-            "maxLength": 128
-          }
-        },
-        "created_by": {
-          "type": "object",
-          "properties": {
-            "type": {
-              "type": "string",
-              "enum": ["user", "agent", "planner_agent", "executor_agent", "system"]
-            },
-            "id": {
-              "type": "string",
-              "minLength": 1,
-              "maxLength": 128
-            }
-          },
-          "required": ["type", "id"],
-          "additionalProperties": false
         }
       },
       "additionalProperties": false,
-      "description": "[unknowns_must_be_marked] Never write a guess as if the user had stated it. Anything unknown goes into content.open_questions, content.assumptions or provenance.inferred_fields, and provenance.sources records how firmly each source supports what was written."
+      "description": "Immutable local Sources cited by claim evidence. Put uncertainty in addressable content assumptions or open_questions, never in inferred document paths."
     }
   },
   "required": ["entity", "schema_version", "meta", "content", "links", "provenance"],

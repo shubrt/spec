@@ -1,31 +1,31 @@
 import { z } from "zod";
 import {
-  entityTypeSchema,
   epicStatusSchema,
-  relationshipTypeSchema,
+  milestoneStatusSchema,
+  ruleStatusSchema,
   streamStatusSchema,
   streamTypeSchema,
   taskStatusSchema,
   taskTypeSchema,
-  type EntityType,
+  type VersionedEntityType,
 } from "../enums";
 import {
-  actorRef,
   entityId,
   entityKey,
   entityPrioritySchema,
-  sourceConfidenceSchema,
+  milestoneKey,
+  sourceId,
   sourceTypeSchema,
   statement,
+  streamSizeSchema,
   title,
 } from "./primitives";
-import { ruleText } from "./rules";
 
 /**
  * The shared document envelope from the domain spec §5: `entity`,
- * `schema_version`, `meta`, `content`, `links`, `provenance`. Every epic, stream
- * and task document has exactly these keys, and `content` is the only part that
- * differs by entity type.
+ * `schema_version`, `meta`, `content`, `links`, `provenance`. Every Epic,
+ * Stream, Task, Rule and Milestone document has these keys; Task additionally
+ * carries `execution`, and `content` differs by entity type.
  *
  * ## Why `z.strictObject` and not `z.object`, everywhere
  *
@@ -45,9 +45,12 @@ import { ruleText } from "./rules";
  *
  * - `…Meta.input` — what an agent is allowed to write: `title`, `status`,
  *   `priority`, plus the entity's own type discriminator.
- * - `…Meta.stored` — that, plus everything the server assigns: `id`, `key`,
- *   `project_id`, `workspace_id`, `revision`, the timestamps and
- *   `created_by` / `updated_by`.
+ * - `…Meta.stored` — that, plus the document identity fields the server assigns:
+ *   `id`, `key` and `revision`.
+ *
+ * Project and workspace ownership deliberately live only on the relational row.
+ * Duplicating them in document JSON would make a hierarchy move either mutate
+ * descendants without a revision or leave two authorities that disagree.
  *
  * Because the input version is a `strictObject`, an agent that sends
  * `meta.revision: 9` gets an `unrecognized_keys` issue instead of a silent
@@ -57,70 +60,50 @@ import { ruleText } from "./rules";
 /* ------------------------------------------------------------------- links */
 
 /**
- * One end of a relationship (domain spec §5.5). Relationships are stored as
- * `(target_type, target_id)` pairs, never as free prose, so that cycle
- * detection and impact analysis can walk them.
- */
-export const entityRef = z.strictObject({
-  target_type: entityTypeSchema,
-  target_id: entityId,
-  reason: statement.optional(),
-});
-
-/**
- * A dependency, which additionally names *which* relationship holds. The
- * relationship set lives in `domain/enums.ts` because `entity_link.relationship`
- * is a column.
- */
-export const dependencyRef = entityRef.extend({
-  relationship: relationshipTypeSchema,
-});
-
-/**
  * Graph relationships are writable only through change-set `link`/`unlink`
- * operations. `entity_link` is the operational source used by cycle checks,
- * context and next-work queries; accepting the same relation in document JSON
- * would create two stores that can disagree. The stored tier still accepts the
- * canonical legacy snapshot shape, while every new agent write exposes only the
- * server-controlled parent link.
+ * operations. `entity_link` is the sole source used by cycle checks, context and
+ * next-work queries; accepting the same relation in current document JSON would
+ * create two stores that can disagree. Historical v1 snapshots remain raw audit
+ * JSON and never pass through these v2 schemas.
  */
 export const epicLinks = {
   input: z.strictObject({}),
-  stored: z.strictObject({
-    related_epics: z.array(entityRef).optional(),
-    supersedes: z.array(entityRef).optional(),
-    extends: z.array(entityRef).optional(),
-  }),
+  stored: z.strictObject({}),
 } as const;
 
 export const streamLinks = {
   input: z.strictObject({ parent_epic_id: entityId }),
-  stored: z.strictObject({
-    parent_epic_id: entityId,
-    depends_on: z.array(dependencyRef).optional(),
-    related_streams: z.array(entityRef).optional(),
-    supersedes: z.array(entityRef).optional(),
-    extends: z.array(entityRef).optional(),
-  }),
+  stored: z.strictObject({ parent_epic_id: entityId }),
 } as const;
 
 export const taskLinks = {
   input: z.strictObject({ parent_stream_id: entityId }),
-  stored: z.strictObject({
-    parent_stream_id: entityId,
-    blocks: z.array(entityRef).optional(),
-    blocked_by: z.array(entityRef).optional(),
-    related_tasks: z.array(entityRef).optional(),
-  }),
+  stored: z.strictObject({ parent_stream_id: entityId }),
+} as const;
+
+/** Rule relations live only in `entity_link`; Milestones are never graph endpoints. */
+export const ruleLinks = {
+  input: z.strictObject({}),
+  stored: z.strictObject({}),
+} as const;
+
+export const milestoneLinks = {
+  input: z.strictObject({}),
+  stored: z.strictObject({}),
 } as const;
 
 /* -------------------------------------------------------------- provenance */
 
-/** Where one statement in the document came from (domain spec §5.6). */
+/** One immutable observation that claim-level evidence can cite by local id. */
 export const provenanceSource = z.strictObject({
+  id: sourceId,
   type: sourceTypeSchema,
-  reference: statement.optional(),
-  confidence: sourceConfidenceSchema,
+  reference: statement,
+  /** Commit, document version, entity revision or another immutable source marker. */
+  snapshot: statement.optional(),
+  observed_at: z.iso.datetime({ offset: true }).optional(),
+  /** Newer local observations this Source is known to replace. */
+  supersedes_source_ids: z.array(sourceId).min(1).optional(),
 });
 
 /**
@@ -132,25 +115,19 @@ export const provenanceSource = z.strictObject({
  * one conversion into `$defs` and references it, and a self-contained generated
  * schema is easier for a model to follow than one behind a `$ref`.
  *
- * The domain spec §11 rule "mark what is unknown" is carried here as a
- * `description` and nowhere else, because it cannot be checked from a single
- * document — nothing in the JSON distinguishes an honest statement from an
- * invented one. Descriptions are the enforcement, which is why `rules.ts` files
- * it under `enforcement: "description"` rather than pretending it is validated.
+ * Sources are a document-local catalogue. Claim elements cite them through
+ * `evidence.source_ids`; unknowns live once in the addressable content-level
+ * `open_questions` and `assumptions` sections.
  */
 export const provenance = () =>
   z
     .strictObject({
       sources: z.array(provenanceSource).optional(),
-      /** Dotted document paths that were inferred rather than stated, e.g. `content.requirements.non_functional`. */
-      inferred_fields: z.array(statement).optional(),
-      open_questions: z.array(statement).optional(),
-      assumptions: z.array(statement).optional(),
-      /** Ids of the entities this document was derived from. */
-      created_from: z.array(entityId).optional(),
-      created_by: actorRef.optional(),
     })
-    .meta({ description: ruleText("unknowns_must_be_marked") });
+    .meta({
+      description:
+        "Immutable local Sources cited by claim evidence. Put uncertainty in addressable content assumptions or open_questions, never in inferred document paths.",
+    });
 
 /* -------------------------------------------------------------------- meta */
 
@@ -172,25 +149,19 @@ const META_INPUT_SHAPE = {
 const META_STORED_SHAPE = {
   id: entityId,
   key: entityKey,
-  project_id: entityId,
-  /**
-   * Optional because the canonical §5.3, §6 and §7 documents do not carry it:
-   * the workspace is a relational column and an authorisation fact, and a
-   * document read back from the database is valid with or without it.
-   */
-  workspace_id: entityId.optional(),
   revision: z.int().min(1),
-  created_at: z.iso.datetime({ offset: true }).optional(),
-  updated_at: z.iso.datetime({ offset: true }).optional(),
-  created_by: actorRef.optional(),
-  updated_by: actorRef.optional(),
 } as const;
 
 /**
  * The keys an agent must never be able to write. The change-set engine strips
  * them before validation rather than letting a well-meaning agent trip over them.
  */
-export const STORED_ONLY_META_KEYS = Object.keys(META_STORED_SHAPE) as readonly string[];
+export const STORED_ONLY_META_KEYS = [
+  ...Object.keys(META_STORED_SHAPE),
+  "roadmap_order",
+  "milestone_key",
+  "roadmap_rank",
+] as readonly string[];
 
 const metaPair = <Extra extends z.core.$ZodLooseShape>(extra: Extra) => ({
   input: z.strictObject({ ...META_INPUT_SHAPE, ...extra }),
@@ -205,16 +176,41 @@ export const epicMeta = metaPair({ status: epicStatusSchema });
  * which content schema applies — see `stream/registry.ts` for why that selection
  * is a map lookup and not a discriminated union.
  */
-export const streamMeta = metaPair({
+const STREAM_META_SHAPE = {
   status: streamStatusSchema,
   stream_type: streamTypeSchema,
-});
+  size: streamSizeSchema.optional(),
+} as const;
+
+export const streamMeta = {
+  input: z.strictObject({ ...META_INPUT_SHAPE, ...STREAM_META_SHAPE }),
+  stored: z.strictObject({
+    ...META_STORED_SHAPE,
+    ...META_INPUT_SHAPE,
+    ...STREAM_META_SHAPE,
+    milestone_key: milestoneKey.nullable().optional(),
+    roadmap_rank: z.int().min(0).nullable().optional(),
+  }),
+} as const;
 
 /** Task `meta`. */
 export const taskMeta = metaPair({
   status: taskStatusSchema,
   task_type: taskTypeSchema,
 });
+
+/** Rule and Milestone have no subtype discriminator. */
+export const ruleMeta = metaPair({ status: ruleStatusSchema });
+export const milestoneMeta = {
+  input: z.strictObject({ ...META_INPUT_SHAPE, status: milestoneStatusSchema }),
+  stored: z.strictObject({
+    ...META_STORED_SHAPE,
+    ...META_INPUT_SHAPE,
+    status: milestoneStatusSchema,
+    /** Server-managed advisory position; equal values are valid. */
+    roadmap_order: z.int().min(0),
+  }),
+} as const;
 
 /* ---------------------------------------------------------------- envelope */
 
@@ -228,7 +224,7 @@ export const taskMeta = metaPair({
  * invalidate old rows, which is only possible if every row states its version.
  */
 export const documentEnvelope = <
-  const Entity extends EntityType,
+  const Entity extends VersionedEntityType,
   const Version extends string,
   Meta extends z.ZodType,
   Content extends z.ZodType,

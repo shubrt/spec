@@ -1,12 +1,16 @@
 import { z } from "zod";
 import {
+  acceptanceCriterionId,
+  CLAIM_EVIDENCE_SHAPE,
   criterionTypeSchema,
+  functionalRequirementId,
   label,
   MEASURABLE_TARGET_SHAPE,
   nfrCategorySchema,
+  nonFunctionalRequirementId,
   requirementPrioritySchema,
-  sectionId,
-  sectionIdList,
+  requirementId,
+  ruleKey,
   statement,
   verificationMethodSchema,
 } from "../primitives";
@@ -21,9 +25,10 @@ import { streamBaseContent } from "./base";
 
 /** One thing the system must do, with MoSCoW priority. */
 export const functionalRequirement = z.strictObject({
-  id: sectionId,
+  id: functionalRequirementId,
   statement,
   priority: requirementPrioritySchema.optional(),
+  ...CLAIM_EVIDENCE_SHAPE,
 });
 
 /**
@@ -32,10 +37,11 @@ export const functionalRequirement = z.strictObject({
  * "should be fast" is the free-text failure the domain spec §14 rejects.
  */
 export const nonFunctionalRequirement = z.strictObject({
-  id: sectionId,
+  id: nonFunctionalRequirementId,
   category: nfrCategorySchema,
   metric: label,
   ...MEASURABLE_TARGET_SHAPE,
+  ...CLAIM_EVIDENCE_SHAPE,
 });
 
 export const featureRequirements = z.strictObject({
@@ -53,8 +59,15 @@ export const featureRequirements = z.strictObject({
  * document — so the rule is quoted in the description as well, because
  * `z.toJSONSchema()` would show the model nothing otherwise.
  */
+export const acceptanceCriterionVerifies = z
+  .strictObject({
+    requirement_ids: z.array(requirementId).optional(),
+    rule_keys: z.array(ruleKey).optional(),
+  })
+  .meta({ description: ruleText("referenced_ids_must_exist") });
+
 export const acceptanceCriterion = z.strictObject({
-  id: sectionId,
+  id: acceptanceCriterionId,
   type: criterionTypeSchema.optional(),
   given: statement,
   when: statement,
@@ -64,8 +77,9 @@ export const acceptanceCriterion = z.strictObject({
   // is a schema, not a plain object with a callable `then`.
   // oxlint-disable-next-line unicorn/no-thenable
   then: statement,
-  verifies: sectionIdList.optional().meta({ description: ruleText("referenced_ids_must_exist") }),
+  verifies: acceptanceCriterionVerifies.optional(),
   verification: verificationMethodSchema.optional(),
+  ...CLAIM_EVIDENCE_SHAPE,
 });
 
 export const featureStreamContent = streamBaseContent.extend({

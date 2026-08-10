@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { scope, sectionId, statement } from "../primitives";
+import { CLAIM_EVIDENCE_SHAPE, investigationQuestionId, scope, statement } from "../primitives";
 import { ruleText } from "../rules";
 import { streamBaseContent } from "./base";
+import { successCriterion } from "./shared";
 
 /**
  * An `investigation` stream: find out something unknown (domain spec §3.2).
@@ -22,20 +23,10 @@ import { streamBaseContent } from "./base";
 
 /** One thing this investigation has to answer. Ids are join keys for the investigation tasks. */
 export const investigationQuestion = z.strictObject({
-  id: sectionId,
+  id: investigationQuestionId,
   question: statement,
   why_it_matters: statement.optional(),
-});
-
-/**
- * A measurable finish line for an investigation. Domain spec §11 allows this in
- * place of classic acceptance criteria — you cannot write given/when/then for a
- * question you have not answered yet.
- */
-export const successCriterion = z.strictObject({
-  id: sectionId,
-  criterion: statement,
-  measurement: statement.optional(),
+  ...CLAIM_EVIDENCE_SHAPE,
 });
 
 export const investigationStreamContent = streamBaseContent.extend({
