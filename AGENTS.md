@@ -14,6 +14,16 @@ This repository intentionally has no automated test suite. Do not create, restor
 
 - Normally verify work with static checks, schema drift checks, builds, and focused offline benchmarks.
 
+## Plans
+
+When a task calls for a written plan, publish it via [postplan.dev](https://postplan.dev) — but only if it is available and authenticated locally. Check with `npx postplan whoami`; a configured account (credentials live in `~/.postplan/credentials.json`) means use it. If that check fails, write the plan into the conversation instead and do not attempt to authenticate.
+
+- Write the plan as a self-contained static HTML file, then upload it:
+  `npx postplan upload ./plan.html`
+- Report the returned URL back to the user as the plan.
+- Use `--draft <draft-id>` to update an existing plan rather than creating a duplicate; `--new` forces a fresh draft.
+- If you are missing information or context needed for the plan, ask before uploading. A plan built on guesses is worse than a question.
+
 ## A note from the author
 
 I like ambitious ideas, simple systems, and software that feels obvious. Do not preserve complexity just because it already exists. Do not introduce machinery because it looks architecturally impressive. Understand the real constraint, then fight for the smallest model that makes the correct behavior unsurprising.
