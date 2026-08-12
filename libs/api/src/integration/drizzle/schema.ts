@@ -1,9 +1,11 @@
 import { relations } from "drizzle-orm";
 import { entityLink } from "./schema/entityLink";
 import { entityRevision } from "./schema/entityRevision";
+import { entityRevisionSummary } from "./schema/entityRevisionSummary";
 import { epic } from "./schema/epic";
 import { milestone } from "./schema/milestone";
 import { project } from "./schema/project";
+import { projectFragment } from "./schema/projectFragment";
 import { rule } from "./schema/rule";
 import { stream } from "./schema/stream";
 import { task } from "./schema/task";
@@ -11,9 +13,11 @@ import { workspace } from "./schema/workspace";
 
 export { entityLink } from "./schema/entityLink";
 export { entityRevision } from "./schema/entityRevision";
+export { entityRevisionSummary } from "./schema/entityRevisionSummary";
 export { epic } from "./schema/epic";
 export { milestone } from "./schema/milestone";
 export { project } from "./schema/project";
+export { projectFragment } from "./schema/projectFragment";
 export { rule } from "./schema/rule";
 export { stream } from "./schema/stream";
 export { task } from "./schema/task";
@@ -126,6 +130,8 @@ export const schema = {
   task,
   entityLink,
   entityRevision,
+  entityRevisionSummary,
+  projectFragment,
   workspaceRelations,
   projectRelations,
   epicRelations,

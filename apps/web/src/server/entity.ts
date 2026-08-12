@@ -54,14 +54,16 @@ export const getEntityDocument = createServerFn({ method: "GET" })
     const api = createApiClient(sessionToken);
 
     try {
-      const projectsResponse = await api.workspace.projects.get();
-      if (projectsResponse.error) return MISSING;
-
-      const selected = selectProject(projectsResponse.data.projects, data.projectId);
-      if (!selected) return MISSING;
+      let projectId = data.projectId;
+      if (!projectId) {
+        const projectsResponse = await api.workspace.projects.get();
+        if (projectsResponse.error) return MISSING;
+        projectId = selectProject(projectsResponse.data.projects, undefined)?.id;
+      }
+      if (!projectId) return MISSING;
 
       const response = await api.workspace
-        .projects({ projectId: selected.id })
+        .projects({ projectId })
         .entities({ key: data.key })
         .get();
       // A key from a URL can name something this Project does not hold, which is an

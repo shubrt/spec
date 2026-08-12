@@ -61,11 +61,14 @@ export const Route = createFileRoute("/roadmap")({
     tab: TABS.some((tab) => tab.id === search.tab) ? (search.tab as TabId) : undefined,
     milestone: typeof search.milestone === "string" ? search.milestone : undefined,
   }),
-  loaderDeps: ({ search }) => ({ projectId: search.project }),
+  loaderDeps: ({ search }) => ({ projectId: search.project, tab: search.tab }),
   // Exit criteria and Milestone questions are fragments. There are few of them, so one
-  // page covers every Milestone rather than one request each.
+  // page covers every Milestone rather than one request each. The Map is entirely
+  // aggregate-backed, so entering it does not request document fragments at all.
   loader: ({ deps }) =>
-    getFragments({ data: { projectId: deps.projectId, limit: 400, section: undefined } }),
+    deps.tab === "map"
+      ? null
+      : getFragments({ data: { projectId: deps.projectId, limit: 400, section: undefined } }),
   component: RoadmapPage,
 });
 
@@ -189,7 +192,7 @@ function RoadmapScreen({ model }: { readonly model: ProjectModel }) {
               section={section}
               model={model}
               nav={nav}
-              fragments={fragmentPage.fragments}
+              fragments={fragmentPage?.fragments ?? []}
               selectedKey={rootSearch.inspect}
             />
           ))
@@ -202,7 +205,7 @@ function RoadmapScreen({ model }: { readonly model: ProjectModel }) {
               section={section}
               model={model}
               nav={nav}
-              fragments={fragmentPage.fragments}
+              fragments={fragmentPage?.fragments ?? []}
             />
           ))
         : null}

@@ -17,6 +17,7 @@ import {
   recordRevision,
   stampServerOwnedMeta,
 } from "./entity";
+import { moveHierarchyFragments } from "./projectFragment";
 
 /**
  * The epic aggregate — the top of the planning hierarchy (domain spec §3.1).
@@ -359,6 +360,12 @@ async function move(
       updatedAt: new Date(),
     })
     .where(and(eq(stream.workspaceId, scope), eq(stream.epicId, current.id)));
+  await moveHierarchyFragments(scope, tx, {
+    rootType: "epic",
+    rootId: current.id,
+    projectId: input.projectId,
+    previousProjectId: current.projectId,
+  });
 
   return { ok: true, row };
 }

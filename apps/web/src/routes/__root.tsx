@@ -1,10 +1,8 @@
 import { ClerkProvider, useClerk } from "@clerk/tanstack-react-start";
 import { createRootRoute, HeadContent, Outlet, redirect, Scripts } from "@tanstack/react-router";
-import { useEffect, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import { AppSidebar, ContextBar } from "~/components/zpecs/shell";
-import { Inspector } from "~/components/zpecs/inspector";
-import { SearchOverlay } from "~/components/zpecs/search-overlay";
-import { useBoardState } from "~/lib/boardState";
+import { BoardStateProvider, useBoardState } from "~/lib/boardState";
 import { validateRootSearch } from "~/lib/search";
 import { fetchAuthState } from "~/server/auth";
 import { getBoard } from "~/server/board";
@@ -15,6 +13,17 @@ import appCss from "../styles.css?url";
 // otherwise the guard below redirects the sign-in page to itself.
 const SIGN_IN_PREFIX = "/sign-in";
 
+const Inspector = lazy(() =>
+  import("~/components/zpecs/inspector").then(({ Inspector: component }) => ({
+    default: component,
+  })),
+);
+const SearchOverlay = lazy(() =>
+  import("~/components/zpecs/search-overlay").then(({ SearchOverlay: component }) => ({
+    default: component,
+  })),
+);
+
 export const Route = createRootRoute({
   head: () => ({
     meta: [
@@ -22,7 +31,15 @@ export const Route = createRootRoute({
       { name: "viewport", content: "width=device-width, initial-scale=1" },
       { title: "zpecs · Operational Ledger" },
     ],
-    links: [{ rel: "stylesheet", href: appCss }],
+    links: [
+      { rel: "preconnect", href: "https://fonts.googleapis.com" },
+      { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
+      {
+        rel: "stylesheet",
+        href: "https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap",
+      },
+      { rel: "stylesheet", href: appCss },
+    ],
   }),
   beforeLoad: async ({ location }) => {
     const { isAuthenticated, orgId, userId } = await fetchAuthState();
@@ -71,7 +88,9 @@ function RootComponent() {
 
   return (
     <RootDocument>
-      <AppFrame />
+      <BoardStateProvider>
+        <AppFrame />
+      </BoardStateProvider>
     </RootDocument>
   );
 }
@@ -87,6 +106,7 @@ function AppFrame() {
   const { signOut } = useClerk();
   const { orgId, userId } = Route.useRouteContext();
   const board = Route.useLoaderData();
+  const { inspect } = Route.useSearch();
   const state = useBoardState();
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -122,11 +142,13 @@ function AppFrame() {
         </div>
       </main>
 
-      {/* Both overlays need the model, so both are absent until there is one. */}
-      {model ? <Inspector model={model} /> : null}
-      {model ? (
-        <SearchOverlay model={model} open={searchOpen} onClose={() => setSearchOpen(false)} />
-      ) : null}
+      {/* Closed overlays stay out of the initial module graph and component tree. */}
+      <Suspense fallback={null}>
+        {model && inspect && !inspect.startsWith("rev:") ? <Inspector model={model} /> : null}
+        {model && searchOpen ? (
+          <SearchOverlay model={model} open onClose={() => setSearchOpen(false)} />
+        ) : null}
+      </Suspense>
     </div>
   );
 }

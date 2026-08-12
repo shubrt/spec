@@ -42,6 +42,12 @@ export const milestone = pgTable(
     searchVector: tsvector().generatedAlwaysAs(
       sql`to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(summary, ''))`,
     ),
+    webSearchText: text().generatedAlwaysAs(
+      sql`key || ' ' || title || ' ' || coalesce(nullif(document -> 'content' ->> 'goal', ''), summary, '')`,
+    ),
+    fuzzyChars: text()
+      .array()
+      .generatedAlwaysAs(sql`string_to_array(lower(title), null)`),
     createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
   },
@@ -50,5 +56,7 @@ export const milestone = pgTable(
     index("milestone_scope_status_idx").on(t.workspaceId, t.projectId, t.status),
     index("milestone_scope_order_idx").on(t.workspaceId, t.projectId, t.roadmapOrder),
     index("milestone_search_idx").using("gin", t.searchVector),
+    index("milestone_web_search_idx").using("gin", t.webSearchText.asc().op("gin_trgm_ops")),
+    index("milestone_fuzzy_idx").using("gin", t.fuzzyChars),
   ],
 );

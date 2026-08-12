@@ -17,6 +17,7 @@ import {
   recordRevision,
   stampServerOwnedMeta,
 } from "./entity";
+import { moveHierarchyFragments } from "./projectFragment";
 
 /**
  * The stream aggregate — the central planning unit for the business "what"
@@ -445,6 +446,12 @@ async function move(
         updatedAt: new Date(),
       })
       .where(and(eq(task.workspaceId, scope), eq(task.streamId, current.id)));
+    await moveHierarchyFragments(scope, tx, {
+      rootType: "stream",
+      rootId: current.id,
+      projectId: target.projectId,
+      previousProjectId: current.projectId,
+    });
   }
 
   return { ok: true, row };

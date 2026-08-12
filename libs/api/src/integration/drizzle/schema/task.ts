@@ -48,6 +48,12 @@ export const task = pgTable(
     searchVector: tsvector().generatedAlwaysAs(
       sql`to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(summary, ''))`,
     ),
+    webSearchText: text().generatedAlwaysAs(
+      sql`key || ' ' || title || ' ' || coalesce(nullif(document -> 'content' ->> 'objective', ''), summary, '')`,
+    ),
+    fuzzyChars: text()
+      .array()
+      .generatedAlwaysAs(sql`string_to_array(lower(title), null)`),
     createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
   },
@@ -59,5 +65,7 @@ export const task = pgTable(
     index("task_scope_status_idx").on(t.workspaceId, t.projectId, t.status),
     index("task_stream_idx").on(t.workspaceId, t.streamId),
     index("task_search_idx").using("gin", t.searchVector),
+    index("task_web_search_idx").using("gin", t.webSearchText.asc().op("gin_trgm_ops")),
+    index("task_fuzzy_idx").using("gin", t.fuzzyChars),
   ],
 );

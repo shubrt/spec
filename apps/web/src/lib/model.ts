@@ -88,6 +88,13 @@ export interface RelationRef {
   readonly direction: "outgoing" | "incoming";
 }
 
+interface RelationEdge {
+  readonly from: string;
+  readonly to: string;
+  readonly relationship: string;
+  readonly reason: string | null;
+}
+
 /**
  * The `implements` fields a Task may carry.
  *
@@ -239,12 +246,7 @@ export interface ProjectModel {
   readonly taskDependencies: readonly DependencyEdge[];
   /** Everything that is not `blocked_by`, between Streams. */
   readonly streamRelations: readonly RelationRef[];
-  readonly relationEdges: readonly {
-    readonly from: string;
-    readonly to: string;
-    readonly relationship: string;
-    readonly reason: string | null;
-  }[];
+  readonly relationEdges: readonly RelationEdge[];
 
   /** Derived at read time. Not stored, and not a schedule. */
   readonly waves: readonly (readonly string[])[];
@@ -294,6 +296,75 @@ function byWorkOrder<
     byKey(left, right);
 }
 
+/** Groups rows in their current order, which keeps every derived list stable. */
+function groupRowsBy<Row>(
+  rows: readonly Row[],
+  keyOf: (row: Row) => string,
+): ReadonlyMap<string, readonly Row[]> {
+  const grouped = new Map<string, Row[]>();
+  for (const row of rows) {
+    const key = keyOf(row);
+    const bucket = grouped.get(key);
+    if (bucket) bucket.push(row);
+    else grouped.set(key, [row]);
+  }
+  return grouped;
+}
+
+/** Direct Rule consumers, indexed once instead of rediscovered once per Rule. */
+function consumersByRule<Row extends { readonly key: string }>(
+  rows: readonly Row[],
+  ruleKeysOf: (row: Row) => readonly string[],
+): ReadonlyMap<string, readonly string[]> {
+  const consumers = new Map<string, string[]>();
+  for (const row of rows) {
+    // The former `some`/`includes` checks named an entity once even if its
+    // document repeated the same Rule, so retain that behavior explicitly.
+    for (const ruleKey of new Set(ruleKeysOf(row))) {
+      const bucket = consumers.get(ruleKey);
+      if (bucket) bucket.push(row.key);
+      else consumers.set(ruleKey, [row.key]);
+    }
+  }
+  return consumers;
+}
+
+/** Both directions of every semantic edge, grouped in original edge order. */
+function relationsByStream(
+  edges: readonly RelationEdge[],
+  streamTitleByKey: ReadonlyMap<string, string>,
+): ReadonlyMap<string, readonly RelationRef[]> {
+  const relations = new Map<string, RelationRef[]>();
+  const add = (key: string, relation: RelationRef) => {
+    const bucket = relations.get(key);
+    if (bucket) bucket.push(relation);
+    else relations.set(key, [relation]);
+  };
+
+  for (const edge of edges) {
+    if (streamTitleByKey.has(edge.from)) {
+      add(edge.from, {
+        key: edge.to,
+        title: streamTitleByKey.get(edge.to) ?? "",
+        relationship: edge.relationship,
+        reason: edge.reason,
+        direction: "outgoing",
+      });
+    }
+    // `relationsFor` used an if/else: a self-edge appeared once as outgoing.
+    if (edge.to !== edge.from && streamTitleByKey.has(edge.to)) {
+      add(edge.to, {
+        key: edge.from,
+        title: streamTitleByKey.get(edge.from) ?? "",
+        relationship: edge.relationship,
+        reason: edge.reason,
+        direction: "incoming",
+      });
+    }
+  }
+  return relations;
+}
+
 /* ------------------------------------------------------------------- build -- */
 
 export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate }): ProjectModel {
@@ -311,30 +382,28 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
   // `entity_link` stores only `blocked_by`, and stores it dependent-first: the
   // source waits for the target. Reading it in the other direction would silently
   // invert every arrow on the Roadmap.
-  const blockedBy = aggregate.links.filter((link) => link.relationship === "blocked_by");
-  const streamDependencies: readonly DependencyEdge[] = blockedBy
-    .filter((link) => link.sourceType === "stream")
-    .map((link) => ({
-      dependent: link.sourceKey,
-      prerequisite: link.targetKey,
-      reason: link.reason,
-    }));
-  const taskDependencies: readonly DependencyEdge[] = blockedBy
-    .filter((link) => link.sourceType === "task")
-    .map((link) => ({
-      dependent: link.sourceKey,
-      prerequisite: link.targetKey,
-      reason: link.reason,
-    }));
+  const streamDependencies: DependencyEdge[] = [];
+  const taskDependencies: DependencyEdge[] = [];
+  const relationEdges: RelationEdge[] = [];
+  for (const link of aggregate.links) {
+    if (link.relationship !== "blocked_by") {
+      relationEdges.push({
+        from: link.sourceKey,
+        to: link.targetKey,
+        relationship: link.relationship,
+        reason: link.reason,
+      });
+      continue;
+    }
 
-  const relationEdges = aggregate.links
-    .filter((link) => link.relationship !== "blocked_by")
-    .map((link) => ({
-      from: link.sourceKey,
-      to: link.targetKey,
-      relationship: link.relationship,
+    const edge = {
+      dependent: link.sourceKey,
+      prerequisite: link.targetKey,
       reason: link.reason,
-    }));
+    };
+    if (link.sourceType === "stream") streamDependencies.push(edge);
+    if (link.sourceType === "task") taskDependencies.push(edge);
+  }
 
   /* -- status and title lookups, before any row is built -------------------- */
 
@@ -350,6 +419,7 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
     taskStatusByKey.set(task.key, task.status);
     taskTitleByKey.set(task.key, task.title);
   }
+  const streamRelationsByKey = relationsByStream(relationEdges, streamTitleByKey);
 
   const streamBlockers = resolveBlockers(
     streamDependencies,
@@ -417,7 +487,7 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
         dependency,
         blockedBy: blockers,
         blocks: streamBlockers.blocks.get(stream.key) ?? [],
-        relations: relationsFor(relationEdges, stream.key, streamTitleByKey),
+        relations: streamRelationsByKey.get(stream.key) ?? [],
         purpose: asText(content.purpose),
         deliversAlone:
           typeof verticalSlice === "object" &&
@@ -519,10 +589,13 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
 
   /* -- Epics ---------------------------------------------------------------- */
 
+  const streamsByEpicKey = groupRowsBy(streams, (row) => row.epicKey);
+  const tasksByEpicKey = groupRowsBy(tasks, (row) => row.epicKey);
+
   const epics: readonly EpicRow[] = aggregate.epics
     .map((epic) => {
-      const own = streams.filter((row) => row.epicKey === epic.key);
-      const ownTasks = tasks.filter((row) => row.epicKey === epic.key);
+      const own = streamsByEpicKey.get(epic.key) ?? [];
+      const ownTasks = tasksByEpicKey.get(epic.key) ?? [];
       const content = contentOf(epic.document);
       return {
         key: epic.key,
@@ -580,6 +653,14 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
   // Direct and only direct. An inherited count reads as reach the Rule does not
   // have: a Rule its Epic applies does not thereby govern every Stream beneath it,
   // because the data does not say so.
+  const epicConsumersByRule = consumersByRule(epics, (epic) =>
+    epic.ruleApplications.map((use) => use.ruleKey),
+  );
+  const streamConsumersByRule = consumersByRule(streams, (stream) =>
+    stream.ruleApplications.map((use) => use.ruleKey),
+  );
+  const taskConsumersByRule = consumersByRule(tasks, (task) => task.ruleKeys);
+
   const rules: readonly RuleRow[] = aggregate.rules
     .map((rule) => {
       const content = contentOf(rule.document);
@@ -588,15 +669,9 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
         typeof evidence === "object" && evidence !== null && !Array.isArray(evidence)
           ? evidence
           : {};
-      const namedByEpics = epics
-        .filter((epic) => epic.ruleApplications.some((use) => use.ruleKey === rule.key))
-        .map((epic) => epic.key);
-      const namedByStreams = streams
-        .filter((stream) => stream.ruleApplications.some((use) => use.ruleKey === rule.key))
-        .map((stream) => stream.key);
-      const namedByTasks = tasks
-        .filter((task) => task.ruleKeys.includes(rule.key))
-        .map((task) => task.key);
+      const namedByEpics = epicConsumersByRule.get(rule.key) ?? [];
+      const namedByStreams = streamConsumersByRule.get(rule.key) ?? [];
+      const namedByTasks = taskConsumersByRule.get(rule.key) ?? [];
 
       return {
         key: rule.key,
@@ -629,11 +704,16 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
     for (const key of wave) waveOfStream.set(key, index);
   });
 
-  const openTasks = tasks.filter((task) => task.status !== "done" && task.status !== "cancelled");
-  const collisions = possibleCollisions(
-    openTasks.map((task) => ({ key: task.key, streamKey: task.streamKey, scope: task.scope })),
-    waveOfStream,
-  );
+  let cachedCollisions: readonly PossibleCollision[] | undefined;
+  const collisions = () => {
+    if (cachedCollisions) return cachedCollisions;
+    const openTasks = tasks.filter((task) => task.status !== "done" && task.status !== "cancelled");
+    cachedCollisions = possibleCollisions(
+      openTasks.map((task) => ({ key: task.key, streamKey: task.streamKey, scope: task.scope })),
+      waveOfStream,
+    );
+    return cachedCollisions;
+  };
 
   return {
     projectId: aggregate.project.id,
@@ -664,7 +744,12 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
     waveOfStream,
     unresolvedWaveStreams: unresolved,
     longestChain: longestBlockerChain(streamDependencies),
-    collisions,
+    // Most entity and table routes do not read collision warnings. A memoized
+    // getter keeps that projection off their hot path while returning one stable
+    // array to the Overview, Focus and Roadmap surfaces that do read it.
+    get collisions() {
+      return collisions();
+    },
 
     // Every entity is at revision N, which means N revision rows exist for it.
     // Summing avoids a second request for a number the payload already implies.
@@ -729,44 +814,6 @@ function resolveBlockers<Status extends string>(
   }
 
   return { blockedBy, blocks };
-}
-
-/** Semantic relations touching one entity, in either direction, direction kept. */
-function relationsFor(
-  edges: readonly {
-    readonly from: string;
-    readonly to: string;
-    readonly relationship: string;
-    readonly reason: string | null;
-  }[],
-  key: string,
-  titleByKey: ReadonlyMap<string, string>,
-): readonly RelationRef[] {
-  return edges.flatMap((edge): readonly RelationRef[] => {
-    if (edge.from === key) {
-      return [
-        {
-          key: edge.to,
-          title: titleByKey.get(edge.to) ?? "",
-          relationship: edge.relationship,
-          reason: edge.reason,
-          direction: "outgoing",
-        },
-      ];
-    }
-    if (edge.to === key) {
-      return [
-        {
-          key: edge.from,
-          title: titleByKey.get(edge.from) ?? "",
-          relationship: edge.relationship,
-          reason: edge.reason,
-          direction: "incoming",
-        },
-      ];
-    }
-    return [];
-  });
 }
 
 /**

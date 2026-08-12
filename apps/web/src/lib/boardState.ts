@@ -1,5 +1,5 @@
 import { useLoaderData } from "@tanstack/react-router";
-import { useMemo } from "react";
+import { createContext, createElement, useContext, useMemo, type ReactNode } from "react";
 import type { ApiFailure } from "./apiFailure";
 import { buildProjectModel, type ProjectModel } from "./model";
 
@@ -24,14 +24,31 @@ export type BoardState =
   | { readonly kind: "no_project"; readonly workspaceName: string }
   | { readonly kind: "ready"; readonly model: ProjectModel };
 
-export function useBoardState(): BoardState {
+const BoardStateContext = createContext<BoardState | null>(null);
+
+/**
+ * Builds the read model once for the signed-in application tree.
+ *
+ * AppFrame, every Screen and both overlays consume the same object. Keeping this at
+ * the root matters because `useMemo` belongs to a component instance: putting the
+ * projection inside `useBoardState` made every caller build its own copy.
+ */
+export function BoardStateProvider({ children }: { readonly children: ReactNode }) {
   const { board } = useLoaderData({ from: "__root__" });
 
-  return useMemo((): BoardState => {
+  const state = useMemo((): BoardState => {
     if (board.status !== "ok") return { kind: "failure", failure: board };
     if (!board.aggregate) return { kind: "no_project", workspaceName: board.workspace.name };
     return { kind: "ready", model: buildProjectModel({ ...board, aggregate: board.aggregate }) };
   }, [board]);
+
+  return createElement(BoardStateContext.Provider, { value: state }, children);
+}
+
+export function useBoardState(): BoardState {
+  const state = useContext(BoardStateContext);
+  if (!state) throw new Error("useBoardState must be used inside BoardStateProvider");
+  return state;
 }
 
 /** Where an MCP client connects, and whether that origin is only reachable locally. */

@@ -42,6 +42,12 @@ export const rule = pgTable(
     searchVector: tsvector().generatedAlwaysAs(
       sql`to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(summary, ''))`,
     ),
+    webSearchText: text().generatedAlwaysAs(
+      sql`key || ' ' || title || ' ' || coalesce(nullif(document -> 'content' ->> 'statement', ''), summary, '')`,
+    ),
+    fuzzyChars: text()
+      .array()
+      .generatedAlwaysAs(sql`string_to_array(lower(title), null)`),
     createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
   },
@@ -49,5 +55,7 @@ export const rule = pgTable(
     uniqueIndex("rule_project_key_uniq").on(t.projectId, t.key),
     index("rule_scope_status_idx").on(t.workspaceId, t.projectId, t.status),
     index("rule_search_idx").using("gin", t.searchVector),
+    index("rule_web_search_idx").using("gin", t.webSearchText.asc().op("gin_trgm_ops")),
+    index("rule_fuzzy_idx").using("gin", t.fuzzyChars),
   ],
 );

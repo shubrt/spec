@@ -10,6 +10,7 @@ import { task } from "../../integration/drizzle/schema/task";
 import type { WorkspaceScope } from "../auth/workspaceScope";
 import type { HierarchyEntityType, VersionedEntityType } from "../enums";
 import { formatKey } from "../keys";
+import { replaceOwnerFragments, replaceTaskBacklinks } from "./projectFragment";
 
 /**
  * What the versioned entity repositories share: the transaction types, the
@@ -410,6 +411,21 @@ export async function recordRevision(
     changedBy: input.changedBy,
     changeReason: input.changeReason ?? null,
   });
+  await replaceOwnerFragments(scope, tx, {
+    entityType: input.entityType,
+    entityId: input.entityId,
+    projectId: input.projectId,
+    document: input.document,
+  });
+  if (input.entityType === "task") {
+    const meta = asRecord(input.document.meta);
+    await replaceTaskBacklinks(scope, tx, {
+      taskId: input.entityId,
+      taskKey: typeof meta.key === "string" ? meta.key : "",
+      projectId: input.projectId,
+      document: input.document,
+    });
+  }
 }
 
 export type StampInput<Status extends string> = {

@@ -58,6 +58,12 @@ export const stream = pgTable(
     searchVector: tsvector().generatedAlwaysAs(
       sql`to_tsvector('simple', coalesce(title, '') || ' ' || coalesce(summary, ''))`,
     ),
+    webSearchText: text().generatedAlwaysAs(
+      sql`key || ' ' || title || ' ' || coalesce(nullif(document -> 'content' ->> 'purpose', ''), summary, '')`,
+    ),
+    fuzzyChars: text()
+      .array()
+      .generatedAlwaysAs(sql`string_to_array(lower(title), null)`),
     createdAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
     updatedAt: timestamp({ withTimezone: true }).defaultNow().notNull(),
   },
@@ -67,5 +73,7 @@ export const stream = pgTable(
     index("stream_epic_idx").on(t.workspaceId, t.epicId),
     index("stream_milestone_rank_idx").on(t.workspaceId, t.projectId, t.milestoneId, t.roadmapRank),
     index("stream_search_idx").using("gin", t.searchVector),
+    index("stream_web_search_idx").using("gin", t.webSearchText.asc().op("gin_trgm_ops")),
+    index("stream_fuzzy_idx").using("gin", t.fuzzyChars),
   ],
 );
