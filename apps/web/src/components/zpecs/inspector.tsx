@@ -1,7 +1,6 @@
 import { useSearch } from "@tanstack/react-router";
 import { useEffect, type ReactNode } from "react";
 import { entityKindOf, parseRevisionRef, useEntityNav } from "~/lib/entityNav";
-import { groupFragments, sectionLabel } from "~/lib/fragments";
 import type { EpicRow, ProjectModel, StreamRow, TaskRow } from "~/lib/model";
 import { cn } from "~/lib/utils";
 import { formatRevisionTime, label } from "~/lib/vocabulary";
@@ -16,7 +15,6 @@ import {
   MetricGrid,
   RuleChip,
 } from "./parts";
-import { SpecFragment } from "./spec-fragment";
 import type { RevisionEntry } from "~/lib/revisions";
 import { RevisionDiff, revisionKindLabel, revisionKindTone } from "./revision-diff";
 
@@ -162,7 +160,6 @@ function StreamInspector({
   const nav = useEntityNav();
   const tasks = model.tasks.filter((task) => task.streamKey === stream.key);
   const blocked = stream.dependency.kind === "blocked";
-  const groups = groupFragments(stream.fragments);
 
   return (
     <>
@@ -304,45 +301,6 @@ function StreamInspector({
           </DrawerSection>
         ) : null}
 
-        {groups.map((group) => (
-          <DrawerSection
-            key={group.section}
-            label={sectionLabel(group.section)}
-            count={group.items.length}
-          >
-            <div className="border-border border-t">
-              {group.items.map((fragment) => (
-                <SpecFragment key={fragment.id} fragment={fragment} dense />
-              ))}
-            </div>
-          </DrawerSection>
-        ))}
-
-        {stream.sources.length > 0 ? (
-          <DrawerSection
-            label="Sources"
-            count={stream.sources.length}
-            hint="A Source becomes stale only by being explicitly superseded — never through age."
-          >
-            <div className="border-border border-t">
-              {stream.sources.map((source) => (
-                <div key={source.id} className="border-border border-b py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="w-12 shrink-0 font-mono text-xs">{source.id}</span>
-                    <Box tone="quiet">{label(source.type)}</Box>
-                    {source.supersededBy.length > 0 ? (
-                      <Box tone="dashed">{`superseded by ${source.supersededBy.join(", ")}`}</Box>
-                    ) : null}
-                  </div>
-                  <div className="text-muted-foreground mt-1 pl-14 text-xs leading-[17px]">
-                    {source.reference}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </DrawerSection>
-        ) : null}
-
         {stream.ruleApplications.length > 0 ? (
           <DrawerSection
             label="Rules"
@@ -364,6 +322,19 @@ function StreamInspector({
             </div>
           </DrawerSection>
         ) : null}
+
+        <DrawerSection
+          label="Specification"
+          hint="The document reads on the Stream's own page, which is where its fragments and the Sources they cite are fetched. The drawer is a preview: it carries where the Stream sits and what is holding it, and the icon above opens the rest."
+        >
+          <button
+            type="button"
+            onClick={() => nav.openPage(stream.key)}
+            className="text-ledger underline decoration-transparent underline-offset-2 transition-colors hover:decoration-current"
+          >
+            {`Open ${stream.key}`}
+          </button>
+        </DrawerSection>
 
         <DrawerSection label="Revision">
           <DefRow label="Current">{`rev ${String(stream.revision)}`}</DefRow>
@@ -623,7 +594,6 @@ function EpicInspector({
               { value: epic.readyNow, label: "Ready or in progress" },
               { value: epic.blockedStreams, label: "Dependency-blocked" },
               { value: epic.executableTasks, label: "Tasks that could start" },
-              { value: epic.fragmentCount, label: "Spec fragments" },
             ]}
           />
         </DrawerSection>

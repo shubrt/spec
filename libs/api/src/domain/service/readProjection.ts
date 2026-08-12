@@ -69,7 +69,40 @@ const PRUNED_ENVELOPE = [
  * removing it from this list — a visible, deliberate act rather than a payload that
  * quietly grew back.
  */
+const FRAGMENT_SECTIONS = [
+  "scope",
+  "discovery_scope",
+  "outcomes",
+  "success_metrics",
+  "requirements",
+  "acceptance_criteria",
+  "workflows",
+  "edge_cases",
+  "behavior_cases",
+  "changes",
+  "refactor_targets",
+  "hypotheses",
+  "research_questions",
+  "questions",
+  "success_criteria",
+  "decision_rules",
+  "invariants",
+  "quality_goals",
+  "maintenance_goals",
+  "risks",
+  "exit_criteria",
+  "open_questions",
+  "assumptions",
+] as const;
+
 const PRUNED_CONTENT: Partial<Record<VersionedEntityType, readonly string[]>> = {
+  // Fragment-bearing sections leave the aggregate entirely: they are the bulk of it,
+  // and every screen that reads them now asks the fragment endpoint for a page or for
+  // one owner. What stays is the prose a list or a header shows — purpose, business
+  // problem, actor, the vertical slice, a Milestone's goal.
+  epic: FRAGMENT_SECTIONS,
+  stream: FRAGMENT_SECTIONS,
+  milestone: FRAGMENT_SECTIONS,
   task: [
     // The technical body. Large, and shown only on the Task's own page, which
     // fetches the whole document for it.
@@ -78,17 +111,20 @@ const PRUNED_CONTENT: Partial<Record<VersionedEntityType, readonly string[]>> = 
     // that is what every dependency column reads.
     "dependencies",
     "artifacts",
+    "open_questions",
+    "assumptions",
   ],
 };
 
 /**
  * Entity kinds whose `provenance` the aggregate carries.
  *
- * A Stream's Sources are listed beside its Specification, and an Epic's fragments
- * cite them. Nothing renders a Task's, a Rule's or a Milestone's source list, so
- * those travel only with the whole document.
+ * None. Sources are cited by fragments and are listed beside a Specification, so they
+ * travel with the owner through the per-entity endpoint rather than with every
+ * navigation. The set is kept as a set rather than deleted, so restoring one kind is
+ * a one-word change.
  */
-const KEEPS_PROVENANCE = new Set<VersionedEntityType>(["epic", "stream"]);
+const KEEPS_PROVENANCE = new Set<VersionedEntityType>([]);
 
 /** `execution` fields the read surface reads. The trace pins are a server audit. */
 const KEPT_EXECUTION = ["estimate", "assignee", "executor_kind", "long_running"] as const;

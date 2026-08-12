@@ -19,6 +19,7 @@ import { useEntityNav, type EntityNav } from "~/lib/entityNav";
 import type { MilestoneRow, ProjectModel, StreamRow } from "~/lib/model";
 import type { RootSearch } from "~/lib/search";
 import { formatRevisionTime, keySequence } from "~/lib/vocabulary";
+import { getFragments, type FragmentEntry } from "~/server/fragments";
 
 /**
  * Roadmap — Plan, Map and Brief over one derived projection. No dates anywhere.
@@ -60,6 +61,11 @@ export const Route = createFileRoute("/roadmap")({
     tab: TABS.some((tab) => tab.id === search.tab) ? (search.tab as TabId) : undefined,
     milestone: typeof search.milestone === "string" ? search.milestone : undefined,
   }),
+  loaderDeps: ({ search }) => ({ projectId: search.project }),
+  // Exit criteria and Milestone questions are fragments. There are few of them, so one
+  // page covers every Milestone rather than one request each.
+  loader: ({ deps }) =>
+    getFragments({ data: { projectId: deps.projectId, limit: 400, section: undefined } }),
   component: RoadmapPage,
 });
 
@@ -104,11 +110,27 @@ function sectionsOf(model: ProjectModel): readonly Section[] {
   return sections;
 }
 
+/** A Milestone's own fragments, out of the one page this screen loaded. */
+function milestoneFragments(
+  all: readonly FragmentEntry[],
+  key: string,
+): {
+  readonly exitCriteria: readonly FragmentEntry[];
+  readonly openQuestions: readonly FragmentEntry[];
+} {
+  const own = all.filter((fragment) => fragment.owner === key);
+  return {
+    exitCriteria: own.filter((fragment) => fragment.section === "exit_criteria"),
+    openQuestions: own.filter((fragment) => fragment.section === "open_questions"),
+  };
+}
+
 function RoadmapScreen({ model }: { readonly model: ProjectModel }) {
   const nav = useEntityNav();
   const search = Route.useSearch();
   const rootSearch = useSearch({ from: "__root__" });
   const navigate = useNavigate({ from: Route.fullPath });
+  const fragmentPage = Route.useLoaderData();
   const tab: TabId = search.tab ?? "plan";
 
   const all = sectionsOf(model);
@@ -167,6 +189,7 @@ function RoadmapScreen({ model }: { readonly model: ProjectModel }) {
               section={section}
               model={model}
               nav={nav}
+              fragments={fragmentPage.fragments}
               selectedKey={rootSearch.inspect}
             />
           ))
@@ -174,7 +197,13 @@ function RoadmapScreen({ model }: { readonly model: ProjectModel }) {
 
       {tab === "brief"
         ? sections.map((section) => (
-            <BriefSection key={section.key} section={section} model={model} nav={nav} />
+            <BriefSection
+              key={section.key}
+              section={section}
+              model={model}
+              nav={nav}
+              fragments={fragmentPage.fragments}
+            />
           ))
         : null}
     </div>
@@ -211,20 +240,23 @@ function PlanSection({
   section,
   model,
   nav,
+  fragments,
   selectedKey,
 }: {
   readonly section: Section;
   readonly model: ProjectModel;
   readonly nav: EntityNav;
+  readonly fragments: readonly FragmentEntry[];
   readonly selectedKey: string | undefined;
 }) {
+  const own = milestoneFragments(fragments, section.key);
   const completed = section.streams.filter((row) => row.status === "completed").length;
   const blocked = section.streams.filter((row) => row.dependency.kind === "blocked").length;
   const ready = section.streams.filter(
     (row) =>
       (row.status === "ready" || row.status === "in_progress") && row.dependency.kind !== "blocked",
   ).length;
-  const exitCriteria = section.milestone?.exitCriteria ?? [];
+  const exitCriteria = own.exitCriteria;
 
   return (
     <MilestoneSection section={section}>
@@ -270,11 +302,11 @@ function PlanSection({
         </div>
       ) : null}
 
-      {section.milestone && section.milestone.openQuestions.length > 0 ? (
+      {own.openQuestions.length > 0 ? (
         <div className="mt-5">
-          <PartHead title="Open questions" count={section.milestone.openQuestions.length} />
+          <PartHead title="Open questions" count={own.openQuestions.length} />
           <div className="border-border border-t">
-            {section.milestone.openQuestions.map((fragment) => (
+            {own.openQuestions.map((fragment) => (
               <SpecFragment key={fragment.id} fragment={fragment} />
             ))}
           </div>
@@ -288,10 +320,12 @@ function BriefSection({
   section,
   model,
   nav,
+  fragments,
 }: {
   readonly section: Section;
   readonly model: ProjectModel;
   readonly nav: EntityNav;
+  readonly fragments: readonly FragmentEntry[];
 }) {
   const completed = section.streams.filter((row) => row.status === "completed");
   const cancelled = section.streams.filter((row) => row.status === "cancelled");
@@ -303,7 +337,7 @@ function BriefSection({
   const executable = model.tasks.filter(
     (task) => task.executable && streamKeys.has(task.streamKey),
   );
-  const exitCriteria = section.milestone?.exitCriteria ?? [];
+  const exitCriteria = milestoneFragments(fragments, section.key).exitCriteria;
   const met = exitCriteria.filter((fragment) => fragment.marks.state === "met").length;
   const recent = [...section.streams]
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))

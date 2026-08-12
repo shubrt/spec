@@ -190,7 +190,7 @@ function ProjectTab({ model }: { readonly model: ProjectModel }) {
               { value: model.tasks.length, label: "Tasks" },
               { value: model.milestones.length, label: "Milestones" },
               { value: model.rules.length, label: "Rules" },
-              { value: model.fragments.length, label: "Spec fragments" },
+              { value: model.fragmentCount, label: "Spec fragments" },
               { value: model.totalRevisions, label: "Entity Revisions" },
               { value: model.linkCount, label: "Entity links" },
             ]}

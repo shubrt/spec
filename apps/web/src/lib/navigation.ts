@@ -1,5 +1,3 @@
-import type { ProjectModel } from "./model";
-
 /**
  * The sidebar, and how a URL becomes a breadcrumb.
  *
@@ -8,7 +6,14 @@ import type { ProjectModel } from "./model";
  * back button all read the same value and cannot disagree.
  */
 
-export type NavCount = keyof ProjectModel & ("epics" | "streams" | "tasks" | "rules" | "fragments");
+/**
+ * What a nav badge can count.
+ *
+ * `fragments` is a number on the model rather than a collection, because the
+ * fragments themselves no longer travel with every navigation — so the badge reads a
+ * count and the screen reads a page.
+ */
+export type NavCount = "epics" | "streams" | "tasks" | "rules" | "fragmentCount";
 
 /**
  * The twelve screens, as literals rather than `string`.
@@ -64,7 +69,7 @@ export const NAV: readonly NavEntry[] = [
     kind: "item",
     to: "/criteria",
     label: "Requirements & Criteria",
-    count: "fragments",
+    count: "fragmentCount",
   },
   { kind: "item", to: "/trace", label: "Traceability" },
   { kind: "group", label: null },

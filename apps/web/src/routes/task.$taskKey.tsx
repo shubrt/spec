@@ -30,6 +30,7 @@ import type { RootSearch } from "~/lib/search";
 import { asArray, asRecord, asText, asTextArray, type JsonObject } from "~/lib/document";
 import { formatRevisionTime, keySequence, label } from "~/lib/vocabulary";
 import { getEntityDocument } from "~/server/entity";
+import type { FragmentEntry } from "~/server/fragments";
 
 /**
  * Task detail — Overview, Traceability, Changes.
@@ -67,9 +68,16 @@ export const Route = createFileRoute("/task/$taskKey")({
     tab: TABS.includes(search.tab as TabId) ? (search.tab as TabId) : undefined,
   }),
   loaderDeps: ({ search }) => ({ projectId: search.project }),
-  // The aggregate carries every Task without its `implementation` section, because
-  // that section is large and this is the only page that shows it. One small request
-  // on a page that is already about one Task.
+  /**
+   * Two fetches, one round trip.
+   *
+   * The Task's own document carries its implementation body, which the aggregate does
+   * not. Resolving what it *implements* needs the parent Stream's fragments, because a
+   * target is a reference into somebody else's document — and quoting a target rather
+   * than paraphrasing it is the whole reason this page exists.
+   *
+   * Both keys are known before render, so they go out together.
+   */
   loader: ({ deps, params }) =>
     getEntityDocument({ data: { projectId: deps.projectId, key: params.taskKey } }),
   component: TaskPage,
@@ -130,12 +138,21 @@ function TaskScreen({ task, model }: { readonly task: TaskRow; readonly model: P
   const loaded = Route.useLoaderData();
   const tab: TabId = search.tab ?? "overview";
   const implementation = readImplementation(loaded.ok ? loaded.document : null);
+  // A Task's own fragments are its open questions; its *targets* live in the parent
+  // Stream and are resolved from the Stream fragments the loader fetched.
+  const openQuestions = (loaded.ok ? loaded.fragments : []).filter(
+    (fragment) => fragment.section === "open_questions",
+  );
+  const targetFragments = new Map(
+    (loaded.ok ? loaded.targetFragments : []).map((fragment) => [fragment.anchor, fragment]),
+  );
+  const resolvedTargets = task.targets.map((target) => ({
+    ...target,
+    fragment: targetFragments.get(target.anchor) ?? null,
+  }));
 
   const epic = model.epicByKey.get(task.epicKey);
-  const resolved = task.targets.filter((target) => target.fragment !== null).length;
-  const openQuestions = task.fragments.filter((fragment) => fragment.section === "open_questions");
   const blocked = task.dependency.kind === "blocked" || task.streamBlocked;
-
   const context = (
     <>
       <ContextBlock label="Traceability" hint="Counted from the edges stored on this Task.">
@@ -143,7 +160,7 @@ function TaskScreen({ task, model }: { readonly task: TaskRow; readonly model: P
           items={[
             { value: task.targets.length, label: "Targets referenced" },
             {
-              value: `${String(resolved)}/${String(task.targets.length)}`,
+              value: `${String(resolvedTargets.filter((target) => target.fragment).length)}/${String(task.targets.length)}`,
               label: "Targets resolved",
             },
             { value: task.ruleKeys.length, label: "Rules applied" },
@@ -319,7 +336,7 @@ function TaskScreen({ task, model }: { readonly task: TaskRow; readonly model: P
               >
                 {task.targets.length > 0 ? (
                   <div className="border-border border-t">
-                    {task.targets.map((target) =>
+                    {resolvedTargets.map((target) =>
                       target.fragment ? (
                         <SpecFragment
                           key={target.anchor}
@@ -435,7 +452,7 @@ function TaskScreen({ task, model }: { readonly task: TaskRow; readonly model: P
             <EntityTable
               label="Implements"
               columns={targetColumns(nav)}
-              rows={task.targets.map((target) => ({ key: target.anchor, target }))}
+              rows={resolvedTargets.map((target) => ({ key: target.anchor, target }))}
               defaultOrderLabel="Read-only · the keys are the links"
               emptyLabel="This Task references no target"
               emptyHint="A Task with no business target cannot be shown to carry anything. Readiness requires at least one, so this is either a draft or a gap."
@@ -489,7 +506,7 @@ function UnresolvedTarget({
   target,
   nav,
 }: {
-  readonly target: TaskTarget;
+  readonly target: ResolvedTarget;
   readonly nav: EntityNav;
 }) {
   return (
@@ -506,7 +523,10 @@ function UnresolvedTarget({
   );
 }
 
-function targetColumns(nav: EntityNav): readonly Column<{ key: string; target: TaskTarget }>[] {
+type ResolvedFragment = FragmentEntry;
+type ResolvedTarget = TaskTarget & { readonly fragment: ResolvedFragment | null };
+
+function targetColumns(nav: EntityNav): readonly Column<{ key: string; target: ResolvedTarget }>[] {
   return [
     {
       id: "anchor",

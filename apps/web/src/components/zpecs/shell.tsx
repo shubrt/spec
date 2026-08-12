@@ -217,7 +217,11 @@ export function AppSidebar({
             const isActive = active === entry.to;
             // In a Project with nothing in it every badge reads 0 rather than
             // keeping the counts of the Project you just left.
-            const count = entry.count ? (model?.[entry.count].length ?? 0) : null;
+            const count = entry.count
+              ? entry.count === "fragmentCount"
+                ? (model?.fragmentCount ?? 0)
+                : (model?.[entry.count].length ?? 0)
+              : null;
             return (
               <li key={entry.to} className="relative">
                 <Link

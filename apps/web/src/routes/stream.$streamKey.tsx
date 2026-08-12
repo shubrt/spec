@@ -21,15 +21,15 @@ import { SectionChips, SpecFragment } from "~/components/zpecs/spec-fragment";
 import { useEntityNav, type EntityNav } from "~/lib/entityNav";
 import {
   SECTION_ORDER,
-  fragmentAnchor,
   groupFragments,
+  isTargetable,
   sectionLabel,
   type SectionId,
-  type SpecFragmentModel,
 } from "~/lib/fragments";
 import type { ProjectModel, StreamRow } from "~/lib/model";
 import type { RootSearch } from "~/lib/search";
 import { formatRevisionTime, label } from "~/lib/vocabulary";
+import { getEntityDocument } from "~/server/entity";
 
 /**
  * Stream detail — Overview, Specification, Tasks, Traceability, Changes.
@@ -64,8 +64,20 @@ export const Route = createFileRoute("/stream/$streamKey")({
       ? (search.section as SectionId)
       : undefined,
   }),
+  loaderDeps: ({ search }) => ({ projectId: search.project }),
+  // A Stream's Specification is the bulk of its document, so it no longer travels
+  // with every navigation. This page — the one that renders it — fetches it, together
+  // with the Sources its fragments cite.
+  loader: ({ deps, params }) =>
+    getEntityDocument({ data: { projectId: deps.projectId, key: params.streamKey } }),
   component: StreamPage,
 });
+
+/** The Stream's own fragments, as this page fetched them. */
+function useStreamFragments() {
+  const loaded = Route.useLoaderData();
+  return loaded.ok ? loaded.fragments : [];
+}
 
 function StreamPage() {
   const { streamKey } = Route.useParams();
@@ -101,15 +113,18 @@ function StreamScreen({
   const search = Route.useSearch();
   const rootSearch = useSearch({ from: "__root__" });
   const navigate = useNavigate({ from: Route.fullPath });
+  const loaded = Route.useLoaderData();
   const tab: TabId = search.tab ?? "overview";
 
+  const streamFragments = loaded.ok ? loaded.fragments : [];
+  const sources = loaded.ok ? loaded.sources : [];
   const tasks = model.tasks.filter((task) => task.streamKey === stream.key);
   const openBlockers = stream.blockedBy.filter((blocker) => !blocker.satisfied);
 
   // Open questions and assumptions frame the document rather than specify it, so
   // they read on Overview and are not part of the Specification's section list.
   const framing: readonly SectionId[] = ["open_questions", "assumptions"];
-  const specFragments = stream.fragments.filter((fragment) => !framing.includes(fragment.section));
+  const specFragments = streamFragments.filter((fragment) => !framing.includes(fragment.section));
   const groups = groupFragments(specFragments);
   const counts = Object.fromEntries(groups.map((group) => [group.section, group.items.length]));
   const shown = search.section
@@ -145,7 +160,7 @@ function StreamScreen({
               value: tasks.filter((task) => task.targets.length > 0).length,
               label: "Tasks with targets",
             },
-            { value: stream.sources.length, label: "Sources" },
+            { value: sources.length, label: "Sources" },
           ]}
         />
       </ContextBlock>
@@ -344,7 +359,7 @@ function StreamScreen({
               ) : null}
 
               {framing.map((section) => {
-                const items = stream.fragments.filter((fragment) => fragment.section === section);
+                const items = streamFragments.filter((fragment) => fragment.section === section);
                 if (items.length === 0) return null;
                 return (
                   <DocSection
@@ -401,10 +416,7 @@ function StreamScreen({
                         <SpecFragment
                           key={fragment.id}
                           fragment={fragment}
-                          implementedBy={
-                            model.implementedBy.get(fragmentAnchor(fragment.owner, fragment.id)) ??
-                            []
-                          }
+                          implementedBy={fragment.implementedBy}
                           onOpenEntity={nav.openPage}
                         />
                       ))}
@@ -419,8 +431,8 @@ function StreamScreen({
                 label="Sources"
                 hint="Immutable observations that claim evidence cites by id. A Source becomes stale only by being explicitly superseded by a newer one — never through age, which is why there is no age column anywhere."
               >
-                {stream.sources.length > 0 ? (
-                  stream.sources.map((source) => (
+                {sources.length > 0 ? (
+                  sources.map((source) => (
                     <div key={source.id} className="border-border border-b py-1.5 last:border-0">
                       <div className="flex items-center gap-2">
                         <span className="font-mono text-xs">{source.id}</span>
@@ -499,16 +511,16 @@ function TraceTab({
   readonly stream: StreamRow;
   readonly model: ProjectModel;
   readonly nav: EntityNav;
-  readonly specFragments: readonly SpecFragmentModel[];
+  readonly specFragments: readonly FetchedFragment[];
 }) {
   const tasks = model.tasks.filter((task) => task.streamKey === stream.key);
   const criteria = specFragments.filter((fragment) => fragment.section === "acceptance_criteria");
+  // Anything a Task could name, plus anything one actually did. The backlink travels
+  // with the fragment now, so this needs no project-wide index.
   const targetable = specFragments.filter(
     (fragment) =>
       fragment.section !== "acceptance_criteria" &&
-      (model.implementedBy.has(fragmentAnchor(fragment.owner, fragment.id)) ||
-        fragment.section === "functional" ||
-        fragment.section === "non_functional"),
+      (fragment.implementedBy.length > 0 || isTargetable(fragment.section)),
   );
 
   return (
@@ -526,7 +538,7 @@ function TraceTab({
           />
           <EntityTable
             label={`Requirements of ${stream.key}`}
-            columns={requirementColumns(model, criteria, nav)}
+            columns={requirementColumns(criteria, nav)}
             rows={targetable.map((fragment) => ({ key: fragment.id, fragment }))}
             defaultOrderLabel="Read-only · the keys are the links"
             emptyLabel="None"
@@ -543,7 +555,7 @@ function TraceTab({
           />
           <EntityTable
             label={`Acceptance criteria of ${stream.key}`}
-            columns={criterionColumns(model, nav)}
+            columns={criterionColumns(nav)}
             rows={criteria.map((fragment) => ({ key: fragment.id, fragment }))}
             defaultOrderLabel="Read-only · the keys are the links"
             emptyLabel="None"
@@ -567,12 +579,15 @@ function TraceTab({
   );
 }
 
+/** A fragment as the per-entity endpoint returns it: the model plus its backlinks. */
+type FetchedFragment = NonNullable<ReturnType<typeof useStreamFragments>>[number];
+
 interface FragmentCell {
   readonly key: string;
-  readonly fragment: SpecFragmentModel;
+  readonly fragment: FetchedFragment;
 }
 
-function statementOf(fragment: SpecFragmentModel): string {
+function statementOf(fragment: FetchedFragment): string {
   const { shape } = fragment;
   if (shape.kind === "statement") return shape.text;
   if (shape.kind === "criterion")
@@ -583,8 +598,7 @@ function statementOf(fragment: SpecFragmentModel): string {
 }
 
 function requirementColumns(
-  model: ProjectModel,
-  criteria: readonly SpecFragmentModel[],
+  criteria: readonly FetchedFragment[],
   nav: EntityNav,
 ): readonly Column<FragmentCell>[] {
   return [
@@ -637,8 +651,7 @@ function requirementColumns(
       width: 170,
       hint: "Tasks whose implements edge names this fragment. An empty cell means no Task references it — not that the work is missing.",
       render: (row) => {
-        const keys =
-          model.implementedBy.get(fragmentAnchor(row.fragment.owner, row.fragment.id)) ?? [];
+        const keys = row.fragment.implementedBy;
         return keys.length > 0 ? (
           <span className="flex flex-wrap gap-1.5">
             {keys.map((taskKey) => (
@@ -653,7 +666,7 @@ function requirementColumns(
   ];
 }
 
-function criterionColumns(model: ProjectModel, nav: EntityNav): readonly Column<FragmentCell>[] {
+function criterionColumns(nav: EntityNav): readonly Column<FragmentCell>[] {
   return [
     {
       id: "id",
@@ -700,8 +713,7 @@ function criterionColumns(model: ProjectModel, nav: EntityNav): readonly Column<
       label: "Implemented by",
       width: 170,
       render: (row) => {
-        const keys =
-          model.implementedBy.get(fragmentAnchor(row.fragment.owner, row.fragment.id)) ?? [];
+        const keys = row.fragment.implementedBy;
         return keys.length > 0 ? (
           <span className="flex flex-wrap gap-1.5">
             {keys.map((taskKey) => (
