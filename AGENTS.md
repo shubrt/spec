@@ -37,7 +37,6 @@ The rest of this document is meant to help you navigate the codebase and make ch
 - Complexity belongs at the adapter boundary. Orchestration stays pure, UI stays dumb.
 - Inferred types over annotations. `any` is the enemy.
 - Comments describe how a thing is used, and move when the code moves. To be used mostly to describe functions, not to annotate every line of behavior.
-- Technical and design decisions are the developer's to make. Offer the options and a recommendation, get an explicit choice, and only then build it — an open architectural or visual question is not settled by writing code for one of the answers.
 - If a rule here fights the task in front of you, say so loudly and get a human sign-off before breaking it.
 
 ## Additional tips
