@@ -143,6 +143,87 @@ function kindOf(
   return deltas.length > 0 ? "structure" : "text";
 }
 
+/** What one page of the log may be narrowed by, before it is cut. */
+export type RevisionFilter = {
+  readonly offset: number;
+  readonly limit: number;
+  /** `YYYY-MM-DD`, inclusive, compared in UTC. */
+  readonly from?: string;
+  readonly to?: string;
+  readonly entityType?: VersionedEntityType;
+  readonly kind?: RevisionKind;
+  readonly actor?: string;
+  readonly entityKey?: string;
+};
+
+export type RevisionPage = {
+  readonly revisions: readonly RevisionEntry[];
+  /** Matches after filtering, before the page was cut. */
+  readonly total: number;
+  readonly offset: number;
+  readonly limit: number;
+  /** Every actor in the filtered set, so a control cannot offer a vanishing option. */
+  readonly actors: readonly { readonly actor: string; readonly count: number }[];
+  readonly reasonCount: number;
+  readonly earliest: string | null;
+  readonly latest: string | null;
+};
+
+const day = (iso: string): string => iso.slice(0, 10);
+
+function matches(entry: RevisionEntry, filter: RevisionFilter): boolean {
+  if (filter.from && day(entry.createdAt) < filter.from) return false;
+  if (filter.to && day(entry.createdAt) > filter.to) return false;
+  if (filter.entityType && entry.entityType !== filter.entityType) return false;
+  if (filter.kind && entry.kind !== filter.kind) return false;
+  if (filter.actor && entry.changedBy !== filter.actor) return false;
+  if (filter.entityKey && entry.entityKey !== filter.entityKey) return false;
+  return true;
+}
+
+/**
+ * One page of the log, plus what a filter control needs to describe the whole of it.
+ *
+ * Filtering and paging happen after the diff because the diff is what `kind`
+ * classifies: "structure" is not a stored column, it is the outcome of comparing
+ * two snapshots. The cost is bounded by the project's history rather than by the
+ * page, which is the trade this makes deliberately — and it is why the page, not
+ * the log, is what crosses the wire.
+ */
+export async function loadRevisionPage(
+  scope: WorkspaceScope,
+  projectId: string,
+  filter: RevisionFilter,
+): Promise<RevisionPage> {
+  const all = await loadRevisionLog(scope, projectId);
+  const filtered = all.filter((entry) => matches(entry, filter));
+
+  const counts = new Map<string, number>();
+  for (const entry of filtered) {
+    counts.set(entry.changedBy, (counts.get(entry.changedBy) ?? 0) + 1);
+  }
+
+  const days = all.map((entry) => day(entry.createdAt)).sort();
+
+  return {
+    revisions: filtered.slice(filter.offset, filter.offset + filter.limit),
+    total: filtered.length,
+    offset: filter.offset,
+    limit: filter.limit,
+    actors: [...counts.entries()]
+      .map(([actor, count]) => ({ actor, count }))
+      .sort((left, right) => right.count - left.count),
+    reasonCount: new Set(
+      filtered.flatMap((entry) => (entry.changeReason ? [entry.changeReason] : [])),
+    ).size,
+    // The bounds of the whole log, not of the filtered set: they are the limits a
+    // date input should allow, and narrowing them to the current filter would make
+    // the control fight the filter it is part of.
+    earliest: days[0] ?? null,
+    latest: days.at(-1) ?? null,
+  };
+}
+
 /**
  * Every revision in one project, newest first.
  *
@@ -151,7 +232,7 @@ function kindOf(
  * is either a window function whose result still has to be walked, or one query
  * per entity.
  */
-export async function loadRevisionLog(
+async function loadRevisionLog(
   scope: WorkspaceScope,
   projectId: string,
 ): Promise<readonly RevisionEntry[]> {

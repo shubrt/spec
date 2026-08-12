@@ -230,6 +230,24 @@ export const IMPLEMENTS_FIELD_SECTIONS = {
   maintenance_goal_ids: ["maintenance_goals"],
 } as const satisfies Record<string, readonly SectionId[]>;
 
+/**
+ * The sections a Task's `implements` edge can actually point at.
+ *
+ * This is the whole list, derived from the fields above rather than written twice.
+ * It matters because an "Implemented by" row on a section outside it would claim an
+ * edge the schema cannot express: there is no `scope_ids` on a Task, so an empty
+ * row under a scope item would read as work nobody has picked up when in fact no
+ * Task could ever reference it. Empty cells that mean "impossible" are exactly the
+ * cells that get read as "missing".
+ */
+export const TARGETABLE_SECTIONS: ReadonlySet<SectionId> = new Set(
+  Object.values(IMPLEMENTS_FIELD_SECTIONS).flat(),
+);
+
+export function isTargetable(section: SectionId): boolean {
+  return TARGETABLE_SECTIONS.has(section);
+}
+
 /* ---------------------------------------------------------------- readers -- */
 
 const NO_MARKS: SpecMarks = {

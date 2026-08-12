@@ -54,6 +54,22 @@ export interface Column<Row extends TableRowShape> {
 
 type SortState = { readonly id: string; readonly direction: "asc" | "desc" };
 
+/**
+ * A page the server cut, rather than one this table sliced.
+ *
+ * Present means the rows given are already the page: the table renders them as
+ * they arrive and asks the caller for the next one. Column sorting disappears with
+ * it, deliberately — sorting the twenty rows in hand would reorder a page rather
+ * than the list, and a Revision column that sorts only what is on screen is worse
+ * than one that does not sort at all. The fixed order is stated instead.
+ */
+export interface ServerPagination {
+  readonly total: number;
+  readonly offset: number;
+  readonly limit: number;
+  readonly onChange: (next: { readonly offset: number; readonly limit: number }) => void;
+}
+
 function sortIndicator(direction: SortState["direction"]): string {
   return direction === "asc" ? "↑" : "↓";
 }
@@ -135,6 +151,7 @@ export function EntityTable<Row extends TableRowShape>({
   emptyLabel = "No items",
   emptyHint,
   initialPageSize = 20,
+  pagination,
 }: {
   /** Names the table for a screen reader. Every table on a screen needs its own. */
   readonly label: string;
@@ -150,6 +167,8 @@ export function EntityTable<Row extends TableRowShape>({
   readonly emptyLabel?: string;
   readonly emptyHint?: ReactNode;
   readonly initialPageSize?: number;
+  /** Set when the rows are one server-cut page. Disables client sorting and slicing. */
+  readonly pagination?: ServerPagination;
 }) {
   const [sort, setSort] = useState<SortState | null>(null);
   const [page, setPage] = useState(0);
@@ -171,8 +190,10 @@ export function EntityTable<Row extends TableRowShape>({
     setPage(0);
   };
 
+  const serverPaged = pagination !== undefined;
+
   let ordered: readonly Row[] = rows;
-  if (sort) {
+  if (sort && !serverPaged) {
     const column = columns.find((candidate) => candidate.id === sort.id);
     const read = column?.sort;
     if (read) {
@@ -188,7 +209,9 @@ export function EntityTable<Row extends TableRowShape>({
     }
   }
 
-  const visible = ordered.slice(page * pageSize, (page + 1) * pageSize);
+  // A server-cut page is already the page. Slicing it again would hide rows the
+  // server was asked for.
+  const visible = serverPaged ? ordered : ordered.slice(page * pageSize, (page + 1) * pageSize);
 
   const onRowKeyDown = (event: KeyboardEvent<HTMLTableRowElement>, key: string, index: number) => {
     if (!onSelect) return;
@@ -220,9 +243,10 @@ export function EntityTable<Row extends TableRowShape>({
           <TableRow>
             {columns.map((column) => {
               const active = sort?.id === column.id;
+              const sortable = column.sort !== undefined && !serverPaged;
               // The explanation lives on the header itself. A native title waits
               // for a deliberate hover, which is what an aside should do.
-              const tip = column.hint ?? (column.sort ? `Sort by ${column.label}` : undefined);
+              const tip = column.hint ?? (sortable ? `Sort by ${column.label}` : undefined);
               return (
                 <TableHead
                   key={column.id}
@@ -236,7 +260,7 @@ export function EntityTable<Row extends TableRowShape>({
                       column.align === "right" ? "justify-end" : "",
                     )}
                   >
-                    {column.sort ? (
+                    {sortable ? (
                       <button
                         type="button"
                         onClick={() => cycle(column)}
@@ -308,9 +332,23 @@ export function EntityTable<Row extends TableRowShape>({
         </TableBody>
       </Table>
 
-      {ordered.length === 0 ? <EmptyState label={emptyLabel} hint={emptyHint} /> : null}
+      {(serverPaged ? pagination.total : ordered.length) === 0 ? (
+        <EmptyState label={emptyLabel} hint={emptyHint} />
+      ) : null}
 
-      {ordered.length > 0 ? (
+      {serverPaged && pagination.total > 0 ? (
+        <Pagination
+          total={pagination.total}
+          page={Math.floor(pagination.offset / pagination.limit)}
+          pageSize={pagination.limit}
+          onPage={(next) =>
+            pagination.onChange({ offset: next * pagination.limit, limit: pagination.limit })
+          }
+          onPageSize={(size) => pagination.onChange({ offset: 0, limit: size })}
+        />
+      ) : null}
+
+      {!serverPaged && ordered.length > 0 ? (
         <Pagination
           total={ordered.length}
           page={page}
@@ -320,7 +358,7 @@ export function EntityTable<Row extends TableRowShape>({
         />
       ) : null}
 
-      {defaultOrderLabel && !sort ? (
+      {defaultOrderLabel && (serverPaged || !sort) ? (
         <div className="text-muted-foreground pt-1.5 text-[11px]">{defaultOrderLabel}</div>
       ) : null}
     </div>

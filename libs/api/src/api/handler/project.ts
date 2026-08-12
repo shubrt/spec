@@ -12,13 +12,16 @@ import {
   taskTypeSchema,
   versionedEntityTypeSchema,
 } from "../../domain/enums";
+import type { VersionedEntityType } from "../../domain/enums";
 import type { Epic } from "../../domain/repository/epic";
 import type { Milestone } from "../../domain/repository/milestone";
 import type { Rule } from "../../domain/repository/rule";
 import type { Stream } from "../../domain/repository/stream";
 import type { Task } from "../../domain/repository/task";
 import { loadProjectAggregate } from "../../domain/service/projectAggregate";
-import { loadRevisionLog } from "../../domain/service/revisionLog";
+import { pruneForAggregate } from "../../domain/service/readProjection";
+import { findProjectEntity } from "../../domain/service/projectEntity";
+import { loadRevisionPage } from "../../domain/service/revisionLog";
 import { authScope } from "../plugin/authScope";
 
 /**
@@ -178,8 +181,51 @@ const RevisionEntryDto = z.strictObject({
   createdAt: z.iso.datetime(),
 });
 
-const RevisionLogDto = z.strictObject({
+/**
+ * One page of the revision log.
+ *
+ * `total` is the count *after* filtering and before the page is cut, so the screen
+ * can say "26–50 of 590" without a second request — and so a filter that matches
+ * nothing is distinguishable from a page past the end.
+ *
+ * `actors` and `earliest`/`latest` describe the whole filtered set rather than the
+ * page. A filter control built from one page would offer options that vanish when
+ * you turn it, which is worse than no control.
+ */
+const RevisionPageDto = z.strictObject({
   revisions: z.array(RevisionEntryDto),
+  total: z.int().min(0),
+  offset: z.int().min(0),
+  limit: z.int().min(1),
+  actors: z.array(z.strictObject({ actor: z.string(), count: z.int().min(0) })),
+  reasonCount: z.int().min(0),
+  earliest: z.string().nullable(),
+  latest: z.string().nullable(),
+});
+
+/** What a revision page may be narrowed by. Every one is applied before paging. */
+const RevisionQuery = z.object({
+  offset: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(200).default(25),
+  from: z.string().optional(),
+  to: z.string().optional(),
+  entityType: versionedEntityTypeSchema.optional(),
+  kind: z.enum(["created", "status", "structure", "text"]).optional(),
+  actor: z.string().optional(),
+  entityKey: z.string().optional(),
+});
+
+const EntityDocumentDto = z.strictObject({
+  entityType: versionedEntityTypeSchema,
+  key: z.string(),
+  title: z.string(),
+  revision: z.int().positive(),
+  document: documentDto,
+});
+
+const EntityNotFoundDto = z.strictObject({
+  error: z.literal("entity_not_found"),
+  message: z.string(),
 });
 
 const ProjectNotFoundDto = z.strictObject({
@@ -192,14 +238,16 @@ const ProjectNotFoundDto = z.strictObject({
  * `JSON.stringify` would have done, so the DTO's `z.iso.datetime()` is the thing
  * that defines the wire format instead of describing an accident.
  */
-function entityFields(row: Epic | Stream | Task | Milestone | Rule) {
+function entityFields(entity: VersionedEntityType, row: Epic | Stream | Task | Milestone | Rule) {
   return {
     id: row.id,
     key: row.key,
     title: row.title,
     summary: row.summary,
     revision: row.revision,
-    document: row.document,
+    // Pruned, not reshaped. The sections nothing on the read surface renders are
+    // dropped here; `GET /entities/:key` still returns the document whole.
+    document: pruneForAggregate(entity, row.document),
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
   };
@@ -229,15 +277,15 @@ export const projectHandler = new Elysia({ prefix: "/workspace/projects" })
           updatedAt: aggregate.project.updatedAt.toISOString(),
         },
         epics: aggregate.epics.map((epicNode) => ({
-          ...entityFields(epicNode.epic),
+          ...entityFields("epic", epicNode.epic),
           status: epicNode.epic.status,
           streams: epicNode.streams.map((streamNode) => ({
-            ...entityFields(streamNode.stream),
+            ...entityFields("stream", streamNode.stream),
             epicId: streamNode.stream.epicId,
             status: streamNode.stream.status,
             streamType: streamNode.stream.streamType,
             tasks: streamNode.tasks.map((taskRow) => ({
-              ...entityFields(taskRow),
+              ...entityFields("task", taskRow),
               streamId: taskRow.streamId,
               status: taskRow.status,
               taskType: taskRow.taskType,
@@ -245,7 +293,7 @@ export const projectHandler = new Elysia({ prefix: "/workspace/projects" })
           })),
         })),
         milestones: aggregate.milestones.map((milestoneNode) => ({
-          ...entityFields(milestoneNode.milestone),
+          ...entityFields("milestone", milestoneNode.milestone),
           status: milestoneNode.milestone.status,
           roadmapOrder: milestoneNode.milestone.roadmapOrder,
           streams: milestoneNode.streams.map((streamRow) => ({
@@ -259,7 +307,7 @@ export const projectHandler = new Elysia({ prefix: "/workspace/projects" })
           })),
         })),
         rules: aggregate.rules.map((ruleRow) => ({
-          ...entityFields(ruleRow),
+          ...entityFields("rule", ruleRow),
           status: ruleRow.status,
         })),
         // Spread rather than passed through: the domain returns `readonly` arrays,
@@ -290,20 +338,48 @@ export const projectHandler = new Elysia({ prefix: "/workspace/projects" })
    */
   .get(
     "/:projectId/revisions",
-    async ({ scope, params }) => {
-      const revisions = await loadRevisionLog(scope, params.projectId);
+    async ({ scope, params, query }) => {
+      const page = await loadRevisionPage(scope, params.projectId, query);
       // Mapped rather than passed through, like every other DTO in this file. The
       // domain returns `readonly` arrays at both levels and Elysia's response type
       // is invariant in array mutability, so the nested one is copied too.
       return {
-        revisions: revisions.map((entry) => ({
+        ...page,
+        revisions: page.revisions.map((entry) => ({
           ...entry,
           sectionDeltas: [...entry.sectionDeltas],
         })),
+        actors: page.actors.map((entry) => ({ ...entry })),
       };
     },
     {
       params: z.strictObject({ projectId: z.uuid() }),
-      response: { 200: RevisionLogDto },
+      query: RevisionQuery,
+      response: { 200: RevisionPageDto },
+    },
+  )
+  /**
+   * One entity's document, whole.
+   *
+   * The aggregate carries a pruned copy — see `readProjection.ts` — so a screen
+   * that needs a section the aggregate drops asks for that one entity. It is one
+   * small request on a page that is already about one entity, rather than a cost
+   * every other screen pays on every navigation.
+   */
+  .get(
+    "/:projectId/entities/:key",
+    async ({ scope, params, status }) => {
+      const found = await findProjectEntity(scope, params.projectId, params.key);
+      if (!found) {
+        return status(404, {
+          error: "entity_not_found" as const,
+          message: "No entity with that key exists in this project.",
+        });
+      }
+      return found;
+    },
+    {
+      params: z.strictObject({ projectId: z.uuid(), key: z.string().min(1).max(128) }),
+      response: { 200: EntityDocumentDto, 404: EntityNotFoundDto },
     },
   );

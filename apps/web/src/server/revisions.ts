@@ -4,30 +4,62 @@ import { selectProject } from "~/lib/search";
 import { createApiClient } from "./api";
 
 /**
- * The revision log for one Project.
+ * One page of the revision log.
  *
- * A second server function rather than a field on the board aggregate, because the
- * cost profile is different: the aggregate is read on every navigation, the history
- * by the one screen that shows it. Only `/changes` asks for this.
+ * A separate server function rather than a field on the board aggregate, because
+ * the cost profile is different: the aggregate is read on every navigation, the
+ * history by the one screen that shows it — and that history is the only list in
+ * the product that grows without bound.
  *
- * The API has already diffed each revision against its predecessor, so what arrives
- * here is derived metadata and not several hundred document snapshots.
- *
- * It takes the same optional `?project=` the board takes and resolves it the same
- * way — through {@link selectProject}, falling back to the first project — because
- * a caller that had to resolve it first would need the project list, which is a
- * round trip this function is already making.
+ * Filtering and paging happen on the server, so the page carries the rows on screen
+ * rather than the whole log. The API has already diffed each revision against its
+ * predecessor, so what arrives is derived metadata and not several hundred document
+ * snapshots.
  */
 
-const EMPTY = { revisions: [] } as const;
+const ENTITY_TYPES = ["epic", "stream", "task", "milestone", "rule"] as const;
+const CHANGE_KINDS = ["created", "status", "structure", "text"] as const;
+
+/**
+ * The two enum-valued filters arrive from a URL a human can edit, so they are
+ * narrowed here rather than cast. An unrecognised value drops the filter instead of
+ * reaching the API as a 422 — a mistyped query parameter should show the unfiltered
+ * list, not an error page.
+ */
+const asEntityType = (value: string | undefined) =>
+  ENTITY_TYPES.find((candidate) => candidate === value);
+const asKind = (value: string | undefined) => CHANGE_KINDS.find((candidate) => candidate === value);
+
+export interface RevisionQuery {
+  readonly projectId?: string;
+  readonly offset?: number;
+  readonly limit?: number;
+  readonly from?: string;
+  readonly to?: string;
+  readonly entityType?: string;
+  readonly kind?: string;
+  readonly actor?: string;
+  readonly entityKey?: string;
+}
+
+const EMPTY = {
+  revisions: [],
+  total: 0,
+  offset: 0,
+  limit: 25,
+  actors: [],
+  reasonCount: 0,
+  earliest: null,
+  latest: null,
+} as const;
 
 export const getRevisions = createServerFn({ method: "GET" })
-  .validator((projectId?: string) => projectId)
-  .handler(async ({ data: projectId }) => {
+  .validator((query: RevisionQuery) => query)
+  .handler(async ({ data }) => {
     const { getToken } = await auth();
     const sessionToken = await getToken();
     // The root loader already reports a missing session as a failure state and
-    // this screen renders inside that, so an empty log is the right answer here
+    // this screen renders inside that, so an empty page is the right answer here
     // rather than a second copy of the same message.
     if (!sessionToken) return EMPTY;
 
@@ -37,15 +69,29 @@ export const getRevisions = createServerFn({ method: "GET" })
       const projectsResponse = await api.workspace.projects.get();
       if (projectsResponse.error) return EMPTY;
 
-      const selected = selectProject(projectsResponse.data.projects, projectId);
+      // Resolved the same way the board resolves it, so `?project=` being absent
+      // means the same project on both screens.
+      const selected = selectProject(projectsResponse.data.projects, data.projectId);
       if (!selected) return EMPTY;
 
-      const response = await api.workspace.projects({ projectId: selected.id }).revisions.get();
+      const response = await api.workspace.projects({ projectId: selected.id }).revisions.get({
+        query: {
+          offset: data.offset ?? 0,
+          limit: data.limit ?? 25,
+          from: data.from,
+          to: data.to,
+          entityType: asEntityType(data.entityType),
+          kind: asKind(data.kind),
+          actor: data.actor,
+          entityKey: data.entityKey,
+        },
+      });
       return response.error ? EMPTY : response.data;
     } catch {
       return EMPTY;
     }
   });
 
-/** The `revisions` array, projected off the API's own response type. */
-export type RevisionLog = Awaited<ReturnType<typeof getRevisions>>["revisions"];
+/** One page, projected off the API's own response type. */
+export type RevisionPage = Awaited<ReturnType<typeof getRevisions>>;
+export type RevisionLog = RevisionPage["revisions"];

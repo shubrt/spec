@@ -27,7 +27,7 @@ deployment:
 
 ```dotenv
 # Local development
-ZPECS_PUBLIC_URL="http://localhost:3003"
+ZPECS_PUBLIC_URL="http://localhost:3005"
 
 # Production (use the existing canonical web origin)
 ZPECS_PUBLIC_URL="https://zpecs.example.com"
@@ -117,7 +117,7 @@ of `VITE_CLERK_PUBLISHABLE_KEY` to the operator script under its
 
 ```bash
 CLERK_PUBLISHABLE_KEY=pk_test_... \
-ZPECS_BASE_URL=http://localhost:3003 \
+ZPECS_BASE_URL=http://localhost:3005 \
 ZPECS_ACCESS_TOKEN=... \
   libs/api/src/integration/clerk/verify.sh
 ```
@@ -170,7 +170,7 @@ commands are:
 ### Claude Code
 
 ```bash
-claude mcp add --transport http zpecs http://localhost:3003/mcp
+claude mcp add --transport http zpecs http://localhost:3005/mcp
 ```
 
 Complete consent and select an organization. To clear an old token or change
@@ -188,7 +188,7 @@ endpoint stay on the web origin.
 Add the server, then start OAuth explicitly:
 
 ```bash
-codex mcp add zpecs --url http://localhost:3003/mcp
+codex mcp add zpecs --url http://localhost:3005/mcp
 codex mcp login zpecs
 ```
 

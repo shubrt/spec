@@ -464,7 +464,9 @@ function openQuestionRows(model: ProjectModel): readonly QuestionRow[] {
       .map((fragment) => toQuestionRow(fragment, stream.epicKey)),
   );
   const fromTasks = model.tasks.flatMap((task) =>
-    task.openQuestions.map((fragment) => toQuestionRow(fragment, task.epicKey)),
+    task.fragments
+      .filter((fragment) => fragment.section === "open_questions")
+      .map((fragment) => toQuestionRow(fragment, task.epicKey)),
   );
   return [...fromStreams, ...fromTasks];
 }

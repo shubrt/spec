@@ -16,13 +16,7 @@ import { revisionKindLabel, revisionKindTone } from "~/components/zpecs/revision
 import { Screen } from "~/components/zpecs/screen";
 import { revisionRef, useEntityNav } from "~/lib/entityNav";
 import type { ProjectModel } from "~/lib/model";
-import {
-  actorTally,
-  applyRevisionFilters,
-  reasonCount,
-  toRevisionEntries,
-  type RevisionEntry,
-} from "~/lib/revisions";
+import { toRevisionEntries, type RevisionEntry } from "~/lib/revisions";
 import { carry, type RootSearch } from "~/lib/search";
 import { formatRevisionTime, keySequence } from "~/lib/vocabulary";
 import { getRevisions } from "~/server/revisions";
@@ -51,6 +45,9 @@ interface ChangesSearch extends RootSearch {
   readonly kind?: string;
   readonly actor?: string;
   readonly entity?: string;
+  /** Which page of the log. In the URL, so a page is a link like everything else. */
+  readonly offset?: number;
+  readonly limit?: number;
 }
 
 export const Route = createFileRoute("/changes")({
@@ -64,11 +61,23 @@ export const Route = createFileRoute("/changes")({
     kind: typeof search.kind === "string" ? search.kind : undefined,
     actor: typeof search.actor === "string" ? search.actor : undefined,
     entity: typeof search.entity === "string" ? search.entity : undefined,
+    offset: Number.isFinite(Number(search.offset)) ? Math.max(0, Number(search.offset)) : undefined,
+    limit: Number.isFinite(Number(search.limit)) ? Number(search.limit) : undefined,
   }),
-  loaderDeps: ({ search }) => ({ project: search.project }),
-  // `?project=` may be absent, in which case the server function falls back to the
-  // same first-project rule the board loader uses. Only this screen loads the log.
-  loader: ({ deps }) => getRevisions({ data: deps.project }),
+  // Every filter is a loader dependency, because filtering happens on the server:
+  // changing one asks for a different page rather than hiding rows already in hand.
+  loaderDeps: ({ search }) => ({
+    projectId: search.project,
+    offset: search.offset,
+    limit: search.limit,
+    from: search.from,
+    to: search.to,
+    entityType: search.type,
+    kind: search.kind,
+    actor: search.actor,
+    entityKey: search.entity,
+  }),
+  loader: ({ deps }) => getRevisions({ data: deps }),
   component: ChangesPage,
 });
 
@@ -98,21 +107,18 @@ function ChangesScreen({ model }: { readonly model: ProjectModel }) {
   const search = Route.useSearch();
   const rootSearch = useSearch({ from: "__root__" });
   const navigate = useNavigate({ from: Route.fullPath });
-  const loaded = Route.useLoaderData();
+  const page = Route.useLoaderData();
 
-  const all = useMemo(() => toRevisionEntries(loaded.revisions), [loaded.revisions]);
-  const rows = applyRevisionFilters(all, search);
+  const rows = useMemo(() => toRevisionEntries(page), [page]);
   const activeFilters = FILTER_KEYS.filter((key) => search[key] !== undefined).length;
 
+  // Changing a filter resets to the first page: page four of the old result is not
+  // page four of the new one, and landing past the end reads as "no matches".
   const set = (patch: Partial<ChangesSearch>) => {
-    void navigate({ search: (previous) => ({ ...previous, ...patch }) });
+    void navigate({ search: (previous) => ({ ...previous, ...patch, offset: undefined }) });
   };
 
-  const actors = actorTally(all);
-  const reasons = reasonCount(all);
-  const days = all.map((entry) => entry.day).filter((day) => day.length > 0);
-  const earliest = days.length > 0 ? days.reduce((min, day) => (day < min ? day : min)) : undefined;
-  const latest = days.length > 0 ? days.reduce((max, day) => (day > max ? day : max)) : undefined;
+  const { actors, reasonCount: reasons, earliest, latest, total } = page;
 
   const entityOptions = [
     ...model.epics.map((row) => ({ key: row.key, label: row.title })),
@@ -124,9 +130,7 @@ function ChangesScreen({ model }: { readonly model: ProjectModel }) {
     <div>
       <PageHead
         title="Recent changes"
-        count={
-          rows.length === all.length ? all.length : `${String(rows.length)} / ${String(all.length)}`
-        }
+        count={total}
         hint="Every stored Entity Revision, newest first. A revision is immutable and numbered; it is not an activity post. There is nothing here to approve, comment on or restore, and nothing tracks what you have already seen."
       >
         <ClearFilters
@@ -141,15 +145,15 @@ function ChangesScreen({ model }: { readonly model: ProjectModel }) {
         <DateField
           label="From"
           value={search.from}
-          min={earliest}
-          max={latest}
+          min={earliest ?? undefined}
+          max={latest ?? undefined}
           onChange={(value) => set({ from: value })}
         />
         <DateField
           label="To"
           value={search.to}
-          min={earliest}
-          max={latest}
+          min={earliest ?? undefined}
+          max={latest ?? undefined}
           onChange={(value) => set({ to: value })}
         />
         <PlainSelect
@@ -186,7 +190,7 @@ function ChangesScreen({ model }: { readonly model: ProjectModel }) {
       </FilterBar>
 
       <div className="text-muted-foreground py-2 text-[11px]">
-        {`${String(reasons)} recorded reasons stand behind ${String(all.length)} revisions — one reason often rewrites several entities at once. They stay separate on purpose: no change set is stored, so there is no batch to collapse them into.`}
+        {`${String(reasons)} recorded reasons stand behind ${String(total)} matching revisions — one reason often rewrites several entities at once. They stay separate on purpose: no change set is stored, so there is no batch to collapse them into.`}
       </div>
 
       <EntityTable
@@ -198,16 +202,27 @@ function ChangesScreen({ model }: { readonly model: ProjectModel }) {
           const entry = rows.find((candidate) => candidate.key === key);
           if (entry) nav.inspect(revisionRef(entry.entityKey, entry.revision));
         }}
-        defaultOrderLabel="Newest first · select a revision to open its diff"
+        defaultOrderLabel="Newest first, cut server-side · sorting is fixed because a column sort would reorder this page rather than the log"
         emptyLabel="No revision matches this filter"
         emptyHint="The filter is URL state, so this empty range is shareable. Clear it to see the whole log."
-        initialPageSize={25}
+        pagination={{
+          total,
+          offset: page.offset,
+          limit: page.limit,
+          onChange: (next) => {
+            void navigate({
+              search: (previous) => ({ ...previous, offset: next.offset, limit: next.limit }),
+            });
+          },
+        }}
       />
 
       {/* Resolving a revision needs the log, and only this screen loads it — so
           this screen mounts the revision-scoped Inspector. The one in the frame
-          owns every other target and ignores `rev:`, so only one is ever open. */}
-      <Inspector model={model} scope="revision" revisions={all} />
+          owns every other target and ignores `rev:`, so only one is ever open.
+          It can only resolve a revision on the page in hand, which is why a `rev:`
+          link lands here with its own page rather than anywhere else. */}
+      <Inspector model={model} scope="revision" revisions={rows} />
     </div>
   );
 }

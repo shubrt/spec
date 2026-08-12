@@ -149,8 +149,8 @@ cp .env.example .env
 vp run dev
 ```
 
-The default local origin is `http://localhost:3003`; its MCP endpoint is
-`http://localhost:3003/mcp`.
+The default local origin is `http://localhost:3005`; its MCP endpoint is
+`http://localhost:3005/mcp`.
 
 <!-- Usage -->
 

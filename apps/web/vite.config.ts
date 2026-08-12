@@ -8,7 +8,7 @@ import tsConfigPaths from "vite-tsconfig-paths";
 export default defineConfig({
   server: {
     // The web UI and MCP endpoint share this one local origin.
-    port: 3003,
+    port: 3005,
   },
   plugins: [
     tsConfigPaths({ projects: ["./tsconfig.json"] }),

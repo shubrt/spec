@@ -127,7 +127,12 @@ export function buildSearchIndex(model: ProjectModel): readonly SearchItem[] {
   // the fragment has no page of its own, and opening the entity that holds it is
   // the only honest destination.
   for (const fragment of model.fragments) {
-    const owner = model.streamByKey.get(fragment.owner);
+    // An owner can be an Epic, a Stream or a Milestone. Resolving only Streams left
+    // Epic scope items and Milestone exit criteria in the index with a blank path.
+    const owner =
+      model.streamByKey.get(fragment.owner) ??
+      model.epicByKey.get(fragment.owner) ??
+      model.milestoneByKey.get(fragment.owner);
     items.push({
       target: fragment.owner,
       display: fragmentAnchor(fragment.owner, fragment.id),

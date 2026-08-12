@@ -172,7 +172,8 @@ export interface TaskRow extends EntityCommon {
   readonly scope: readonly string[];
   readonly verificationCount: number;
   readonly doneWhenCount: number;
-  readonly openQuestions: readonly SpecFragmentModel[];
+  /** The Task's own open questions and assumptions. */
+  readonly fragments: readonly SpecFragmentModel[];
   readonly executable: boolean;
 }
 
@@ -499,9 +500,7 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
         scope: technicalScopeOf(content.technical_scope),
         verificationCount: countOf(content.verification),
         doneWhenCount: countOf(content.done_when),
-        openQuestions: readFragments(task.key, task.document).filter(
-          (fragment) => fragment.section === "open_questions",
-        ),
+        fragments: readFragments(task.key, task.document),
         // A blocked parent hides every Task under it from executable work,
         // whatever the Task's own status says.
         executable:
@@ -686,7 +685,16 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
     longestChain: longestBlockerChain(streamDependencies),
     collisions,
 
-    fragments: [...fragmentByAnchor.values()],
+    // Every addressable fragment in the Project, not just the Streams'. An Epic
+    // carries scope, outcomes and success metrics; a Milestone carries exit
+    // criteria. Leaving them out made "every typed fragment" a claim the index
+    // did not keep.
+    fragments: [
+      ...epics.flatMap((row) => row.fragments),
+      ...fragmentByAnchor.values(),
+      ...tasks.flatMap((row) => row.fragments),
+      ...milestones.flatMap((row) => [...row.exitCriteria, ...row.openQuestions]),
+    ],
     implementedBy,
     // Every entity is at revision N, which means N revision rows exist for it.
     // Summing avoids a second request for a number the payload already implies.

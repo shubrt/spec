@@ -1,12 +1,14 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { ChipFilter, ClearFilters, FilterBar, SearchField } from "~/components/zpecs/controls";
 import { EntityTable, type Column } from "~/components/zpecs/entity-table";
+import { Absent } from "~/components/zpecs/box";
 import { EntityKey, PageHead } from "~/components/zpecs/parts";
 import { Screen } from "~/components/zpecs/screen";
 import { useEntityNav, type EntityNav } from "~/lib/entityNav";
 import {
   SECTION_ORDER,
   fragmentAnchor,
+  isTargetable,
   sectionLabel,
   type SectionId,
   type SpecFragmentModel,
@@ -60,7 +62,8 @@ interface FragmentRow {
   readonly id: string;
   readonly section: SectionId;
   readonly excerpt: string;
-  readonly implementedBy: number;
+  /** `null` where the section is outside every `implements` namespace. */
+  readonly implementedBy: number | null;
 }
 
 function CriteriaScreen({ model }: { readonly model: ProjectModel }) {
@@ -77,11 +80,13 @@ function CriteriaScreen({ model }: { readonly model: ProjectModel }) {
     return {
       key: anchor,
       owner: fragment.owner,
-      ownerTitle: model.streamByKey.get(fragment.owner)?.title ?? "",
+      ownerTitle: ownerTitleOf(model, fragment.owner),
       id: fragment.id,
       section: fragment.section,
       excerpt: excerptOf(fragment),
-      implementedBy: model.implementedBy.get(anchor)?.length ?? 0,
+      implementedBy: isTargetable(fragment.section)
+        ? (model.implementedBy.get(anchor)?.length ?? 0)
+        : null,
     };
   });
 
@@ -175,7 +180,7 @@ function fragmentColumns(nav: EntityNav): readonly Column<FragmentRow>[] {
           }}
         />
       ),
-      hint: "The Stream that holds this fragment. Fragments live inside their owner — they are not project-level objects, and they have no page of their own.",
+      hint: "The entity that holds this fragment — an Epic, a Stream or a Milestone. Fragments live inside their owner: they are not project-level objects and they have no page of their own.",
     },
     {
       id: "id",
@@ -208,11 +213,24 @@ function fragmentColumns(nav: EntityNav): readonly Column<FragmentRow>[] {
       width: 132,
       align: "right",
       cellClass: "font-mono text-xs tabular-nums",
-      sort: (row) => row.implementedBy,
-      render: (row) => row.implementedBy,
-      hint: "Tasks whose implements edge names this fragment. Zero means no Task references it — which is a fact about the references, not a verdict on whether the work exists.",
+      sort: (row) => row.implementedBy ?? -1,
+      // A dash is not a zero. Zero means no Task named a fragment that one could
+      // have named; the dash means the section is outside every `implements`
+      // namespace, so no Task could ever point at it.
+      render: (row) => (row.implementedBy === null ? <Absent label="—" /> : row.implementedBy),
+      hint: "Tasks whose implements edge names this fragment. Zero means no Task references it, which is a fact about the references rather than a verdict on the work. A dash means the section is not a targetable namespace at all — a Task has no field that could name it.",
     },
   ];
+}
+
+/** An owner can be an Epic, a Stream or a Milestone, so all three are resolved. */
+function ownerTitleOf(model: ProjectModel, owner: string): string {
+  return (
+    model.streamByKey.get(owner)?.title ??
+    model.epicByKey.get(owner)?.title ??
+    model.milestoneByKey.get(owner)?.title ??
+    ""
+  );
 }
 
 /** One line of a fragment, whatever shape it is in. */
