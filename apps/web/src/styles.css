@@ -1,44 +1,72 @@
-@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap");
 @import "tailwindcss";
-@import "tw-animate-css";
 
-@custom-variant dark (&:is(.dark *));
-
-/* Design tokens ported from the Claude Design source (Zpecs PM.dc.html),
-   mapped onto shadcn's variable names. */
+/**
+ * Operational Ledger theme tokens.
+ *
+ * A register has 0–2 px corners, hairline rules, black fills and exactly four
+ * semantic colours. The neutral ramp is untinted (`oklch(L 0 0)`) so nothing on
+ * screen carries a hue it did not earn: colour is reserved for the four states
+ * a reader has to tell apart at a glance, and everything else is greyscale.
+ *
+ * Two pairs are deliberately not what stock shadcn ships:
+ *
+ *   --foreground / --primary   Body text sits at 0.205 and black fills at 0.145.
+ *                              Text is never the darkest thing on the page; a
+ *                              filled control is.
+ *   --accent / --muted         Selection is the *darker* surface (0.94) and
+ *                              hover the lighter one (0.97). Stock has these the
+ *                              other way round, which makes a hovered row look
+ *                              selected.
+ *
+ * --border-strong is the structural rule (0.87) against the 0.922 hairline. A
+ * table's header rule, a section boundary and a panel edge are structure; the
+ * line between two rows is not.
+ */
 :root {
-  --radius: 0.75rem;
+  --radius: 0.125rem;
 
-  --background: #f7f7f8;
-  --foreground: #1b1b1f;
-  --card: #ffffff;
-  --card-foreground: #1b1b1f;
-  --popover: #ffffff;
-  --popover-foreground: #1b1b1f;
-  --primary: #5b5bd6;
-  --primary-foreground: #ffffff;
-  --secondary: #f0f0f1;
-  --secondary-foreground: #4a4a50;
-  --muted: #f0f0f1;
-  --muted-foreground: #8b8b92;
-  --accent: oklch(0.96 0.03 276);
-  --accent-foreground: oklch(0.45 0.14 276);
-  --destructive: oklch(0.58 0.19 25);
-  --destructive-foreground: #ffffff;
-  --border: #ececed;
-  --input: #e4e4e6;
-  --ring: #5b5bd6;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.205 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.205 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.205 0 0);
+  --primary: oklch(0.145 0 0);
+  --primary-foreground: oklch(1 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.94 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.52 0.19 27);
+  --border: oklch(0.922 0 0);
+  --border-strong: oklch(0.87 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.145 0 0);
 
-  --sidebar: #fbfbfc;
-  --sidebar-foreground: #4a4a50;
-  --sidebar-primary: #5b5bd6;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: oklch(0.96 0.03 276);
-  --sidebar-accent-foreground: oklch(0.45 0.14 276);
-  --sidebar-border: #ececed;
-  --sidebar-ring: #5b5bd6;
+  /* Green finished, blue startable, amber running, red stopped. Each carries a
+     -soft companion, which is the only fill a Box ever uses: a saturated fill
+     behind 13 px text stops being readable, and these columns are read, not
+     glanced at. */
+  --success: oklch(0.5 0.11 155);
+  --success-soft: oklch(0.965 0.022 155);
+  --warning: oklch(0.5 0.1 68);
+  --warning-soft: oklch(0.965 0.03 78);
+  --info: oklch(0.48 0.13 252);
+  --info-soft: oklch(0.965 0.022 252);
+  --danger: oklch(0.48 0.18 27);
+  --danger-soft: oklch(0.965 0.028 27);
 
-  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.205 0 0);
+  --sidebar-primary: oklch(0.145 0 0);
+  --sidebar-primary-foreground: oklch(1 0 0);
+  --sidebar-accent: oklch(0.94 0 0);
+  --sidebar-accent-foreground: oklch(0.205 0 0);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.145 0 0);
 }
 
 @theme inline {
@@ -57,10 +85,20 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-input: var(--input);
   --color-ring: var(--ring);
+
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-info: var(--info);
+  --color-info-soft: var(--info-soft);
+  --color-danger: var(--danger);
+  --color-danger-soft: var(--danger-soft);
+
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -70,121 +108,39 @@
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
 
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
+  /* Scaled off --radius rather than offset from it: at 0.125rem an offset of
+     ±4 px produces a negative radius for `sm` and a 6 px one for `xl`, which is
+     three unrelated corner sizes on one screen. */
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  --radius-xl: calc(var(--radius) * 1.4);
 
-  --font-mono: var(--font-mono);
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* The two type steps the ledger runs on: 13/18 for a dense row and 11/16 for
+     a table header. Both are tokens rather than arbitrary values so a row and a
+     drawer cannot drift apart by a pixel. */
+  --text-ledger: 0.8125rem;
+  --text-ledger--line-height: 1.125rem;
+  --text-micro: 0.6875rem;
+  --text-micro--line-height: 1rem;
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    border-color: var(--border);
   }
   body {
-    @apply bg-background text-foreground;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
-    line-height: 1.45;
-  }
-}
-
-/* Status + priority tone system — colors kept verbatim from the design. Applied
-   via data-tone / data-priority attributes so a single Badge/dot renders every
-   state. */
-@layer components {
-  .tone-dot {
-    display: inline-block;
-    width: 0.5rem;
-    height: 0.5rem;
-    border-radius: 9999px;
-    flex: none;
-    background: var(--muted-foreground);
-  }
-  .tone-dot[data-tone="in_progress"],
-  .tone-dot[data-tone="active"] {
-    background: oklch(0.6 0.15 250);
-  }
-  .tone-dot[data-tone="blocked"] {
-    background: oklch(0.62 0.19 25);
-  }
-  .tone-dot[data-tone="done"] {
-    background: oklch(0.62 0.14 155);
   }
 
-  .tone-pill {
-    background: #efeff0;
-    color: #6c6c74;
-    border-color: transparent;
-  }
-  .tone-pill[data-tone="in_progress"],
-  .tone-pill[data-tone="active"] {
-    background: oklch(0.96 0.03 250);
-    color: oklch(0.45 0.13 250);
-  }
-  .tone-pill[data-tone="blocked"] {
-    background: oklch(0.95 0.04 25);
-    color: oklch(0.5 0.17 25);
-  }
-  .tone-pill[data-tone="done"] {
-    background: oklch(0.95 0.05 155);
-    color: oklch(0.42 0.12 155);
-  }
-
-  .ptag {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.03em;
-    text-transform: uppercase;
-    color: var(--muted-foreground);
-  }
-  .ptag[data-priority="medium"] {
-    color: oklch(0.55 0.13 250);
-  }
-  .ptag[data-priority="high"] {
-    color: oklch(0.56 0.14 65);
-  }
-  .ptag[data-priority="urgent"] {
-    color: oklch(0.58 0.19 25);
-  }
-
-  .prio-border {
-    border-top: 2px solid transparent;
-  }
-  .prio-border[data-priority="urgent"] {
-    border-top-color: oklch(0.6 0.19 25);
-  }
-  .prio-border[data-priority="high"] {
-    border-top-color: oklch(0.65 0.14 65);
-  }
-  .prio-border[data-priority="medium"] {
-    border-top-color: oklch(0.6 0.13 250);
-  }
-  .prio-border[data-priority="low"] {
-    border-top-color: #c9c9ce;
-  }
-
-  .prio-fill[data-priority="low"] {
-    background: #b6b6bd;
-  }
-  .prio-fill[data-priority="medium"] {
-    background: oklch(0.6 0.13 250);
-  }
-  .prio-fill[data-priority="high"] {
-    background: oklch(0.65 0.14 65);
-  }
-  .prio-fill[data-priority="urgent"] {
-    background: oklch(0.6 0.19 25);
-  }
-
-  .rule-tag {
-    font-family: var(--font-mono);
-    font-size: 10.5px;
-    background: var(--accent);
-    color: var(--accent-foreground);
-    padding: 2px 6px;
-    border-radius: 5px;
-    white-space: nowrap;
+  /* Keyboard focus is a black ring with a white gap, everywhere. */
+  :focus-visible {
+    outline: none;
   }
 }

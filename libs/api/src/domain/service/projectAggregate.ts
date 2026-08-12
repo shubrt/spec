@@ -1,4 +1,6 @@
 import type { WorkspaceScope } from "../auth/workspaceScope";
+import type { LinkableEntityType, RelationshipType } from "../enums";
+import { entityLinkRepository } from "../repository/entityLink";
 import { type Epic, epicRepository } from "../repository/epic";
 import { type Milestone, milestoneRepository } from "../repository/milestone";
 import { type Rule, ruleRepository } from "../repository/rule";
@@ -64,11 +66,35 @@ export type MilestoneNode = {
   readonly streams: readonly MilestoneStreamNode[];
 };
 
+/**
+ * One stored link, both endpoints named by their public key.
+ *
+ * `relationship` is carried verbatim rather than reduced to "blocks / does not
+ * block": `blocked_by` claims an order and the other six do not, and a reader has
+ * to be able to tell a prerequisite from an `extends` at a glance. Collapsing them
+ * would let a semantic relation be drawn as a blocker.
+ *
+ * Stored direction only. `entity_link` holds `blocked_by` and never `blocks`, so
+ * `source` is the *dependent* and `target` is the *prerequisite*; a consumer that
+ * wants the other direction reverses the pair rather than reading a second row
+ * that could disagree with the first.
+ */
+export type ProjectLink = {
+  readonly sourceType: LinkableEntityType;
+  readonly sourceKey: string;
+  readonly targetType: LinkableEntityType;
+  readonly targetKey: string;
+  readonly relationship: RelationshipType;
+  /** Why this link exists, in the author's words (domain spec §5.5). */
+  readonly reason: string | null;
+};
+
 export type ProjectAggregate = {
   readonly project: Project;
   readonly epics: readonly EpicNode[];
   readonly milestones: readonly MilestoneNode[];
   readonly rules: readonly Rule[];
+  readonly links: readonly ProjectLink[];
 };
 
 /**
@@ -102,13 +128,14 @@ export async function loadProjectAggregate(
 
   // The entity reads do not depend on one another — each filters on
   // `(workspace_id, project_id)` directly — so they go out together and cost one
-  // round trip's latency rather than five.
-  const [epics, streams, tasks, milestones, rules] = await Promise.all([
+  // round trip's latency rather than six.
+  const [epics, streams, tasks, milestones, rules, links] = await Promise.all([
     epicRepository.listByProject(scope, projectId),
     streamRepository.listByProject(scope, projectId),
     taskRepository.listByProject(scope, projectId),
     milestoneRepository.listByProject(scope, projectId),
     ruleRepository.listByProject(scope, projectId),
+    entityLinkRepository.listByProject(scope, projectId),
   ]);
 
   const streamsByEpic = groupBy(streams, (row) => row.epicId);
@@ -144,9 +171,33 @@ export async function loadProjectAggregate(
     );
   }
 
+  // `entity_link` endpoints carry no foreign key, so a link can outlive the
+  // entity it points at — the change-set engine owns that cleanup, and a read
+  // path must not answer "blocked by" with a row it cannot name. An edge with an
+  // unresolvable end is dropped here rather than surfaced with a blank key.
+  const keyById = new Map<string, string>();
+  for (const row of [...epics, ...streams, ...tasks, ...rules]) {
+    keyById.set(row.id, row.key);
+  }
+
   return {
     project,
     rules,
+    links: links.flatMap((row) => {
+      const sourceKey = keyById.get(row.sourceId);
+      const targetKey = keyById.get(row.targetId);
+      if (sourceKey === undefined || targetKey === undefined) return [];
+      return [
+        {
+          sourceType: row.sourceType,
+          sourceKey,
+          targetType: row.targetType,
+          targetKey,
+          relationship: row.relationshipType,
+          reason: row.reason,
+        },
+      ];
+    }),
     milestones: milestones.map((milestoneRow) => ({
       milestone: milestoneRow,
       streams: streamsByMilestone.get(milestoneRow.id) ?? [],

@@ -10,10 +10,17 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ChangesRouteImport } from './routes/changes'
 import { Route as ConnectionRouteImport } from './routes/connection'
+import { Route as CriteriaRouteImport } from './routes/criteria'
 import { Route as EpicsRouteImport } from './routes/epics'
+import { Route as FocusRouteImport } from './routes/focus'
 import { Route as RoadmapRouteImport } from './routes/roadmap'
 import { Route as RulesRouteImport } from './routes/rules'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as StreamsRouteImport } from './routes/streams'
+import { Route as TasksRouteImport } from './routes/tasks'
+import { Route as TraceRouteImport } from './routes/trace'
 import { Route as EpicEpicKeyRouteImport } from './routes/epic.$epicKey'
 import { Route as MilestoneMilestoneKeyRouteImport } from './routes/milestone.$milestoneKey'
 import { Route as RuleRuleKeyRouteImport } from './routes/rule.$ruleKey'
@@ -26,14 +33,29 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChangesRoute = ChangesRouteImport.update({
+  id: '/changes',
+  path: '/changes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ConnectionRoute = ConnectionRouteImport.update({
   id: '/connection',
   path: '/connection',
   getParentRoute: () => rootRouteImport,
 } as any)
+const CriteriaRoute = CriteriaRouteImport.update({
+  id: '/criteria',
+  path: '/criteria',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EpicsRoute = EpicsRouteImport.update({
   id: '/epics',
   path: '/epics',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FocusRoute = FocusRouteImport.update({
+  id: '/focus',
+  path: '/focus',
   getParentRoute: () => rootRouteImport,
 } as any)
 const RoadmapRoute = RoadmapRouteImport.update({
@@ -44,6 +66,26 @@ const RoadmapRoute = RoadmapRouteImport.update({
 const RulesRoute = RulesRouteImport.update({
   id: '/rules',
   path: '/rules',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StreamsRoute = StreamsRouteImport.update({
+  id: '/streams',
+  path: '/streams',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TasksRoute = TasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TraceRoute = TraceRouteImport.update({
+  id: '/trace',
+  path: '/trace',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EpicEpicKeyRoute = EpicEpicKeyRouteImport.update({
@@ -79,10 +121,17 @@ const TaskTaskKeyRoute = TaskTaskKeyRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/changes': typeof ChangesRoute
   '/connection': typeof ConnectionRoute
+  '/criteria': typeof CriteriaRoute
   '/epics': typeof EpicsRoute
+  '/focus': typeof FocusRoute
   '/roadmap': typeof RoadmapRoute
   '/rules': typeof RulesRoute
+  '/settings': typeof SettingsRoute
+  '/streams': typeof StreamsRoute
+  '/tasks': typeof TasksRoute
+  '/trace': typeof TraceRoute
   '/epic/$epicKey': typeof EpicEpicKeyRoute
   '/milestone/$milestoneKey': typeof MilestoneMilestoneKeyRoute
   '/rule/$ruleKey': typeof RuleRuleKeyRoute
@@ -92,10 +141,17 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/changes': typeof ChangesRoute
   '/connection': typeof ConnectionRoute
+  '/criteria': typeof CriteriaRoute
   '/epics': typeof EpicsRoute
+  '/focus': typeof FocusRoute
   '/roadmap': typeof RoadmapRoute
   '/rules': typeof RulesRoute
+  '/settings': typeof SettingsRoute
+  '/streams': typeof StreamsRoute
+  '/tasks': typeof TasksRoute
+  '/trace': typeof TraceRoute
   '/epic/$epicKey': typeof EpicEpicKeyRoute
   '/milestone/$milestoneKey': typeof MilestoneMilestoneKeyRoute
   '/rule/$ruleKey': typeof RuleRuleKeyRoute
@@ -106,10 +162,17 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/changes': typeof ChangesRoute
   '/connection': typeof ConnectionRoute
+  '/criteria': typeof CriteriaRoute
   '/epics': typeof EpicsRoute
+  '/focus': typeof FocusRoute
   '/roadmap': typeof RoadmapRoute
   '/rules': typeof RulesRoute
+  '/settings': typeof SettingsRoute
+  '/streams': typeof StreamsRoute
+  '/tasks': typeof TasksRoute
+  '/trace': typeof TraceRoute
   '/epic/$epicKey': typeof EpicEpicKeyRoute
   '/milestone/$milestoneKey': typeof MilestoneMilestoneKeyRoute
   '/rule/$ruleKey': typeof RuleRuleKeyRoute
@@ -121,10 +184,17 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/changes'
     | '/connection'
+    | '/criteria'
     | '/epics'
+    | '/focus'
     | '/roadmap'
     | '/rules'
+    | '/settings'
+    | '/streams'
+    | '/tasks'
+    | '/trace'
     | '/epic/$epicKey'
     | '/milestone/$milestoneKey'
     | '/rule/$ruleKey'
@@ -134,10 +204,17 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/changes'
     | '/connection'
+    | '/criteria'
     | '/epics'
+    | '/focus'
     | '/roadmap'
     | '/rules'
+    | '/settings'
+    | '/streams'
+    | '/tasks'
+    | '/trace'
     | '/epic/$epicKey'
     | '/milestone/$milestoneKey'
     | '/rule/$ruleKey'
@@ -147,10 +224,17 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/changes'
     | '/connection'
+    | '/criteria'
     | '/epics'
+    | '/focus'
     | '/roadmap'
     | '/rules'
+    | '/settings'
+    | '/streams'
+    | '/tasks'
+    | '/trace'
     | '/epic/$epicKey'
     | '/milestone/$milestoneKey'
     | '/rule/$ruleKey'
@@ -161,10 +245,17 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ChangesRoute: typeof ChangesRoute
   ConnectionRoute: typeof ConnectionRoute
+  CriteriaRoute: typeof CriteriaRoute
   EpicsRoute: typeof EpicsRoute
+  FocusRoute: typeof FocusRoute
   RoadmapRoute: typeof RoadmapRoute
   RulesRoute: typeof RulesRoute
+  SettingsRoute: typeof SettingsRoute
+  StreamsRoute: typeof StreamsRoute
+  TasksRoute: typeof TasksRoute
+  TraceRoute: typeof TraceRoute
   EpicEpicKeyRoute: typeof EpicEpicKeyRoute
   MilestoneMilestoneKeyRoute: typeof MilestoneMilestoneKeyRoute
   RuleRuleKeyRoute: typeof RuleRuleKeyRoute
@@ -182,6 +273,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/changes': {
+      id: '/changes'
+      path: '/changes'
+      fullPath: '/changes'
+      preLoaderRoute: typeof ChangesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/connection': {
       id: '/connection'
       path: '/connection'
@@ -189,11 +287,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ConnectionRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/criteria': {
+      id: '/criteria'
+      path: '/criteria'
+      fullPath: '/criteria'
+      preLoaderRoute: typeof CriteriaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/epics': {
       id: '/epics'
       path: '/epics'
       fullPath: '/epics'
       preLoaderRoute: typeof EpicsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/focus': {
+      id: '/focus'
+      path: '/focus'
+      fullPath: '/focus'
+      preLoaderRoute: typeof FocusRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/roadmap': {
@@ -208,6 +320,34 @@ declare module '@tanstack/react-router' {
       path: '/rules'
       fullPath: '/rules'
       preLoaderRoute: typeof RulesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/streams': {
+      id: '/streams'
+      path: '/streams'
+      fullPath: '/streams'
+      preLoaderRoute: typeof StreamsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/tasks': {
+      id: '/tasks'
+      path: '/tasks'
+      fullPath: '/tasks'
+      preLoaderRoute: typeof TasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/trace': {
+      id: '/trace'
+      path: '/trace'
+      fullPath: '/trace'
+      preLoaderRoute: typeof TraceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/epic/$epicKey': {
@@ -257,10 +397,17 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ChangesRoute: ChangesRoute,
   ConnectionRoute: ConnectionRoute,
+  CriteriaRoute: CriteriaRoute,
   EpicsRoute: EpicsRoute,
+  FocusRoute: FocusRoute,
   RoadmapRoute: RoadmapRoute,
   RulesRoute: RulesRoute,
+  SettingsRoute: SettingsRoute,
+  StreamsRoute: StreamsRoute,
+  TasksRoute: TasksRoute,
+  TraceRoute: TraceRoute,
   EpicEpicKeyRoute: EpicEpicKeyRoute,
   MilestoneMilestoneKeyRoute: MilestoneMilestoneKeyRoute,
   RuleRuleKeyRoute: RuleRuleKeyRoute,

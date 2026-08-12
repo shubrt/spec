@@ -313,6 +313,36 @@ async function edgesForProject(
   return rows;
 }
 
+/**
+ * Every link of one project, in every relationship type, endpoints unresolved.
+ *
+ * The read side needs the whole graph rather than `blocked_by` alone: a
+ * dependency and a semantic relation are drawn differently and must not be
+ * confused, which is only possible if both are on the wire with their type
+ * intact. `edgesForProject` stays narrowed to `blocked_by` because a cycle check
+ * must not be widened by accident; this is the other question.
+ *
+ * Endpoints are returned as `(type, id)` pairs and not joined to their rows. The
+ * one caller — `loadProjectAggregate` — has already read every epic, stream, task
+ * and rule of the project, so resolving an id to a key is a map lookup there
+ * against four `LEFT JOIN`s here.
+ *
+ * Ordered by creation so the same graph always produces the same reading order;
+ * `id` breaks the tie, since two links created in one transaction share a
+ * timestamp.
+ */
+async function listByProject(
+  scope: WorkspaceScope,
+  projectId: string,
+  executor: DbExecutor = db,
+): Promise<readonly EntityLink[]> {
+  return await executor
+    .select()
+    .from(entityLink)
+    .where(and(eq(entityLink.workspaceId, scope), eq(entityLink.projectId, projectId)))
+    .orderBy(asc(entityLink.createdAt), asc(entityLink.id));
+}
+
 async function find(
   scope: WorkspaceScope,
   normalized: NormalizedLink,
@@ -342,4 +372,5 @@ export const entityLinkRepository = {
   hasLinks,
   moveSubtreeLinks,
   edgesForProject,
+  listByProject,
 };
