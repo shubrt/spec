@@ -35,6 +35,16 @@ export const UNKNOWN_RULE =
   "result; a confident guess is a defect that outlives the conversation.";
 
 /**
+ * Domain spec §13: the decision itself is the user's, not the agent's. Kept next
+ * to `UNKNOWN_RULE` because it is the same failure one step further along — an
+ * invented answer rather than an invented requirement.
+ */
+export const DECISION_RULE =
+  "Technical and design decisions are the user's to make. Offer the options and a " +
+  "recommendation, get an explicit choice, and only then record it — an unchosen decision " +
+  "is an open question.";
+
+/**
  * The MVP's only gate on destructive operations (global constraints: no role
  * gating). **Per operation, not per call:** a flag on the tool would be demanded
  * even by a change set that only creates, and a reflexive confirmation is not

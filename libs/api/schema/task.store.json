@@ -232,6 +232,7 @@
               }
             },
             "technical_decisions": {
+              "description": "[decisions_need_user_input] A technical or design decision becomes document content only after the user has chosen it. Offer the options with a recommendation and ask; keep an unchosen decision in content.open_questions instead of content.implementation.technical_decisions.",
               "type": "array",
               "items": {
                 "type": "object",
