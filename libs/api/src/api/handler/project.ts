@@ -2,12 +2,15 @@ import Elysia from "elysia";
 import { z } from "zod";
 import {
   epicStatusSchema,
+  linkableEntityTypeSchema,
   milestoneStatusSchema,
+  relationshipTypeSchema,
   ruleStatusSchema,
   streamStatusSchema,
   streamTypeSchema,
   taskStatusSchema,
   taskTypeSchema,
+  versionedEntityTypeSchema,
 } from "../../domain/enums";
 import type { Epic } from "../../domain/repository/epic";
 import type { Milestone } from "../../domain/repository/milestone";
@@ -15,6 +18,7 @@ import type { Rule } from "../../domain/repository/rule";
 import type { Stream } from "../../domain/repository/stream";
 import type { Task } from "../../domain/repository/task";
 import { loadProjectAggregate } from "../../domain/service/projectAggregate";
+import { loadRevisionLog } from "../../domain/service/revisionLog";
 import { authScope } from "../plugin/authScope";
 
 /**
@@ -121,11 +125,61 @@ const ProjectDto = z.strictObject({
   updatedAt: z.iso.datetime(),
 });
 
+/**
+ * One stored relationship, both ends named by public key.
+ *
+ * `relationship` is on the wire verbatim. `blocked_by` is the only type that
+ * claims an order, and a client that cannot tell it from `related_to` would have
+ * to either draw every link as a blocker or draw none of them — both of which
+ * misreport the graph.
+ */
+const ProjectLinkDto = z.strictObject({
+  sourceType: linkableEntityTypeSchema,
+  sourceKey: z.string(),
+  targetType: linkableEntityTypeSchema,
+  targetKey: z.string(),
+  relationship: relationshipTypeSchema,
+  reason: z.string().nullable(),
+});
+
 const ProjectAggregateDto = z.strictObject({
   project: ProjectDto,
   epics: z.array(EpicDto),
   milestones: z.array(MilestoneDto),
   rules: z.array(RuleDto),
+  links: z.array(ProjectLinkDto),
+});
+
+/** Entry counts for one section of the document, before and after. */
+const SectionDeltaDto = z.strictObject({
+  section: z.string(),
+  from: z.int().min(0),
+  to: z.int().min(0),
+});
+
+/**
+ * One revision, already diffed.
+ *
+ * The document snapshots that produced `sectionDeltas` stay on the server: a
+ * client that received them would be holding the project's entire history to
+ * answer a question the server had both sides of.
+ */
+const RevisionEntryDto = z.strictObject({
+  entityType: versionedEntityTypeSchema,
+  entityKey: z.string(),
+  title: z.string(),
+  revision: z.int().positive(),
+  kind: z.enum(["created", "status", "structure", "text"]),
+  status: z.string(),
+  statusChanged: z.boolean(),
+  sectionDeltas: z.array(SectionDeltaDto),
+  changedBy: z.string(),
+  changeReason: z.string().nullable(),
+  createdAt: z.iso.datetime(),
+});
+
+const RevisionLogDto = z.strictObject({
+  revisions: z.array(RevisionEntryDto),
 });
 
 const ProjectNotFoundDto = z.strictObject({
@@ -151,68 +205,105 @@ function entityFields(row: Epic | Stream | Task | Milestone | Rule) {
   };
 }
 
-export const projectHandler = new Elysia({ prefix: "/workspace/projects" }).use(authScope).get(
-  "/:projectId",
-  async ({ scope, params, status }) => {
-    const aggregate = await loadProjectAggregate(scope, params.projectId);
-    if (!aggregate) {
-      // A project id from another tenant is answered identically to one that does
-      // not exist — the scope is inside the `WHERE`, so the two are not
-      // distinguishable here and must not become distinguishable by accident.
-      return status(404, {
-        error: "project_not_found" as const,
-        message: "No project with that id exists in this workspace.",
-      });
-    }
+export const projectHandler = new Elysia({ prefix: "/workspace/projects" })
+  .use(authScope)
+  .get(
+    "/:projectId",
+    async ({ scope, params, status }) => {
+      const aggregate = await loadProjectAggregate(scope, params.projectId);
+      if (!aggregate) {
+        // A project id from another tenant is answered identically to one that does
+        // not exist — the scope is inside the `WHERE`, so the two are not
+        // distinguishable here and must not become distinguishable by accident.
+        return status(404, {
+          error: "project_not_found" as const,
+          message: "No project with that id exists in this workspace.",
+        });
+      }
 
-    return {
-      project: {
-        id: aggregate.project.id,
-        name: aggregate.project.name,
-        createdAt: aggregate.project.createdAt.toISOString(),
-        updatedAt: aggregate.project.updatedAt.toISOString(),
-      },
-      epics: aggregate.epics.map((epicNode) => ({
-        ...entityFields(epicNode.epic),
-        status: epicNode.epic.status,
-        streams: epicNode.streams.map((streamNode) => ({
-          ...entityFields(streamNode.stream),
-          epicId: streamNode.stream.epicId,
-          status: streamNode.stream.status,
-          streamType: streamNode.stream.streamType,
-          tasks: streamNode.tasks.map((taskRow) => ({
-            ...entityFields(taskRow),
-            streamId: taskRow.streamId,
-            status: taskRow.status,
-            taskType: taskRow.taskType,
+      return {
+        project: {
+          id: aggregate.project.id,
+          name: aggregate.project.name,
+          createdAt: aggregate.project.createdAt.toISOString(),
+          updatedAt: aggregate.project.updatedAt.toISOString(),
+        },
+        epics: aggregate.epics.map((epicNode) => ({
+          ...entityFields(epicNode.epic),
+          status: epicNode.epic.status,
+          streams: epicNode.streams.map((streamNode) => ({
+            ...entityFields(streamNode.stream),
+            epicId: streamNode.stream.epicId,
+            status: streamNode.stream.status,
+            streamType: streamNode.stream.streamType,
+            tasks: streamNode.tasks.map((taskRow) => ({
+              ...entityFields(taskRow),
+              streamId: taskRow.streamId,
+              status: taskRow.status,
+              taskType: taskRow.taskType,
+            })),
           })),
         })),
-      })),
-      milestones: aggregate.milestones.map((milestoneNode) => ({
-        ...entityFields(milestoneNode.milestone),
-        status: milestoneNode.milestone.status,
-        roadmapOrder: milestoneNode.milestone.roadmapOrder,
-        streams: milestoneNode.streams.map((streamRow) => ({
-          id: streamRow.id,
-          key: streamRow.key,
-          title: streamRow.title,
-          status: streamRow.status,
-          streamType: streamRow.streamType,
-          epicKey: streamRow.epicKey,
-          roadmapRank: streamRow.roadmapRank,
+        milestones: aggregate.milestones.map((milestoneNode) => ({
+          ...entityFields(milestoneNode.milestone),
+          status: milestoneNode.milestone.status,
+          roadmapOrder: milestoneNode.milestone.roadmapOrder,
+          streams: milestoneNode.streams.map((streamRow) => ({
+            id: streamRow.id,
+            key: streamRow.key,
+            title: streamRow.title,
+            status: streamRow.status,
+            streamType: streamRow.streamType,
+            epicKey: streamRow.epicKey,
+            roadmapRank: streamRow.roadmapRank,
+          })),
         })),
-      })),
-      rules: aggregate.rules.map((ruleRow) => ({
-        ...entityFields(ruleRow),
-        status: ruleRow.status,
-      })),
-    };
-  },
-  {
-    // Zod v4, never Elysia's `t`. This is load-bearing rather than cosmetic: the
-    // id goes straight into a `uuid` comparison, so without it a non-uuid path
-    // segment reaches Postgres and turns a client mistake into a 500.
-    params: z.strictObject({ projectId: z.uuid() }),
-    response: { 200: ProjectAggregateDto, 404: ProjectNotFoundDto },
-  },
-);
+        rules: aggregate.rules.map((ruleRow) => ({
+          ...entityFields(ruleRow),
+          status: ruleRow.status,
+        })),
+        // Spread rather than passed through: the domain returns `readonly` arrays,
+        // and Elysia's response type is invariant in the array's mutability.
+        links: [...aggregate.links],
+      };
+    },
+    {
+      // Zod v4, never Elysia's `t`. This is load-bearing rather than cosmetic: the
+      // id goes straight into a `uuid` comparison, so without it a non-uuid path
+      // segment reaches Postgres and turns a client mistake into a 500.
+      params: z.strictObject({ projectId: z.uuid() }),
+      response: { 200: ProjectAggregateDto, 404: ProjectNotFoundDto },
+    },
+  )
+  /**
+   * The revision log, on its own path rather than inside the aggregate.
+   *
+   * Separate because the cost profile is different: the aggregate is read on every
+   * navigation, while the history is read by the one screen that shows it. Folding
+   * several hundred diffed revisions into the payload every page would pay for a
+   * screen the reader is usually not on.
+   *
+   * No `404` branch: `loadRevisionLog` filters on `(workspace_id, project_id)`, so
+   * a project that does not exist in this scope has no revisions and answers with
+   * an empty list. That is the same information a 404 would carry, without making
+   * "does this project exist" separately probeable.
+   */
+  .get(
+    "/:projectId/revisions",
+    async ({ scope, params }) => {
+      const revisions = await loadRevisionLog(scope, params.projectId);
+      // Mapped rather than passed through, like every other DTO in this file. The
+      // domain returns `readonly` arrays at both levels and Elysia's response type
+      // is invariant in array mutability, so the nested one is copied too.
+      return {
+        revisions: revisions.map((entry) => ({
+          ...entry,
+          sectionDeltas: [...entry.sectionDeltas],
+        })),
+      };
+    },
+    {
+      params: z.strictObject({ projectId: z.uuid() }),
+      response: { 200: RevisionLogDto },
+    },
+  );

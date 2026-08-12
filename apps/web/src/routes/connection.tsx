@@ -1,203 +1,183 @@
-import { createFileRoute, useLoaderData } from "@tanstack/react-router";
-import { useState } from "react";
-import { Button } from "~/components/ui/button";
-import { Card } from "~/components/ui/card";
-import { Toolbar } from "~/components/zpecs/toolbar";
-import { connectionWorkspaceChecks, mcpClientSetups, type McpClientId } from "~/lib/connection";
-import { getMcpEndpoint } from "~/server/connection";
+import { createFileRoute, Link, useLoaderData } from "@tanstack/react-router";
+import { AbsentBox, Box } from "~/components/zpecs/box";
+import {
+  CommandLine,
+  ContextBlock,
+  DefRow,
+  DocSection,
+  NotOffered,
+  PageHead,
+} from "~/components/zpecs/parts";
+import { useMcpEndpoint } from "~/lib/boardState";
+import { connectionWorkspaceChecks, mcpClientSetups } from "~/lib/connection";
+import { carry } from "~/lib/search";
 
 /**
- * The connection page: the commands for supported MCP clients, plus what this
- * app can honestly say about the state of the connection.
+ * Connection — how an MCP client reaches this deployment, and what this app can
+ * honestly say about the state of that connection.
  *
- * The honesty is the design constraint. The server has no session-level view of
- * MCP clients: `POST /mcp` is stateless, a fresh transport per request with no
- * `sessionIdGenerator`, so there is no such thing as a connected client to
- * report on. This page therefore reports the two things it really can observe —
- * whether the embedded API completed a data read, and whether this session has
- * a workspace — and says plainly that it cannot observe the third. An indicator
- * reading "connected" would be decoration over a fact nobody measured.
+ * The honesty is the design constraint. `POST /mcp` is stateless — a fresh
+ * transport per request with no session id — so there is no such thing as a
+ * connected client to report on. This page therefore reports the two things it
+ * really can observe (whether the embedded API completed a read, and whether this
+ * session resolves to a workspace) and says plainly that it cannot observe the
+ * third. An indicator reading "connected" would be decoration over a fact nobody
+ * measured.
+ *
+ * It is also the write path. Everything in this product is created through the MCP
+ * server; this surface only reads, which is why the page a reader lands on when a
+ * Project is empty points here.
  */
-export const Route = createFileRoute("/connection")({
-  loader: () => getMcpEndpoint(),
-  component: ConnectionPage,
-});
+export const Route = createFileRoute("/connection")({ component: ConnectionPage });
 
 function ConnectionPage() {
-  const board = useLoaderData({ from: "__root__" });
-  const endpoint = Route.useLoaderData();
+  const { board } = useLoaderData({ from: "__root__" });
   const { orgId } = Route.useRouteContext();
-  const clientSetups = mcpClientSetups(endpoint.url);
-  const [claudeSetup, codexSetup] = clientSetups;
+  const endpoint = useMcpEndpoint();
+  const setups = mcpClientSetups(endpoint.url);
 
-  // Any Elysia response proves the embedded API ran — including 401, 403 and
-  // 5xx. An absent session or an unexpected invocation failure makes this false.
-  const reachable = board.status === "ok" || board.apiReachable;
   const workspace = board.status === "ok" ? board.workspace : null;
-  const unreachableReason = board.status === "ok" ? null : board.message;
-  const workspaceChecks = connectionWorkspaceChecks({
+  const checks = connectionWorkspaceChecks({
     orgId,
     workspaceName: workspace?.name ?? null,
     failureStatus: board.status === "ok" ? null : board.status,
-    failureMessage: unreachableReason,
+    failureMessage: board.status === "ok" ? null : board.message,
   });
+  // Any Elysia response proves the embedded API ran — including 401, 403 and 5xx.
+  // An absent session or an unexpected invocation failure makes this false.
+  const apiAnswered = board.status === "ok" || board.apiReachable;
 
   return (
-    <>
-      <Toolbar title="Connection" />
+    <div>
+      <PageHead
+        title="Connection"
+        hint="One streamable HTTP MCP server for the whole deployment. The workspace comes from the org_id claim in your token rather than from the URL, so there is no per-workspace endpoint to construct."
+      />
 
-      <div className="flex max-w-3xl flex-col gap-6 px-8 pb-16 pt-6">
-        {clientSetups.map((setup) => (
-          <section key={setup.id}>
-            <h2 className="mb-1 text-sm font-semibold">{setup.title}</h2>
-            <p className="mb-3 text-sm text-muted-foreground">{setup.description}</p>
-            {setup.commands.length === 1 ? (
-              <CommandLine
-                command={setup.commands[0]}
-                copyLabel={commandCopyLabel(setup.id, 0, setup.commands.length)}
-              />
-            ) : (
-              <ol className="flex list-decimal flex-col gap-2 pl-5">
-                {setup.commands.map((command, index) => (
-                  <li key={command} className="pl-1">
-                    <CommandLine
-                      command={command}
-                      copyLabel={commandCopyLabel(setup.id, index, setup.commands.length)}
-                    />
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-        ))}
-
-        {endpoint.isLocal ? (
-          <p className="-mt-4 text-xs text-muted-foreground">
-            This is a loopback address, so it is only reachable from this machine. A deployed
-            instance serves its own origin here.
-          </p>
-        ) : null}
-
-        <section>
-          <h2 className="mb-3 text-sm font-semibold">What this page can see</h2>
-          <Card className="p-4">
-            <Check
-              ok={reachable}
-              name="zpecs API available"
-              detail={
-                reachable
-                  ? "The embedded API completed this app's last read."
-                  : (unreachableReason ?? "The API read did not complete.")
-              }
-            />
-            <Check
-              ok={workspaceChecks.organization.ok}
-              name="Clerk organization in this web session"
-              detail={workspaceChecks.organization.detail}
-            />
-            <Check
-              ok={workspaceChecks.workspace.ok}
-              name="Local zpecs workspace confirmed"
-              detail={workspaceChecks.workspace.detail}
-            />
-          </Card>
-        </section>
-
-        <section>
-          <h2 className="mb-1 text-sm font-semibold">What it cannot</h2>
-          {/* Load-bearing, not a disclaimer. Someone will eventually want a green
-              "connected" light here, and this is the reason there is none. */}
-          <p className="text-sm text-muted-foreground">
-            Whether an MCP client is currently connected. The MCP endpoint is stateless — a fresh
-            server and transport per request, with all state in Postgres — so no connection exists
-            to observe. The two checks above are what is actually measurable from here.
-          </p>
-        </section>
-
-        <section>
-          <h2 className="mb-1 text-sm font-semibold">One endpoint, no workspace in the URL</h2>
-          <p className="text-sm text-muted-foreground">
-            <code className="rounded bg-secondary px-1 py-0.5 font-mono text-xs">
-              {endpoint.url}
-            </code>{" "}
-            is the whole surface. The organization you choose during OAuth consent is written into
-            the issued MCP token as <code>org_id</code>. Switching organization in the web header
-            changes this web session, but it cannot change a token an MCP client already holds.
-          </p>
-          <div className="mt-3 space-y-3">
-            <div>
-              <h3 className="text-xs font-medium">Claude Code</h3>
-              <p className="text-sm text-muted-foreground">
-                Open <code>/mcp</code>, choose <strong>Clear authentication</strong> for zpecs,
-                reconnect, and choose the other organization during consent. The equivalent CLI
-                command is <code>{claudeSetup.logoutCommand}</code>.
+      <div className="flex flex-wrap gap-8 pt-1">
+        <div className="w-[664px] shrink-0">
+          <DocSection label="Endpoint">
+            <CommandLine command={endpoint.url} />
+            {endpoint.isLocal ? (
+              <p className="text-muted-foreground mt-2 text-xs leading-[17px]">
+                This is a loopback address. It works on this machine and nowhere else — pasted into
+                a colleague's client it fails in a way that looks like a bug in zpecs.
               </p>
-            </div>
-            <div>
-              <h3 className="text-xs font-medium">OpenAI Codex</h3>
-              <p className="text-sm text-muted-foreground">
-                Run <code>{codexSetup.logoutCommand}</code>, followed by{" "}
-                <code>{codexSetup.loginCommand}</code>, then choose the other organization during
-                consent.
+            ) : null}
+          </DocSection>
+
+          {setups.map((setup) => (
+            <DocSection
+              key={setup.id}
+              label={setup.title}
+              hint="Defined in this app and verified against this endpoint. A client without an entry here gets the endpoint and nothing more, rather than a command nobody has run."
+            >
+              <div className="flex items-center gap-2 pt-1.5">
+                <Box tone="success" marker="●">
+                  Ready to connect
+                </Box>
+              </div>
+              <p className="text-muted-foreground mt-1.5 text-xs leading-[17px]">
+                {setup.description}
               </p>
+              {setup.commands.map((command, index) => (
+                <div key={command} className="mt-1.5 flex items-start gap-2">
+                  {setup.commands.length > 1 ? (
+                    <span className="text-muted-foreground w-4 shrink-0 pt-3 font-mono text-[11px]">
+                      {index + 1}
+                    </span>
+                  ) : null}
+                  <span className="min-w-0 flex-1">
+                    <CommandLine command={command} />
+                  </span>
+                </div>
+              ))}
+              <div className="mt-2">
+                <span className="text-muted-foreground text-[11px]">Sign out again</span>
+                <CommandLine command={setup.logoutCommand} />
+              </div>
+            </DocSection>
+          ))}
+
+          <DocSection
+            label="Any other MCP client"
+            hint="The transport is standard, but no command line here has been verified for your client, so none is printed."
+          >
+            <div className="flex items-center gap-2 pt-1.5">
+              <Box tone="dashed">Endpoint only</Box>
             </div>
-          </div>
-          <p className="mt-3 text-sm text-muted-foreground">
-            The endpoint and add commands stay the same.
-          </p>
-        </section>
-      </div>
-    </>
-  );
-}
+            <p className="text-muted-foreground mt-1.5 text-xs leading-[17px]">
+              A streamable HTTP MCP server with browser-based authorization. A client that speaks
+              that transport can be pointed at the endpoint above; the command differs per client.
+            </p>
+          </DocSection>
+        </div>
 
-function commandCopyLabel(clientId: McpClientId, commandIndex: number, commandCount: number) {
-  const clientName = clientId === "claude-code" ? "Claude Code" : "OpenAI Codex";
-  const step = commandCount === 1 ? "" : ` ${commandIndex + 1}`;
-  return `Copy ${clientName} setup command${step}`;
-}
+        <div className="w-[304px] shrink-0">
+          <ContextBlock
+            label="What can be observed"
+            hint="Two of these are measured on this request. The third is not observable at all, and saying so is more useful than a green dot that means nothing."
+          >
+            <DefRow label="API">
+              {apiAnswered ? (
+                <Box tone="success" marker="●">
+                  answered this request
+                </Box>
+              ) : (
+                <Box tone="danger" marker="⊘">
+                  did not answer
+                </Box>
+              )}
+            </DefRow>
+            <DefRow label="Organization" hint={checks.organization.detail}>
+              {checks.organization.ok ? (
+                <Box tone="success" marker="●">
+                  active in Clerk
+                </Box>
+              ) : (
+                <Box tone="danger" marker="⊘">
+                  none active
+                </Box>
+              )}
+            </DefRow>
+            <DefRow label="Workspace" hint={checks.workspace.detail}>
+              {checks.workspace.ok ? (
+                <Box tone="success" marker="●">
+                  confirmed by the API
+                </Box>
+              ) : (
+                <Box tone="danger" marker="⊘">
+                  not confirmed
+                </Box>
+              )}
+            </DefRow>
+            <DefRow
+              label="MCP clients"
+              hint="POST /mcp is stateless — a fresh transport per request with no session id — so the server has no view of connected clients."
+            >
+              <AbsentBox label="not observable" />
+            </DefRow>
+          </ContextBlock>
 
-function CommandLine({ command, copyLabel }: { command: string; copyLabel: string }) {
-  const [copied, setCopied] = useState(false);
+          <ContextBlock label="Write path" hint="This entire web surface is read-only by design.">
+            <p className="text-muted-foreground text-xs leading-[17px]">
+              Epics, Streams, Tasks, Rules and Milestones are created and changed through the MCP
+              server, which owns document validation, readiness gates and the revision history. No
+              revision has ever originated in a browser.
+            </p>
+            <p className="text-muted-foreground mt-2 text-xs leading-[17px]">
+              What that produces reads on{" "}
+              <Link to="/changes" search={carry} className="underline underline-offset-2">
+                Recent changes
+              </Link>
+              .
+            </p>
+          </ContextBlock>
 
-  const copy = () => {
-    void navigator.clipboard.writeText(command).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(false), 1500);
-      },
-      // Clipboard access can be refused by permissions policy. Failing quietly
-      // and leaving the text selectable is better than an alert.
-      () => setCopied(false),
-    );
-  };
-
-  return (
-    <div className="flex items-center gap-2 rounded-xl border bg-secondary/40 p-3">
-      <code className="flex-1 overflow-x-auto whitespace-pre font-mono text-xs">{command}</code>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={copy}
-        className="flex-none"
-        aria-label={copyLabel}
-      >
-        {copied ? "Copied" : "Copy"}
-      </Button>
-    </div>
-  );
-}
-
-function Check({ ok, name, detail }: { ok: boolean; name: string; detail: string }) {
-  return (
-    <div className="flex gap-3 border-t py-3 first:border-t-0">
-      {/* The neutral tone, not a red one, when the answer is no: neither check
-          failing is a fault — "no workspace yet" is an ordinary state with a
-          one-click remedy. */}
-      <span className="tone-dot mt-1.5" data-tone={ok ? "done" : "none"} />
-      <div>
-        <div className="text-[13px] font-medium">{name}</div>
-        <div className="text-xs text-muted-foreground">{detail}</div>
+          <ContextBlock label="Not offered">
+            <NotOffered items={["Webhooks", "API tokens", "Third-party issue sync"]} />
+          </ContextBlock>
+        </div>
       </div>
     </div>
   );
