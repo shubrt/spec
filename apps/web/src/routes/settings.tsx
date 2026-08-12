@@ -1,4 +1,4 @@
-import { useClerk, useUser } from "@clerk/tanstack-react-start";
+import { useClerk } from "@clerk/tanstack-react-start";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { AbsentBox, Box, NotStoredBox } from "~/components/zpecs/box";
 import {
@@ -190,7 +190,7 @@ function ProjectTab({ model }: { readonly model: ProjectModel }) {
               { value: model.tasks.length, label: "Tasks" },
               { value: model.milestones.length, label: "Milestones" },
               { value: model.rules.length, label: "Rules" },
-              { value: model.fragments.length, label: "Spec fragments" },
+              { value: model.fragmentCount, label: "Spec fragments" },
               { value: model.totalRevisions, label: "Entity Revisions" },
               { value: model.linkCount, label: "Entity links" },
             ]}
@@ -361,7 +361,9 @@ function IntegrationsTab() {
 /* --------------------------------------------------------------- Account -- */
 
 function AccountTab({ model }: { readonly model: ProjectModel }) {
-  const { user } = useUser();
+  // Read from the route context rather than Clerk's client hook, so the id this
+  // page is *about* is server rendered instead of appearing after hydration.
+  const { userId } = Route.useRouteContext();
   const { signOut, openUserProfile } = useClerk();
 
   return (
@@ -372,7 +374,7 @@ function AccountTab({ model }: { readonly model: ProjectModel }) {
           hint="zpecs stores no user row. Your id appears in exactly one place in the database: the actor column of an Entity Revision. Everything else about you is resolved from your Clerk session at request time and never written down."
         >
           <DefRow label="Actor id">
-            <span className="font-mono text-xs">{user?.id ?? "—"}</span>
+            <span className="font-mono text-xs">{userId ?? "—"}</span>
           </DefRow>
           <DefRow label="Workspace">{model.workspaceName}</DefRow>
         </DocSection>

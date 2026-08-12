@@ -18,10 +18,10 @@ import {
 } from "~/components/zpecs/parts";
 import { Screen } from "~/components/zpecs/screen";
 import { useEntityNav, type EntityNav } from "~/lib/entityNav";
-import type { SpecFragmentModel } from "~/lib/fragments";
 import type { ProjectModel, StreamRow } from "~/lib/model";
 import type { RootSearch } from "~/lib/search";
 import { formatRevisionTime, keySequence } from "~/lib/vocabulary";
+import { getFragments } from "~/server/fragments";
 
 /**
  * Focus — seven answers, one per tab, one table each.
@@ -93,6 +93,17 @@ export const Route = createFileRoute("/focus")({
     inspect: typeof search.inspect === "string" ? search.inspect : undefined,
     tab: TABS.some((tab) => tab.id === search.tab) ? (search.tab as TabId) : undefined,
   }),
+  loaderDeps: ({ search }) => ({ projectId: search.project, tab: search.tab }),
+  // Only the questions tab needs fragments, so only it asks — and it asks for that
+  // one section rather than for the project's documents.
+  loader: ({ deps }) =>
+    getFragments({
+      data: {
+        projectId: deps.projectId,
+        section: "open_questions",
+        limit: deps.tab === "questions" ? 200 : 1,
+      },
+    }),
   component: FocusPage,
 });
 
@@ -105,7 +116,7 @@ interface QuestionRow {
   readonly owner: string;
   readonly fragmentId: string;
   readonly question: string;
-  readonly epicKey: string;
+  readonly ownerTitle: string;
 }
 
 function FocusScreen({ model }: { readonly model: ProjectModel }) {
@@ -131,12 +142,18 @@ function FocusScreen({ model }: { readonly model: ProjectModel }) {
     const stream = model.streamByKey.get(key);
     return stream ? [stream] : [];
   });
-  const questions = openQuestionRows(model);
-  // Superseding is the entire freshness model, so it is reported as a measured
-  // fraction rather than asserted as a zero.
-  const allSources = model.streams.flatMap((stream) => stream.sources);
-  const totalSources = allSources.length;
-  const supersededSources = allSources.filter((source) => source.supersededBy.length > 0).length;
+  // Open questions are a page of the fragment endpoint, filtered to that section —
+  // the one tab that needs fragments asks for them, and only when it is open.
+  const questionPage = Route.useLoaderData();
+  const questions = questionPage.fragments.map(
+    (fragment): QuestionRow => ({
+      key: fragment.anchor,
+      owner: fragment.owner,
+      fragmentId: fragment.id,
+      question: fragment.shape.kind === "statement" ? fragment.shape.text : "",
+      ownerTitle: fragment.ownerTitle,
+    }),
+  );
   const recent = [...model.streams]
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     .slice(0, 15);
@@ -147,7 +164,7 @@ function FocusScreen({ model }: { readonly model: ProjectModel }) {
     decompose: decompose.length,
     blocked: blocked.length,
     parallel: parallel.length,
-    questions: questions.length,
+    questions: questionPage.total,
     revisions: recent.length,
   };
 
@@ -278,9 +295,9 @@ function FocusScreen({ model }: { readonly model: ProjectModel }) {
             items={[
               { value: questions.length, label: "open questions across the Project" },
               {
-                value: `${String(supersededSources)}/${String(totalSources)}`,
-                label: "Sources superseded",
-                hint: "The whole of the freshness model. A Source becomes stale by being explicitly replaced by a newer one and by nothing else — elapsed time says nothing about whether an observation still holds, so there is no age column anywhere in this app.",
+                value: questionPage.total,
+                label: "recorded across the Project",
+                hint: "Counted by the API over every Epic, Stream, Task and Milestone document. An open question is how an author records what is known to be unknown instead of inventing an answer.",
               },
             ]}
           />
@@ -429,12 +446,12 @@ function questionColumns(nav: EntityNav): readonly Column<QuestionRow>[] {
       hint: "The Stream or Task that holds this question. A fragment lives inside its owner — it is not a project-level object.",
     },
     {
-      id: "epic",
-      label: "Epic",
-      width: 56,
-      cellClass: "text-muted-foreground font-mono text-xs",
-      sort: (row) => keySequence(row.epicKey),
-      render: (row) => row.epicKey,
+      id: "ownerTitle",
+      label: "Owner title",
+      width: 200,
+      cellClass: "text-muted-foreground text-xs",
+      sort: (row) => row.ownerTitle,
+      render: (row) => row.ownerTitle,
     },
     {
       id: "fragment",
@@ -454,27 +471,4 @@ function questionColumns(nav: EntityNav): readonly Column<QuestionRow>[] {
       render: (row) => row.question,
     },
   ];
-}
-
-/** Every open question in the Project, each carrying the owner that makes its key mean something. */
-function openQuestionRows(model: ProjectModel): readonly QuestionRow[] {
-  const fromStreams = model.streams.flatMap((stream) =>
-    stream.fragments
-      .filter((fragment) => fragment.section === "open_questions")
-      .map((fragment) => toQuestionRow(fragment, stream.epicKey)),
-  );
-  const fromTasks = model.tasks.flatMap((task) =>
-    task.openQuestions.map((fragment) => toQuestionRow(fragment, task.epicKey)),
-  );
-  return [...fromStreams, ...fromTasks];
-}
-
-function toQuestionRow(fragment: SpecFragmentModel, epicKey: string): QuestionRow {
-  return {
-    key: `${fragment.owner}#${fragment.id}`,
-    owner: fragment.owner,
-    fragmentId: fragment.id,
-    question: fragment.shape.kind === "statement" ? fragment.shape.text : "",
-    epicKey,
-  };
 }

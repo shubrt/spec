@@ -1,17 +1,7 @@
 import type { Aggregate, LoadedBoard } from "~/server/board";
 import type { DependencyState } from "~/components/zpecs/box";
 import { asNumber, asText, asTextArray, contentOf, executionOf, metaOf } from "./document";
-import {
-  IMPLEMENTS_FIELD_SECTIONS,
-  fragmentAnchor,
-  readFragments,
-  readRuleApplications,
-  readSources,
-  type RuleApplicationModel,
-  type SectionId,
-  type SourceModel,
-  type SpecFragmentModel,
-} from "./fragments";
+import { fragmentAnchor } from "./fragments";
 import {
   dependencyWaves,
   longestBlockerChain,
@@ -98,6 +88,32 @@ export interface RelationRef {
   readonly direction: "outgoing" | "incoming";
 }
 
+/**
+ * The `implements` fields a Task may carry.
+ *
+ * Mirrored from the API's own list because this runs in the browser, over the Task
+ * content the aggregate still ships. Each field accepts exactly one local-id
+ * namespace, which is what makes a reference checkable.
+ */
+const IMPLEMENTS_FIELDS = [
+  "requirement_ids",
+  "acceptance_criteria_ids",
+  "behavior_case_ids",
+  "change_ids",
+  "hypothesis_ids",
+  "research_question_ids",
+  "success_criteria_ids",
+  "decision_rule_ids",
+  "investigation_question_ids",
+  "refactor_target_ids",
+  "invariant_ids",
+  "quality_goal_ids",
+  "maintenance_goal_ids",
+] as const;
+
+/** A local use of one canonical Rule, as the aggregate now carries it. */
+export type RuleApplication = Aggregate["epics"][number]["ruleApplications"][number];
+
 export interface EpicRow extends EntityCommon {
   readonly status: EpicStatus;
   readonly streamCount: number;
@@ -107,13 +123,9 @@ export interface EpicRow extends EntityCommon {
   readonly readyNow: number;
   readonly blockedStreams: number;
   readonly executableTasks: number;
-  /** Fragments in the Streams beneath it, not in its own document. */
-  readonly fragmentCount: number;
   readonly purpose: string;
   readonly businessProblem: string;
-  /** The Epic's own scope, outcomes, metrics, questions and assumptions. */
-  readonly fragments: readonly SpecFragmentModel[];
-  readonly ruleApplications: readonly RuleApplicationModel[];
+  readonly ruleApplications: readonly RuleApplication[];
 }
 
 export interface StreamRow extends EntityCommon {
@@ -134,22 +146,25 @@ export interface StreamRow extends EntityCommon {
   readonly purpose: string;
   readonly deliversAlone: string | null;
   readonly actor: { readonly primary: string; readonly secondary: readonly string[] } | null;
-  readonly fragments: readonly SpecFragmentModel[];
-  readonly sources: readonly SourceModel[];
-  readonly ruleApplications: readonly RuleApplicationModel[];
+  readonly ruleApplications: readonly RuleApplication[];
   /** Derived: this Stream could be worked on now. */
   readonly executable: boolean;
 }
 
-/** One typed reference from a Task to a fragment of its parent Stream. */
+/**
+ * One typed reference from a Task to a fragment of its parent Stream.
+ *
+ * The reference only — not the fragment. The statement behind it lives in the
+ * Stream's document, and the Task page fetches that Stream's fragments to resolve
+ * it. Carrying the resolved fragment here would mean every Tasks-table row dragged
+ * its targets' full text along to render a count.
+ */
 export interface TaskTarget {
   readonly anchor: string;
   readonly owner: string;
   readonly id: string;
   /** Which `implements` field named it, and therefore which namespace it is in. */
   readonly field: string;
-  /** The fragment itself, when the owner holds one with that id. */
-  readonly fragment: SpecFragmentModel | null;
 }
 
 export interface TaskRow extends EntityCommon {
@@ -172,7 +187,6 @@ export interface TaskRow extends EntityCommon {
   readonly scope: readonly string[];
   readonly verificationCount: number;
   readonly doneWhenCount: number;
-  readonly openQuestions: readonly SpecFragmentModel[];
   readonly executable: boolean;
 }
 
@@ -181,8 +195,6 @@ export interface MilestoneRow extends EntityCommon {
   /** Server-managed advisory position. Equal values are valid and mean equal. */
   readonly roadmapOrder: number;
   readonly goal: string;
-  readonly exitCriteria: readonly SpecFragmentModel[];
-  readonly openQuestions: readonly SpecFragmentModel[];
   readonly streamKeys: readonly string[];
 }
 
@@ -213,6 +225,8 @@ export interface ProjectModel {
   readonly tasks: readonly TaskRow[];
   readonly milestones: readonly MilestoneRow[];
   readonly rules: readonly RuleRow[];
+  /** The size of the fragment corpus. The fragments themselves come from the API. */
+  readonly fragmentCount: number;
 
   readonly epicByKey: ReadonlyMap<string, EpicRow>;
   readonly streamByKey: ReadonlyMap<string, StreamRow>;
@@ -239,10 +253,6 @@ export interface ProjectModel {
   readonly longestChain: readonly string[];
   readonly collisions: readonly PossibleCollision[];
 
-  /** Every addressable fragment in the project, with its owner. */
-  readonly fragments: readonly SpecFragmentModel[];
-  /** Tasks that name a given `owner#id` in their `implements` edge. */
-  readonly implementedBy: ReadonlyMap<string, readonly string[]>;
   readonly totalRevisions: number;
   readonly linkCount: number;
 }
@@ -428,9 +438,7 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
                 ),
               }
             : null,
-        fragments: readFragments(stream.key, stream.document),
-        sources: readSources(stream.document),
-        ruleApplications: readRuleApplications(stream.document),
+        ruleApplications: stream.ruleApplications,
         // Derived: an active Epic, a workable status, nothing holding it.
         executable:
           activeEpicKeys.has(epic.key) &&
@@ -447,15 +455,6 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
 
   const streamByKey = new Map(streams.map((row) => [row.key, row]));
 
-  /* -- fragments, before Tasks, because a Task resolves its targets --------- */
-
-  const fragmentByAnchor = new Map<string, SpecFragmentModel>();
-  for (const stream of streams) {
-    for (const fragment of stream.fragments) {
-      fragmentByAnchor.set(fragmentAnchor(fragment.owner, fragment.id), fragment);
-    }
-  }
-
   /* -- Tasks ---------------------------------------------------------------- */
 
   const tasks: readonly TaskRow[] = flatTasks
@@ -466,7 +465,7 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
       const ownDependency = dependencyState(blockers);
       const parent = streamByKey.get(stream.key);
       const streamBlocked = parent?.dependency.kind === "blocked";
-      const targets = readTargets(content.implements, stream.key, fragmentByAnchor);
+      const targets = readTargets(content.implements, stream.key);
       const estimate = execution.estimate;
       const assignee = execution.assignee;
 
@@ -499,9 +498,6 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
         scope: technicalScopeOf(content.technical_scope),
         verificationCount: countOf(content.verification),
         doneWhenCount: countOf(content.done_when),
-        openQuestions: readFragments(task.key, task.document).filter(
-          (fragment) => fragment.section === "open_questions",
-        ),
         // A blocked parent hides every Task under it from executable work,
         // whatever the Task's own status says.
         executable:
@@ -521,24 +517,12 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
 
   const taskByKey = new Map(tasks.map((row) => [row.key, row]));
 
-  /* -- what implements what ------------------------------------------------- */
-
-  const implementedBy = new Map<string, string[]>();
-  for (const task of tasks) {
-    for (const target of task.targets) {
-      const bucket = implementedBy.get(target.anchor);
-      if (bucket) bucket.push(task.key);
-      else implementedBy.set(target.anchor, [task.key]);
-    }
-  }
-
   /* -- Epics ---------------------------------------------------------------- */
 
   const epics: readonly EpicRow[] = aggregate.epics
     .map((epic) => {
       const own = streams.filter((row) => row.epicKey === epic.key);
       const ownTasks = tasks.filter((row) => row.epicKey === epic.key);
-      const fragmentCount = own.reduce((sum, row) => sum + row.fragments.length, 0);
       const content = contentOf(epic.document);
       return {
         key: epic.key,
@@ -560,11 +544,9 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
         ).length,
         blockedStreams: own.filter((row) => row.dependency.kind === "blocked").length,
         executableTasks: ownTasks.filter((row) => row.executable).length,
-        fragmentCount,
         purpose: asText(content.purpose),
         businessProblem: asText(content.business_problem),
-        fragments: readFragments(epic.key, epic.document),
-        ruleApplications: readRuleApplications(epic.document),
+        ruleApplications: epic.ruleApplications,
       } satisfies EpicRow;
     })
     .sort(
@@ -575,7 +557,6 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
 
   const milestones: readonly MilestoneRow[] = aggregate.milestones
     .map((milestone) => {
-      const fragments = readFragments(milestone.key, milestone.document);
       return {
         key: milestone.key,
         title: milestone.title,
@@ -587,8 +568,6 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
         status: milestone.status,
         roadmapOrder: milestone.roadmapOrder,
         goal: asText(contentOf(milestone.document).goal),
-        exitCriteria: fragments.filter((fragment) => fragment.section === "exit_criteria"),
-        openQuestions: fragments.filter((fragment) => fragment.section === "open_questions"),
         streamKeys: milestone.streams.map((reference) => reference.key),
       } satisfies MilestoneRow;
     })
@@ -668,6 +647,7 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
     tasks,
     milestones,
     rules,
+    fragmentCount: aggregate.fragmentCount,
 
     epicByKey: new Map(epics.map((row) => [row.key, row])),
     streamByKey,
@@ -686,8 +666,6 @@ export function buildProjectModel(board: LoadedBoard & { aggregate: Aggregate })
     longestChain: longestBlockerChain(streamDependencies),
     collisions,
 
-    fragments: [...fragmentByAnchor.values()],
-    implementedBy,
     // Every entity is at revision N, which means N revision rows exist for it.
     // Summing avoids a second request for a number the payload already implies.
     totalRevisions:
@@ -798,11 +776,7 @@ function relationsFor(
  * targets live in another entity, so `CHG-1` on its own is not a reference — it is
  * a reference *inside the Stream*, and the anchor is the only globally unique form.
  */
-function readTargets(
-  implementsValue: unknown,
-  streamKey: string,
-  fragmentByAnchor: ReadonlyMap<string, SpecFragmentModel>,
-): readonly TaskTarget[] {
+function readTargets(implementsValue: unknown, streamKey: string): readonly TaskTarget[] {
   const record =
     typeof implementsValue === "object" &&
     implementsValue !== null &&
@@ -810,16 +784,9 @@ function readTargets(
       ? (implementsValue as Record<string, unknown>)
       : {};
 
-  return Object.keys(IMPLEMENTS_FIELD_SECTIONS).flatMap((field) =>
+  return IMPLEMENTS_FIELDS.flatMap((field) =>
     asTextArray(record[field]).map((id) => {
-      const anchor = fragmentAnchor(streamKey, id);
-      return {
-        anchor,
-        owner: streamKey,
-        id,
-        field,
-        fragment: fragmentByAnchor.get(anchor) ?? null,
-      };
+      return { anchor: fragmentAnchor(streamKey, id), owner: streamKey, id, field };
     }),
   );
 }
@@ -855,11 +822,4 @@ function formatEstimate(value: unknown): string | null {
   const confidence = asText(record.confidence);
   const base = `${String(amount)} ${unit}`;
   return confidence.length > 0 ? `${base} · ${confidence} confidence` : base;
-}
-
-/** The sections a Stream of this type can actually hold, in reading order. */
-export function sectionsPresent(fragments: readonly SpecFragmentModel[]): readonly SectionId[] {
-  const seen = new Set<SectionId>();
-  for (const fragment of fragments) seen.add(fragment.section);
-  return [...seen];
 }

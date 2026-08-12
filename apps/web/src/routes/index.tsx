@@ -118,7 +118,7 @@ function Overview({ model }: { readonly model: ProjectModel }) {
           { value: model.milestones.length, label: "Milestones" },
           { value: model.rules.length, label: "Rules" },
           {
-            value: model.fragments.length,
+            value: model.fragmentCount,
             label: "spec fragments",
             hint: "Every addressable requirement, criterion, scope item, edge case, change target, hypothesis and question across the Streams of this Project.",
           },

@@ -12,6 +12,13 @@ import { createServerFn } from "@tanstack/react-start";
 export interface AuthState {
   readonly isAuthenticated: boolean;
   readonly orgId: string | null;
+  /**
+   * The Clerk user id — the one identity zpecs ever writes down, as the actor on a
+   * revision. Resolved here rather than from Clerk's client hook so it is server
+   * rendered: that hook is null during SSR, which made every surface showing it
+   * paint a dash first and swap in the real id on hydration.
+   */
+  readonly userId: string | null;
 }
 
 // `auth()` is server-only and reads the auth object clerkMiddleware put on the
@@ -24,6 +31,6 @@ export const fetchAuthState = createServerFn({ method: "GET" }).handler(
     // `userId` means sign in, while a `userId` with no `orgId` means the session
     // has no workspace — a state the UI has to render as an action ("create or
     // join an organization"), not as an error.
-    return { isAuthenticated: userId !== null, orgId: orgId ?? null };
+    return { isAuthenticated: userId !== null, orgId: orgId ?? null, userId: userId ?? null };
   },
 );

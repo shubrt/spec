@@ -12,10 +12,11 @@ import {
 import { Screen } from "~/components/zpecs/screen";
 import { SpecFragment } from "~/components/zpecs/spec-fragment";
 import { useEntityNav, type EntityNav } from "~/lib/entityNav";
-import { fragmentAnchor, sectionLabel, type SpecFragmentModel } from "~/lib/fragments";
+import { fragmentText, sectionLabel } from "~/lib/fragments";
 import type { ProjectModel, RuleRow } from "~/lib/model";
 import type { RootSearch } from "~/lib/search";
 import { keySequence } from "~/lib/vocabulary";
+import { getFragments, type FragmentEntry } from "~/server/fragments";
 
 /**
  * Traceability — a contextual view from one starting point, never a matrix.
@@ -43,6 +44,22 @@ export const Route = createFileRoute("/trace")({
     inspect: typeof search.inspect === "string" ? search.inspect : undefined,
     anchor: typeof search.anchor === "string" ? search.anchor : undefined,
   }),
+  loaderDeps: ({ search }) => ({ projectId: search.project, anchor: search.anchor }),
+  /**
+   * Two pages of the fragment endpoint: the Requirements the picker offers, and — when
+   * an anchor is selected — every fragment of its owner, which is what the reversal of
+   * a verifies-edge is read from.
+   */
+  loader: async ({ deps }) => {
+    const owner = deps.anchor?.includes("#") ? deps.anchor.split("#")[0] : undefined;
+    const [requirements, ownerFragments] = await Promise.all([
+      getFragments({ data: { projectId: deps.projectId, section: "functional", limit: 400 } }),
+      owner
+        ? getFragments({ data: { projectId: deps.projectId, owner, limit: 400 } })
+        : Promise.resolve(null),
+    ]);
+    return { requirements, ownerFragments };
+  },
   component: TracePage,
 });
 
@@ -59,16 +76,14 @@ function TraceScreen({ model }: { readonly model: ProjectModel }) {
     void navigate({ search: (previous) => ({ ...previous, anchor }) });
   };
 
-  const requirements = model.fragments.filter(
-    (fragment) => fragment.section === "functional" || fragment.section === "non_functional",
-  );
+  const loaded = Route.useLoaderData();
+  const requirements = loaded.requirements.fragments;
 
   const rule = search.anchor ? (model.ruleByKey.get(search.anchor) ?? null) : null;
+  const ownerFragments = loaded.ownerFragments?.fragments ?? [];
   const fragment =
     search.anchor && !rule
-      ? (model.fragments.find(
-          (candidate) => fragmentAnchor(candidate.owner, candidate.id) === search.anchor,
-        ) ?? null)
+      ? (ownerFragments.find((candidate) => candidate.anchor === search.anchor) ?? null)
       : null;
 
   return (
@@ -90,12 +105,12 @@ function TraceScreen({ model }: { readonly model: ProjectModel }) {
         <span className="text-border text-xs">or</span>
         <SearchSelect
           label="a Requirement"
-          value={fragment ? fragmentAnchor(fragment.owner, fragment.id) : undefined}
+          value={fragment?.anchor}
           width={150}
           placeholder="—"
           options={requirements.map((candidate) => ({
-            key: fragmentAnchor(candidate.owner, candidate.id),
-            label: excerpt(candidate),
+            key: candidate.anchor,
+            label: fragmentText(candidate),
           }))}
           onChange={set}
         />
@@ -106,7 +121,14 @@ function TraceScreen({ model }: { readonly model: ProjectModel }) {
 
       <div className="pt-5">
         {rule ? <RuleTrace rule={rule} nav={nav} /> : null}
-        {fragment ? <FragmentTrace fragment={fragment} model={model} nav={nav} /> : null}
+        {fragment ? (
+          <FragmentTrace
+            fragment={fragment}
+            ownerFragments={ownerFragments}
+            model={model}
+            nav={nav}
+          />
+        ) : null}
         {!rule && !fragment ? (
           <EmptyState
             label="Pick a Rule or a Requirement to trace"
@@ -174,23 +196,24 @@ function RuleTrace({ rule, nav }: { readonly rule: RuleRow; readonly nav: Entity
 
 function FragmentTrace({
   fragment,
+  ownerFragments,
   model,
   nav,
 }: {
-  readonly fragment: SpecFragmentModel;
+  readonly fragment: FragmentEntry;
+  readonly ownerFragments: readonly FragmentEntry[];
   readonly model: ProjectModel;
   readonly nav: EntityNav;
 }) {
-  const anchor = fragmentAnchor(fragment.owner, fragment.id);
   const owner = model.streamByKey.get(fragment.owner);
 
   // Read backwards off each criterion's own `verifies` edge: the Requirement stores
   // nothing about who checks it, so this direction is derived and labelled as such.
-  const verifiedBy = (owner?.fragments ?? []).filter(
+  const verifiedBy = ownerFragments.filter(
     (candidate) =>
       candidate.section === "acceptance_criteria" && candidate.verifies.includes(fragment.id),
   );
-  const implementedBy = model.implementedBy.get(anchor) ?? [];
+  const implementedBy = fragment.implementedBy;
 
   return (
     <div className="w-[880px] max-w-full">
@@ -227,7 +250,7 @@ function FragmentTrace({
         {verifiedBy.length > 0 ? (
           <div className="flex flex-wrap gap-1.5 py-2">
             {verifiedBy.map((criterion) => (
-              <Chip key={criterion.id}>{fragmentAnchor(criterion.owner, criterion.id)}</Chip>
+              <Chip key={criterion.id}>{criterion.anchor}</Chip>
             ))}
           </div>
         ) : (
@@ -273,8 +296,4 @@ function KeyList({
         ))}
     </span>
   );
-}
-
-function excerpt(fragment: SpecFragmentModel): string {
-  return fragment.shape.kind === "statement" ? fragment.shape.text : sectionLabel(fragment.section);
 }

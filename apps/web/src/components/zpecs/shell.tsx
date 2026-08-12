@@ -1,4 +1,4 @@
-import { useClerk, useUser } from "@clerk/tanstack-react-start";
+import { useClerk } from "@clerk/tanstack-react-start";
 import { Link, useNavigate, useRouter, useRouterState, useSearch } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { NAV, activeNavPath, breadcrumb } from "~/lib/navigation";
@@ -183,9 +183,11 @@ function NavBadge({ value }: { readonly value: number }) {
 
 export function AppSidebar({
   model,
+  actorId,
   onSignOut,
 }: {
   readonly model: ProjectModel | null;
+  readonly actorId: string | null;
   readonly onSignOut: () => void;
 }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -215,7 +217,11 @@ export function AppSidebar({
             const isActive = active === entry.to;
             // In a Project with nothing in it every badge reads 0 rather than
             // keeping the counts of the Project you just left.
-            const count = entry.count ? (model?.[entry.count].length ?? 0) : null;
+            const count = entry.count
+              ? entry.count === "fragmentCount"
+                ? (model?.fragmentCount ?? 0)
+                : (model?.[entry.count].length ?? 0)
+              : null;
             return (
               <li key={entry.to} className="relative">
                 <Link
@@ -240,7 +246,7 @@ export function AppSidebar({
         </ul>
       </nav>
 
-      <UserBlock onSignOut={onSignOut} />
+      <UserBlock actorId={actorId} onSignOut={onSignOut} />
     </div>
   );
 }
@@ -253,18 +259,19 @@ export function AppSidebar({
  * Settings · Account, which is where the identity zpecs actually holds is written
  * down; a profile belongs on a screen rather than in a popover.
  */
-function UserBlock({ onSignOut }: { readonly onSignOut: () => void }) {
-  const { user } = useUser();
+function UserBlock({
+  actorId,
+  onSignOut,
+}: {
+  readonly actorId: string | null;
+  readonly onSignOut: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const close = () => {
     setOpen(false);
     setConfirming(false);
   };
-
-  // zpecs stores no user row: the actor id on a revision is the only identity it
-  // has ever recorded, so that id is what this block shows.
-  const actorId = user?.id ?? "—";
 
   return (
     <div className="border-sidebar-border relative border-t p-2">
@@ -285,7 +292,7 @@ function UserBlock({ onSignOut }: { readonly onSignOut: () => void }) {
           u
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-mono text-[11px]">{actorId}</span>
+          <span className="block truncate font-mono text-[11px]">{actorId ?? "—"}</span>
           <span className="text-muted-foreground block text-[10px]">Signed in</span>
         </span>
         <ChevronPair />

@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from "react";
 import {
   fragmentAnchor,
+  isTargetable,
   sectionLabel,
   type SectionId,
   type SpecFragmentModel,
@@ -306,7 +307,10 @@ export function SpecFragment({
         </SpecRelation>
       ) : null}
 
-      {showRelations && implementedBy && onOpenEntity ? (
+      {/* Only where a Task could actually point. A section outside the targetable
+          namespaces has no `implements` field to be named by, so an empty row here
+          would report an absence that is structurally impossible. */}
+      {showRelations && implementedBy && onOpenEntity && isTargetable(fragment.section) ? (
         <SpecRelation label="Implemented by" indent={indent}>
           {implementedBy.length > 0 ? (
             implementedBy.map((taskKey) => (
@@ -318,11 +322,9 @@ export function SpecFragment({
               />
             ))
           ) : (
-            // "No Task references this" is a fact about the references, not a
-            // verdict on the work. The wording says which of the two it is.
-            <span className="text-muted-foreground text-[11px]">
-              {`no Task references this ${sectionLabel(fragment.section).toLowerCase().replace(/s$/, "")}`}
-            </span>
+            // A fact about the references, not a verdict on the work — and the
+            // wording says which of the two it is.
+            <span className="text-muted-foreground text-[11px]">no Task implements this</span>
           )}
         </SpecRelation>
       ) : null}

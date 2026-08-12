@@ -21,6 +21,7 @@ import { groupFragments, sectionLabel } from "~/lib/fragments";
 import type { EpicRow, ProjectModel, StreamRow } from "~/lib/model";
 import type { RootSearch } from "~/lib/search";
 import { formatRevisionTime } from "~/lib/vocabulary";
+import { getEntityDocument } from "~/server/entity";
 
 /**
  * Epic detail — Overview, Streams, Rules, Changes.
@@ -47,6 +48,11 @@ export const Route = createFileRoute("/epic/$epicKey")({
     inspect: typeof search.inspect === "string" ? search.inspect : undefined,
     tab: TABS.includes(search.tab as TabId) ? (search.tab as TabId) : undefined,
   }),
+  loaderDeps: ({ search }) => ({ projectId: search.project }),
+  // An Epic's scope, outcomes and metrics are fragments, and they left the aggregate
+  // with every other document section. This page fetches its own.
+  loader: ({ deps, params }) =>
+    getEntityDocument({ data: { projectId: deps.projectId, key: params.epicKey } }),
   component: EpicPage,
 });
 
@@ -78,10 +84,11 @@ function EpicScreen({ epic, model }: { readonly epic: EpicRow; readonly model: P
   const search = Route.useSearch();
   const rootSearch = useSearch({ from: "__root__" });
   const navigate = useNavigate({ from: Route.fullPath });
+  const loaded = Route.useLoaderData();
   const tab: TabId = search.tab ?? "overview";
 
   const streams = model.streams.filter((stream) => stream.epicKey === epic.key);
-  const groups = groupFragments(epic.fragments);
+  const groups = groupFragments(loaded.ok ? loaded.fragments : []);
 
   const context = (
     <>
@@ -102,7 +109,10 @@ function EpicScreen({ epic, model }: { readonly epic: EpicRow; readonly model: P
             { value: epic.readyNow, label: "Ready or in progress" },
             { value: epic.blockedStreams, label: "Held by a prerequisite" },
             { value: epic.executableTasks, label: "Tasks that could start" },
-            { value: epic.fragmentCount, label: "Spec fragments beneath" },
+            {
+              value: streams.reduce((sum, stream) => sum + stream.taskCount, 0),
+              label: "Tasks beneath",
+            },
           ]}
         />
       </ContextBlock>
