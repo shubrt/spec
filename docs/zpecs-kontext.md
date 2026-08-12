@@ -700,6 +700,11 @@ durchgesetzt:
 8. Änderungen zuerst validieren und den semantischen Diff prüfen.
 9. Bei mehreren Änderungen am selben ID-Array gebündelte `items` verwenden.
 10. Eine stale Revision neu lesen; niemals die erwartete Revision raten.
+11. Technische und gestalterische Entscheidungen dem Nutzer vorlegen: Optionen
+    mit Empfehlung zeigen, explizit fragen, und erst die getroffene Wahl mit
+    Begründung und Alternativen als `technical_decisions` festschreiben.
+    Unentschiedenes bleibt `OQ-*`; ist die Entscheidung selbst Arbeit, wird sie
+    ein Task vom Typ `decision`.
 
 ## 14. Bewusste Nicht-Ziele
 

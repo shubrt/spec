@@ -120,6 +120,19 @@ export const RULES = {
       "Never write a guess as if the user had stated it. Put unknowns in addressable content.open_questions or content.assumptions. Claims record basis and local source_ids; provenance.sources holds immutable source observations.",
   },
 
+  /**
+   * The same defect as `unknowns_must_be_marked`, one step further along: not an
+   * invented requirement but an invented answer. It cannot be validated — the
+   * document does not record who chose — so its only enforcement is this text,
+   * carried by the `technical_decisions` field where the decision would be written.
+   */
+  decisions_need_user_input: {
+    spec: "§13",
+    enforcement: "description",
+    message:
+      "A technical or design decision becomes document content only after the user has chosen it. Offer the options with a recommendation and ask; keep an unchosen decision in content.open_questions instead of content.implementation.technical_decisions.",
+  },
+
   /* ------------------------------------------------------------- service */
 
   stream_belongs_to_one_epic: {

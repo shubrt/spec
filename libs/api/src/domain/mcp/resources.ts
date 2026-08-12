@@ -5,7 +5,7 @@ import { HIERARCHY_ENTITY_TYPE, STREAM_TYPE, TASK_TYPE, VERSIONED_ENTITY_TYPE } 
 import type { DocumentSchemaTarget } from "../schema/document";
 import { documentJsonSchema } from "../schema/jsonSchema";
 import { type DocumentSchemaSelection, resolveDocumentSchemaTarget } from "../schema/target";
-import { CONFIRM_RULE, HIERARCHY, UNKNOWN_RULE, WHAT_VS_HOW } from "./fragments";
+import { CONFIRM_RULE, DECISION_RULE, HIERARCHY, UNKNOWN_RULE, WHAT_VS_HOW } from "./fragments";
 
 /**
  * Tier 3 of three (domain spec §10.5): the long form, fetched only when a model
@@ -126,9 +126,19 @@ const GUIDES: readonly GuideResource[] = [
   {
     slug: "conventions",
     title: "Working conventions",
-    description: "Unknown information, confirmation, revisions, and what not to do.",
+    description:
+      "Unknown information, decisions that are the user's, confirmation, revisions, and what not to do.",
     text: [
       UNKNOWN_RULE,
+      DECISION_RULE,
+      "Working a decision: name the options, say which one you would pick and why, show the " +
+        "trade-offs, then ask. Once the user has chosen, record it as a " +
+        "content.implementation.technical_decisions entry with its reason and the alternatives " +
+        "considered — the alternatives are what shows the choice was made rather than assumed. " +
+        "While it is open, keep it in content.open_questions, add an assumption only if work has " +
+        "to continue without the answer, and leave the Task at draft or planned. When the " +
+        "decision is itself the work, make it a Task of type decision instead of resolving it " +
+        "silently; when it keeps applying beyond this Stream, record it as an R-key.",
       CONFIRM_RULE,
       "Never overwrite a newer revision. Every update states the revision it was based on; if " +
         "that revision is stale the change is rejected, and the correct response is to re-read " +

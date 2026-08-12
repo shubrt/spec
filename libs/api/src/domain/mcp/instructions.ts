@@ -1,5 +1,6 @@
 import {
   CONFIRM_RULE,
+  DECISION_RULE,
   HIERARCHY,
   STREAM_TYPES_LINE,
   TASK_TYPES_LINE,
@@ -20,7 +21,10 @@ import {
  *
  * Contents are fixed by the plan: the Epic/Stream/Task glossary (§3), the
  * what/why vs how split with both "belongs in" lists (§4), the stream and task
- * types (§3.2/§3.3), the unknown-marking rule (§14), and the confirm rule.
+ * types (§3.2/§3.3), the unknown-marking rule (§14), the decision rule (§13),
+ * and the confirm rule. The two "belongs in" lists are the compressed form; the
+ * full lists are `zpecs://guide/separation`, which is what paid for the decision
+ * rule's place here.
  */
 export const SERVER_INSTRUCTIONS = [
   "zpecs is the project-management system for this workspace. Epics, Streams, Tasks, Rules, " +
@@ -32,15 +36,13 @@ export const SERVER_INSTRUCTIONS = [
   WHAT_VS_HOW,
 
   "Belongs in an epic or stream: purpose, business problem, scope and exclusions, outcomes, " +
-    "functional requirements, non-functional requirements with measurable targets, workflows, " +
-    "Rule applications, edge cases, business dependencies, acceptance or success criteria, open " +
-    "questions and assumptions.",
+    "functional and measurable non-functional requirements, workflows, Rule applications, edge " +
+    "cases, dependencies, acceptance criteria, open questions and assumptions.",
 
-  "Belongs in a task: frameworks and libraries, concrete files and modules, API endpoints, " +
-    "database tables and migrations, technical architecture, implementation decisions, test " +
-    "files and strategy, deployment steps, branches and environments. Every ready Task references " +
-    "at least one typed business target in its parent Stream, so what and why stay separate from " +
-    "how but remain traceable.",
+  "Belongs in a task: frameworks, files and modules, endpoints, tables and migrations, " +
+    "technical architecture, implementation decisions, test strategy, deployment steps, branches " +
+    "and environments. Every ready Task references a typed business target in its parent Stream, " +
+    "so what and why stay separate from how but stay traceable.",
 
   `${STREAM_TYPES_LINE} Pick the type from the nature of the work; do not force a user-story ` +
     "shape onto a bug, an experiment or an investigation.",
@@ -48,6 +50,8 @@ export const SERVER_INSTRUCTIONS = [
   TASK_TYPES_LINE,
 
   UNKNOWN_RULE,
+
+  DECISION_RULE,
 
   CONFIRM_RULE,
 

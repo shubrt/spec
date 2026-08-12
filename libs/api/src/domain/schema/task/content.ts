@@ -93,7 +93,10 @@ export const technicalDecision = z.strictObject({
 export const taskImplementation = z.strictObject({
   approach: prose,
   steps: statementList.optional(),
-  technical_decisions: z.array(technicalDecision).optional(),
+  technical_decisions: z
+    .array(technicalDecision)
+    .optional()
+    .meta({ description: ruleText("decisions_need_user_input") }),
 });
 
 /** How the task will be shown to work. */
