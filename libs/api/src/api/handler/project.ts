@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 import { z } from "zod";
+import { recordReadPerformanceEvent } from "../../_/eventLog";
 import {
   epicStatusSchema,
   linkableEntityTypeSchema,
@@ -22,8 +23,8 @@ import { loadProjectAggregate } from "../../domain/service/projectAggregate";
 import { pruneForAggregate } from "../../domain/service/readProjection";
 import { findProjectEntity } from "../../domain/service/projectEntity";
 import {
-  countProjectFragments,
-  loadEntityFragments,
+  extractDocumentFragments,
+  indexImplementationBacklinks,
   loadFragmentPage,
   type FragmentEntry,
 } from "../../domain/service/projectFragments";
@@ -31,6 +32,7 @@ import { SECTION_IDS, readRuleApplications, readSources } from "../../domain/ser
 import { SEARCH_GROUPS, searchProject } from "../../domain/service/projectSearch";
 import { loadRevisionPage } from "../../domain/service/revisionLog";
 import { streamRepository } from "../../domain/repository/stream";
+import { taskRepository } from "../../domain/repository/task";
 import { asRecord, asText } from "../../domain/service/documentValue";
 import { authScope } from "../plugin/authScope";
 
@@ -459,66 +461,96 @@ export const projectHandler = new Elysia({ prefix: "/workspace/projects" })
   .get(
     "/:projectId",
     async ({ scope, params, status }) => {
-      const [aggregate, fragmentCount] = await Promise.all([
-        loadProjectAggregate(scope, params.projectId),
-        countProjectFragments(scope, params.projectId),
-      ]);
-      if (!aggregate) {
-        // A project id from another tenant is answered identically to one that does
-        // not exist — the scope is inside the `WHERE`, so the two are not
-        // distinguishable here and must not become distinguishable by accident.
-        return status(404, {
-          error: "project_not_found" as const,
-          message: "No project with that id exists in this workspace.",
-        });
-      }
+      const startedAt = performance.now();
+      let readOutcome: "ok" | "not_found" | "error" = "error";
+      let resultCount: number | undefined;
+      let corpusCount: number | undefined;
+      try {
+        const aggregate = await loadProjectAggregate(scope, params.projectId);
+        if (!aggregate) {
+          // A project id from another tenant is answered identically to one that does
+          // not exist — the scope is inside the `WHERE`, so the two are not
+          // distinguishable here and must not become distinguishable by accident.
+          readOutcome = "not_found";
+          resultCount = 0;
+          return status(404, {
+            error: "project_not_found" as const,
+            message: "No project with that id exists in this workspace.",
+          });
+        }
 
-      return {
-        project: {
-          id: aggregate.project.id,
-          name: aggregate.project.name,
-          createdAt: aggregate.project.createdAt.toISOString(),
-          updatedAt: aggregate.project.updatedAt.toISOString(),
-        },
-        epics: aggregate.epics.map((epicNode) => ({
-          ...entityFields("epic", epicNode.epic),
-          status: epicNode.epic.status,
-          streams: epicNode.streams.map((streamNode) => ({
-            ...entityFields("stream", streamNode.stream),
-            epicId: streamNode.stream.epicId,
-            status: streamNode.stream.status,
-            streamType: streamNode.stream.streamType,
-            tasks: streamNode.tasks.map((taskRow) => ({
-              ...entityFields("task", taskRow),
-              streamId: taskRow.streamId,
-              status: taskRow.status,
-              taskType: taskRow.taskType,
+        resultCount =
+          aggregate.epics.reduce(
+            (epicTotal, epicNode) =>
+              epicTotal +
+              1 +
+              epicNode.streams.reduce(
+                (streamTotal, streamNode) => streamTotal + 1 + streamNode.tasks.length,
+                0,
+              ),
+            0,
+          ) +
+          aggregate.milestones.length +
+          aggregate.rules.length;
+        corpusCount = aggregate.fragmentCount;
+
+        const result = {
+          project: {
+            id: aggregate.project.id,
+            name: aggregate.project.name,
+            createdAt: aggregate.project.createdAt.toISOString(),
+            updatedAt: aggregate.project.updatedAt.toISOString(),
+          },
+          epics: aggregate.epics.map((epicNode) => ({
+            ...entityFields("epic", epicNode.epic),
+            status: epicNode.epic.status,
+            streams: epicNode.streams.map((streamNode) => ({
+              ...entityFields("stream", streamNode.stream),
+              epicId: streamNode.stream.epicId,
+              status: streamNode.stream.status,
+              streamType: streamNode.stream.streamType,
+              tasks: streamNode.tasks.map((taskRow) => ({
+                ...entityFields("task", taskRow),
+                streamId: taskRow.streamId,
+                status: taskRow.status,
+                taskType: taskRow.taskType,
+              })),
             })),
           })),
-        })),
-        milestones: aggregate.milestones.map((milestoneNode) => ({
-          ...entityFields("milestone", milestoneNode.milestone),
-          status: milestoneNode.milestone.status,
-          roadmapOrder: milestoneNode.milestone.roadmapOrder,
-          streams: milestoneNode.streams.map((streamRow) => ({
-            id: streamRow.id,
-            key: streamRow.key,
-            title: streamRow.title,
-            status: streamRow.status,
-            streamType: streamRow.streamType,
-            epicKey: streamRow.epicKey,
-            roadmapRank: streamRow.roadmapRank,
+          milestones: aggregate.milestones.map((milestoneNode) => ({
+            ...entityFields("milestone", milestoneNode.milestone),
+            status: milestoneNode.milestone.status,
+            roadmapOrder: milestoneNode.milestone.roadmapOrder,
+            streams: milestoneNode.streams.map((streamRow) => ({
+              id: streamRow.id,
+              key: streamRow.key,
+              title: streamRow.title,
+              status: streamRow.status,
+              streamType: streamRow.streamType,
+              epicKey: streamRow.epicKey,
+              roadmapRank: streamRow.roadmapRank,
+            })),
           })),
-        })),
-        rules: aggregate.rules.map((ruleRow) => ({
-          ...entityFields("rule", ruleRow),
-          status: ruleRow.status,
-        })),
-        // Spread rather than passed through: the domain returns `readonly` arrays,
-        // and Elysia's response type is invariant in the array's mutability.
-        links: [...aggregate.links],
-        fragmentCount,
-      };
+          rules: aggregate.rules.map((ruleRow) => ({
+            ...entityFields("rule", ruleRow),
+            status: ruleRow.status,
+          })),
+          // Spread rather than passed through: the domain returns `readonly` arrays,
+          // and Elysia's response type is invariant in the array's mutability.
+          links: [...aggregate.links],
+          fragmentCount: aggregate.fragmentCount,
+        };
+        readOutcome = "ok";
+        return result;
+      } finally {
+        recordReadPerformanceEvent({
+          operation: "project.aggregate",
+          outcome: readOutcome,
+          elapsedMs: performance.now() - startedAt,
+          ...(resultCount === undefined ? {} : { resultCount }),
+          ...(corpusCount === undefined ? {} : { corpusCount }),
+        });
+      }
     },
     {
       // Zod v4, never Elysia's `t`. This is load-bearing rather than cosmetic: the
@@ -544,18 +576,36 @@ export const projectHandler = new Elysia({ prefix: "/workspace/projects" })
   .get(
     "/:projectId/revisions",
     async ({ scope, params, query }) => {
-      const page = await loadRevisionPage(scope, params.projectId, query);
-      // Mapped rather than passed through, like every other DTO in this file. The
-      // domain returns `readonly` arrays at both levels and Elysia's response type
-      // is invariant in array mutability, so the nested one is copied too.
-      return {
-        ...page,
-        revisions: page.revisions.map((entry) => ({
-          ...entry,
-          sectionDeltas: [...entry.sectionDeltas],
-        })),
-        actors: page.actors.map((entry) => ({ ...entry })),
-      };
+      const startedAt = performance.now();
+      let readOutcome: "ok" | "error" = "error";
+      let resultCount: number | undefined;
+      let totalCount: number | undefined;
+      try {
+        const page = await loadRevisionPage(scope, params.projectId, query);
+        // Mapped rather than passed through, like every other DTO in this file. The
+        // domain returns `readonly` arrays at both levels and Elysia's response type
+        // is invariant in array mutability, so the nested one is copied too.
+        const result = {
+          ...page,
+          revisions: page.revisions.map((entry) => ({
+            ...entry,
+            sectionDeltas: [...entry.sectionDeltas],
+          })),
+          actors: page.actors.map((entry) => ({ ...entry })),
+        };
+        resultCount = page.revisions.length;
+        totalCount = page.total;
+        readOutcome = "ok";
+        return result;
+      } finally {
+        recordReadPerformanceEvent({
+          operation: "project.revisions",
+          outcome: readOutcome,
+          elapsedMs: performance.now() - startedAt,
+          ...(resultCount === undefined ? {} : { resultCount }),
+          ...(totalCount === undefined ? {} : { totalCount }),
+        });
+      }
     },
     {
       params: z.strictObject({ projectId: z.uuid() }),
@@ -574,36 +624,87 @@ export const projectHandler = new Elysia({ prefix: "/workspace/projects" })
   .get(
     "/:projectId/entities/:key",
     async ({ scope, params, status }) => {
-      const found = await findProjectEntity(scope, params.projectId, params.key);
-      if (!found) {
-        return status(404, {
-          error: "entity_not_found" as const,
-          message: "No entity with that key exists in this project.",
+      const startedAt = performance.now();
+      let readOutcome: "ok" | "not_found" | "error" = "error";
+      let resultCount: number | undefined;
+      let corpusCount: number | undefined;
+      try {
+        const found = await findProjectEntity(scope, params.projectId, params.key);
+        if (!found) {
+          readOutcome = "not_found";
+          resultCount = 0;
+          return status(404, {
+            error: "entity_not_found" as const,
+            message: "No entity with that key exists in this project.",
+          });
+        }
+        // A Task's targets live in its parent Stream. Fragment anchors use the owner
+        // key while the Task document stores its parent as a uuid, so the row is read
+        // to translate one into the other and provide the parent document itself.
+        const parentId =
+          found.entityType === "task"
+            ? asText(asRecord(found.document.links).parent_stream_id)
+            : "";
+        const parent =
+          parentId.length > 0 ? await streamRepository.findById(scope, parentId) : null;
+        // Only Stream fragments can be implementation targets. Read Tasks from that
+        // one Stream to retain exact backlinks without expanding every document in
+        // the project. A Stream detail uses itself; a Task detail uses its parent.
+        const implementationStream =
+          found.entityType === "stream" ? { id: found.id, key: found.key } : parent;
+        const implementingTasks = implementationStream
+          ? await taskRepository.listByStreams(scope, { streamIds: [implementationStream.id] })
+          : [];
+        const implementedBy = implementationStream
+          ? indexImplementationBacklinks(implementingTasks, [implementationStream])
+          : new Map<string, readonly string[]>();
+        const fragments = extractDocumentFragments(
+          {
+            entityType: found.entityType,
+            key: found.key,
+            title: found.title,
+            document: found.document,
+          },
+          implementedBy,
+        );
+        const targetFragments = parent
+          ? extractDocumentFragments(
+              {
+                entityType: "stream",
+                key: parent.key,
+                title: parent.title,
+                document: parent.document,
+              },
+              implementedBy,
+            )
+          : [];
+        const result = {
+          entityType: found.entityType,
+          key: found.key,
+          title: found.title,
+          revision: found.revision,
+          document: found.document,
+          targetFragments: targetFragments.map(toFragmentDto),
+          fragments: fragments.map(toFragmentDto),
+          sources: readSources(found.document).map((source) => ({
+            ...source,
+            supersedes: [...source.supersedes],
+            supersededBy: [...source.supersededBy],
+          })),
+        };
+        resultCount = 1;
+        corpusCount = fragments.length + targetFragments.length;
+        readOutcome = "ok";
+        return result;
+      } finally {
+        recordReadPerformanceEvent({
+          operation: "project.entity_detail",
+          outcome: readOutcome,
+          elapsedMs: performance.now() - startedAt,
+          ...(resultCount === undefined ? {} : { resultCount }),
+          ...(corpusCount === undefined ? {} : { corpusCount }),
         });
       }
-      // A Task's targets live in its parent Stream, and the fragment loader addresses
-      // owners by key while the document stores the parent as a uuid — so the row is
-      // read to translate one into the other.
-      const parentId =
-        found.entityType === "task" ? asText(asRecord(found.document.links).parent_stream_id) : "";
-      const parent = parentId.length > 0 ? await streamRepository.findById(scope, parentId) : null;
-      const parentKey = parent?.key ?? null;
-      const [fragments, targetFragments] = await Promise.all([
-        loadEntityFragments(scope, params.projectId, params.key),
-        parentKey === null
-          ? Promise.resolve([])
-          : loadEntityFragments(scope, params.projectId, parentKey),
-      ]);
-      return {
-        ...found,
-        targetFragments: targetFragments.map(toFragmentDto),
-        fragments: fragments.map(toFragmentDto),
-        sources: readSources(found.document).map((source) => ({
-          ...source,
-          supersedes: [...source.supersedes],
-          supersededBy: [...source.supersededBy],
-        })),
-      };
     },
     {
       params: z.strictObject({ projectId: z.uuid(), key: z.string().min(1).max(128) }),
@@ -621,18 +722,39 @@ export const projectHandler = new Elysia({ prefix: "/workspace/projects" })
   .get(
     "/:projectId/fragments",
     async ({ scope, params, query }) => {
-      const page = await loadFragmentPage(scope, params.projectId, {
-        offset: query.offset,
-        limit: query.limit,
-        section: query.section as never,
-        owner: query.owner,
-        q: query.q,
-      });
-      return {
-        ...page,
-        fragments: page.fragments.map(toFragmentDto),
-        sectionCounts: page.sectionCounts.map((entry) => ({ ...entry })),
-      };
+      const startedAt = performance.now();
+      let readOutcome: "ok" | "error" = "error";
+      let resultCount: number | undefined;
+      let totalCount: number | undefined;
+      let corpusCount: number | undefined;
+      try {
+        const page = await loadFragmentPage(scope, params.projectId, {
+          offset: query.offset,
+          limit: query.limit,
+          section: query.section as never,
+          owner: query.owner,
+          q: query.q,
+        });
+        const result = {
+          ...page,
+          fragments: page.fragments.map(toFragmentDto),
+          sectionCounts: page.sectionCounts.map((entry) => ({ ...entry })),
+        };
+        resultCount = page.fragments.length;
+        totalCount = page.total;
+        corpusCount = page.sectionCounts.reduce((total, entry) => total + entry.count, 0);
+        readOutcome = "ok";
+        return result;
+      } finally {
+        recordReadPerformanceEvent({
+          operation: "project.fragments",
+          outcome: readOutcome,
+          elapsedMs: performance.now() - startedAt,
+          ...(resultCount === undefined ? {} : { resultCount }),
+          ...(totalCount === undefined ? {} : { totalCount }),
+          ...(corpusCount === undefined ? {} : { corpusCount }),
+        });
+      }
     },
     {
       params: z.strictObject({ projectId: z.uuid() }),
@@ -650,11 +772,32 @@ export const projectHandler = new Elysia({ prefix: "/workspace/projects" })
   .get(
     "/:projectId/search",
     async ({ scope, params, query }) => {
-      const result = await searchProject(scope, params.projectId, {
-        query: query.q,
-        limit: query.limit,
-      });
-      return { ...result, hits: result.hits.map((hit) => ({ ...hit })) };
+      const startedAt = performance.now();
+      let readOutcome: "ok" | "error" = "error";
+      let resultCount: number | undefined;
+      let totalCount: number | undefined;
+      let corpusCount: number | undefined;
+      try {
+        const result = await searchProject(scope, params.projectId, {
+          query: query.q,
+          limit: query.limit,
+        });
+        const response = { ...result, hits: result.hits.map((hit) => ({ ...hit })) };
+        resultCount = result.hits.length;
+        totalCount = result.total;
+        corpusCount = result.indexed;
+        readOutcome = "ok";
+        return response;
+      } finally {
+        recordReadPerformanceEvent({
+          operation: "project.search",
+          outcome: readOutcome,
+          elapsedMs: performance.now() - startedAt,
+          ...(resultCount === undefined ? {} : { resultCount }),
+          ...(totalCount === undefined ? {} : { totalCount }),
+          ...(corpusCount === undefined ? {} : { corpusCount }),
+        });
+      }
     },
     {
       params: z.strictObject({ projectId: z.uuid() }),

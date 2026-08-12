@@ -66,15 +66,17 @@ export const getRevisions = createServerFn({ method: "GET" })
     const api = createApiClient(sessionToken);
 
     try {
-      const projectsResponse = await api.workspace.projects.get();
-      if (projectsResponse.error) return EMPTY;
+      let projectId = data.projectId;
+      if (!projectId) {
+        const projectsResponse = await api.workspace.projects.get();
+        if (projectsResponse.error) return EMPTY;
+        // Resolved the same way the board resolves it, so `?project=` being absent
+        // means the same project on both screens.
+        projectId = selectProject(projectsResponse.data.projects, undefined)?.id;
+      }
+      if (!projectId) return EMPTY;
 
-      // Resolved the same way the board resolves it, so `?project=` being absent
-      // means the same project on both screens.
-      const selected = selectProject(projectsResponse.data.projects, data.projectId);
-      if (!selected) return EMPTY;
-
-      const response = await api.workspace.projects({ projectId: selected.id }).revisions.get({
+      const response = await api.workspace.projects({ projectId }).revisions.get({
         query: {
           offset: data.offset ?? 0,
           limit: data.limit ?? 25,

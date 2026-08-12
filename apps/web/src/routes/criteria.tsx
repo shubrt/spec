@@ -1,4 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { Absent } from "~/components/zpecs/box";
 import { ChipFilter, ClearFilters, FilterBar, SearchField } from "~/components/zpecs/controls";
 import { EntityTable, type Column } from "~/components/zpecs/entity-table";
@@ -39,6 +40,8 @@ interface CriteriaSearch extends RootSearch {
   readonly limit?: number;
 }
 
+const SEARCH_DEBOUNCE_MS = 250;
+
 export const Route = createFileRoute("/criteria")({
   validateSearch: (search: Record<string, unknown>): CriteriaSearch => ({
     project: typeof search.project === "string" ? search.project : undefined,
@@ -75,11 +78,41 @@ function CriteriaScreen() {
   const search = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   const page = Route.useLoaderData();
+  const [query, setQuery] = useState(search.q ?? "");
+
+  // Back/forward navigation and links can change the canonical URL independently
+  // of this input, so the draft follows those changes.
+  useEffect(() => {
+    setQuery(search.q ?? "");
+  }, [search.q]);
+
+  // Filtering is server-side. Keep typing local and update the URL only after the
+  // user pauses, replacing the current entry so a word does not become a stack of
+  // one-character history entries.
+  useEffect(() => {
+    const next = query || undefined;
+    if (next === search.q) return undefined;
+
+    const timer = setTimeout(() => {
+      void navigate({
+        replace: true,
+        search: (previous) => ({ ...previous, q: next, offset: undefined }),
+      });
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(timer);
+  }, [navigate, query, search.q]);
 
   // Changing a filter resets to the first page: page four of the old result is not
   // page four of the new one, and landing past the end reads as "no matches".
   const set = (patch: Partial<CriteriaSearch>) => {
-    void navigate({ search: (previous) => ({ ...previous, ...patch, offset: undefined }) });
+    void navigate({
+      search: (previous) => ({
+        ...previous,
+        q: query || undefined,
+        ...patch,
+        offset: undefined,
+      }),
+    });
   };
 
   const activeFilters = FILTER_KEYS.filter((key) => search[key] !== undefined).length;
@@ -97,6 +130,7 @@ function CriteriaScreen() {
         <ClearFilters
           count={activeFilters}
           onClear={() => {
+            setQuery("");
             void navigate({ search: (previous) => carry(previous) });
           }}
         />
@@ -104,8 +138,8 @@ function CriteriaScreen() {
 
       <FilterBar>
         <SearchField
-          value={search.q}
-          onChange={(value) => set({ q: value })}
+          value={query || undefined}
+          onChange={(value) => setQuery(value ?? "")}
           placeholder="Search anchor or text…"
           width={280}
           label="Search fragments"

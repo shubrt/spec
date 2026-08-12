@@ -1,35 +1,22 @@
 import type { WorkspaceScope } from "../auth/workspaceScope";
 import type { VersionedEntityType } from "../enums";
-import { epicRepository } from "../repository/epic";
-import { milestoneRepository } from "../repository/milestone";
-import { streamRepository } from "../repository/stream";
-import { taskRepository } from "../repository/task";
-import { readFragments, type SectionId, type SpecFragmentModel } from "./specFragment";
+import { projectFragmentRepository } from "../repository/projectFragment";
+import {
+  readFragments,
+  SECTION_ORDER,
+  type SectionId,
+  type SpecFragmentModel,
+} from "./specFragment";
+
+export { fragmentText } from "./specFragment";
 
 /**
  * Specification fragments as a queryable collection.
  *
- * A fragment is not a row. `FR-1`, `AC-2` and `CHG-1` live inside `content` as
- * jsonb, so they have no identity the database can filter, count or rank by — which
- * is why the browser used to hold every document in order to page a list of them.
- *
- * This reads the documents once and expands them here. Filtering, counting and
- * paging then happen over a materialised array rather than over the wire.
- *
- * ## Why not SQL
- *
- * `jsonb_array_elements` over a lateral join of the known section paths would push
- * this into the query planner, and the shape is written down in `specFragment.ts`
- * already. But the *text* of a fragment is not a jsonb field — it is assembled from
- * three or four of them by the readers there (a criterion is given/when/then, a
- * transition is current→desired). Expanding in SQL would mean writing those
- * assemblies a second time, in a second language, and a search that disagreed with
- * the renderer about what a fragment says is worse than a slower one that agrees.
- *
- * So the documents are read and the readers run once per request. The cost is
- * proportional to the project rather than to the page — see `bench` figures in the
- * plan — and the escalation, if a project ever outgrows it, is a projection table
- * behind this same function rather than a different shape above it.
+ * The authoritative fragments still live inside each document. A transactional
+ * projection expands them once per write with the same TypeScript reader used by
+ * detail pages. Reads can therefore filter, count and page in SQL without copying
+ * the document-shape rules into SQL or transferring the rest of the project.
  */
 
 export interface FragmentFilter {
@@ -66,64 +53,67 @@ export interface FragmentPage {
   readonly ownerCount: number;
 }
 
-/** Every fragment of one project, in reading order, owners resolved. */
-async function loadAll(
-  scope: WorkspaceScope,
-  projectId: string,
-): Promise<readonly FragmentEntry[]> {
-  const [epics, streams, tasks, milestones] = await Promise.all([
-    epicRepository.listByProject(scope, projectId),
-    streamRepository.listByProject(scope, projectId),
-    taskRepository.listByProject(scope, projectId),
-    milestoneRepository.listByProject(scope, projectId),
-  ]);
+type FragmentDocument = {
+  readonly key: string;
+  readonly document: Record<string, unknown>;
+};
 
-  // Which Tasks name which fragment. Built from the Tasks already in hand, so the
-  // backlink costs no extra query — and it is the one relation a fragment carries
-  // that is not inside its own document.
+type FragmentOwner = FragmentDocument & {
+  readonly entityType: VersionedEntityType;
+  readonly title: string;
+};
+
+type ImplementingTask = FragmentDocument & {
+  readonly streamId: string;
+};
+
+/**
+ * Indexes Task implementation edges by their globally addressable Stream fragment.
+ *
+ * The Stream rows supplied by the caller define the boundary: a detail request can
+ * pass one parent and query only its Tasks, while the project-wide fragment page
+ * can pass the complete collections it already loaded.
+ */
+export function indexImplementationBacklinks(
+  tasks: readonly ImplementingTask[],
+  streams: readonly { readonly id: string; readonly key: string }[],
+): ReadonlyMap<string, readonly string[]> {
+  const streamKeyById = new Map(streams.map((stream) => [stream.id, stream.key]));
   const implementedBy = new Map<string, string[]>();
   for (const task of tasks) {
-    for (const anchor of taskTargetAnchors(task.document, task.streamId, streams)) {
+    const streamKey = streamKeyById.get(task.streamId);
+    if (streamKey === undefined) continue;
+    for (const anchor of taskTargetAnchors(task.document, streamKey)) {
       const bucket = implementedBy.get(anchor);
       if (bucket) bucket.push(task.key);
       else implementedBy.set(anchor, [task.key]);
     }
   }
+  return implementedBy;
+}
 
-  const owners: readonly {
-    readonly type: VersionedEntityType;
-    readonly rows: readonly { key: string; title: string; document: Record<string, unknown> }[];
-  }[] = [
-    { type: "epic", rows: epics },
-    { type: "stream", rows: streams },
-    { type: "task", rows: tasks },
-    { type: "milestone", rows: milestones },
-  ];
-
-  return owners.flatMap(({ type, rows }) =>
-    rows.flatMap((row) =>
-      readFragments(row.key, row.document).map((fragment) => {
-        const anchor = `${fragment.owner}#${fragment.id}`;
-        return {
-          ...fragment,
-          ownerType: type,
-          ownerTitle: row.title,
-          anchor,
-          implementedBy: implementedBy.get(anchor) ?? [],
-        };
-      }),
-    ),
-  );
+/** Extracts one already-loaded entity's fragments and attaches known backlinks. */
+export function extractDocumentFragments(
+  owner: FragmentOwner,
+  implementedBy: ReadonlyMap<string, readonly string[]> = new Map(),
+): readonly FragmentEntry[] {
+  return readFragments(owner.key, owner.document).map((fragment) => {
+    const anchor = `${fragment.owner}#${fragment.id}`;
+    return {
+      ...fragment,
+      ownerType: owner.entityType,
+      ownerTitle: owner.title,
+      anchor,
+      implementedBy: implementedBy.get(anchor) ?? [],
+    };
+  });
 }
 
 /** The anchors one Task's `implements` names, resolved against its parent Stream. */
 function taskTargetAnchors(
   document: Record<string, unknown>,
-  streamId: string,
-  streams: readonly { id: string; key: string }[],
+  streamKey: string,
 ): readonly string[] {
-  const parent = streams.find((stream) => stream.id === streamId);
-  if (!parent) return [];
   const content = document.content;
   const implementsValue =
     typeof content === "object" && content !== null && !Array.isArray(content)
@@ -135,35 +125,8 @@ function taskTargetAnchors(
       ? []
       : value
           .filter((id): id is string => typeof id === "string")
-          .map((id) => `${parent.key}#${id}`),
+          .map((id) => `${streamKey}#${id}`),
   );
-}
-
-function matches(entry: FragmentEntry, filter: FragmentFilter): boolean {
-  if (filter.section && entry.section !== filter.section) return false;
-  if (filter.owner && entry.owner !== filter.owner) return false;
-  if (filter.q) {
-    const needle = filter.q.trim().toLowerCase();
-    if (!`${entry.anchor} ${fragmentText(entry)}`.toLowerCase().includes(needle)) return false;
-  }
-  return true;
-}
-
-/** One line of a fragment, whatever shape it is in. The same assembly the UI renders. */
-export function fragmentText(fragment: SpecFragmentModel): string {
-  const { shape } = fragment;
-  switch (shape.kind) {
-    case "statement":
-      return shape.text;
-    case "criterion":
-      return `Given ${shape.given} · When ${shape.when} · Then ${shape.then}`;
-    case "condition":
-      return `${shape.condition} → ${shape.outcome}`;
-    case "transition":
-      return `${shape.from} → ${shape.to}`;
-    case "workflow":
-      return shape.steps.map((step) => step.action).join(" · ");
-  }
 }
 
 export async function loadFragmentPage(
@@ -171,38 +134,24 @@ export async function loadFragmentPage(
   projectId: string,
   filter: FragmentFilter,
 ): Promise<FragmentPage> {
-  const all = await loadAll(scope, projectId);
-  const filtered = all.filter((entry) => matches(entry, filter));
-
-  const counts = new Map<string, number>();
-  for (const entry of all) {
-    counts.set(entry.section, (counts.get(entry.section) ?? 0) + 1);
-  }
+  const page = await projectFragmentRepository.loadPage(scope, projectId, filter);
 
   return {
-    fragments: filtered.slice(filter.offset, filter.offset + filter.limit),
-    total: filtered.length,
+    fragments: page.rows.map((row) => ({
+      ...row.fragment,
+      ownerType: row.ownerType,
+      ownerTitle: row.ownerTitle,
+      anchor: row.anchor,
+      implementedBy: row.backlinks.map((backlink) => backlink.key),
+    })),
+    total: page.total,
     offset: filter.offset,
     limit: filter.limit,
-    sectionCounts: [...counts.entries()].map(([section, count]) => ({ section, count })),
-    ownerCount: new Set(filtered.map((entry) => entry.owner)).size,
+    sectionCounts: [...page.sectionCounts].sort(
+      (left, right) =>
+        SECTION_ORDER.indexOf(left.section as SectionId) -
+        SECTION_ORDER.indexOf(right.section as SectionId),
+    ),
+    ownerCount: page.ownerCount,
   };
-}
-
-/** How many fragments the project holds. The size of the corpus, without its text. */
-export async function countProjectFragments(
-  scope: WorkspaceScope,
-  projectId: string,
-): Promise<number> {
-  return (await loadAll(scope, projectId)).length;
-}
-
-/** Every fragment of one entity, for the page that renders that entity's document. */
-export async function loadEntityFragments(
-  scope: WorkspaceScope,
-  projectId: string,
-  key: string,
-): Promise<readonly FragmentEntry[]> {
-  const all = await loadAll(scope, projectId);
-  return all.filter((entry) => entry.owner === key);
 }

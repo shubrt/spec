@@ -21,6 +21,8 @@ import { taskRepository } from "../repository/task";
  */
 
 export type ProjectEntityDocument = {
+  /** Internal row identity, used to issue child reads without repeating lookup. */
+  readonly id: string;
   readonly entityType: VersionedEntityType;
   readonly key: string;
   readonly title: string;
@@ -40,6 +42,7 @@ export async function findProjectEntity(
   if (!row) return null;
 
   return {
+    id: row.id,
     entityType: parsed.entity,
     key: row.key,
     title: row.title,
@@ -49,6 +52,7 @@ export async function findProjectEntity(
 }
 
 type EntityRow = {
+  readonly id: string;
   readonly key: string;
   readonly title: string;
   readonly revision: number;

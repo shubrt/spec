@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { useEntityNav, type EntityNav } from "~/lib/entityNav";
 import type { ProjectModel } from "~/lib/model";
 import { cn } from "~/lib/utils";
@@ -51,6 +51,22 @@ interface MapEdge {
   readonly to: string;
   readonly blocking: boolean;
   readonly reason: string | null;
+}
+
+interface NodeDegree {
+  readonly incoming: number;
+  readonly outgoing: number;
+}
+
+interface DependencyMapLayout {
+  readonly inGraph: ReadonlySet<string>;
+  readonly edges: readonly MapEdge[];
+  readonly columns: readonly (readonly string[])[];
+  readonly placement: ReadonlyMap<string, Placement>;
+  readonly neighboursByKey: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly degreeByKey: ReadonlyMap<string, NodeDegree>;
+  readonly height: number;
+  readonly width: number;
 }
 
 /**
@@ -149,11 +165,8 @@ function edgePath(from: Placement, to: Placement): string {
   return `M${String(x1)},${String(y1)} C${String(mid)},${String(y1)} ${String(mid)},${String(y2)} ${String(x2)},${String(y2)}`;
 }
 
-export function DependencyMap({ model }: { readonly model: ProjectModel }) {
-  const nav = useEntityNav();
-  const [asList, setAsList] = useState(false);
-  const [hover, setHover] = useState<string | null>(null);
-
+/** Everything determined solely by the Project data, including node degrees. */
+function buildLayout(model: ProjectModel): DependencyMapLayout {
   const inGraph = new Set<string>();
   for (const edge of model.streamDependencies) {
     inGraph.add(edge.dependent);
@@ -195,19 +208,47 @@ export function DependencyMap({ model }: { readonly model: ProjectModel }) {
     });
   });
 
-  const tallest = columns.reduce((max, nodes) => Math.max(max, nodes.length), 0);
-  const height = HEADER_HEIGHT + tallest * ROW_HEIGHT + 8;
-  const width = columns.length * COLUMN_WIDTH + GUTTER;
-
-  const neighbours = new Set<string>();
-  if (hover) {
-    neighbours.add(hover);
-    for (const edge of edges) {
-      if (edge.from === hover) neighbours.add(edge.to);
-      if (edge.to === hover) neighbours.add(edge.from);
+  const neighboursByKey = new Map<string, Set<string>>();
+  const degreeByKey = new Map<string, NodeDegree>();
+  for (const key of inGraph) {
+    neighboursByKey.set(key, new Set([key]));
+    degreeByKey.set(key, { incoming: 0, outgoing: 0 });
+  }
+  for (const edge of edges) {
+    neighboursByKey.get(edge.from)?.add(edge.to);
+    neighboursByKey.get(edge.to)?.add(edge.from);
+    const fromDegree = degreeByKey.get(edge.from);
+    const toDegree = degreeByKey.get(edge.to);
+    if (fromDegree) {
+      degreeByKey.set(edge.from, { ...fromDegree, outgoing: fromDegree.outgoing + 1 });
+    }
+    if (toDegree) {
+      degreeByKey.set(edge.to, { ...toDegree, incoming: toDegree.incoming + 1 });
     }
   }
-  const dimmed = (key: string) => hover !== null && !neighbours.has(key);
+
+  const tallest = columns.reduce((max, nodes) => Math.max(max, nodes.length), 0);
+  return {
+    inGraph,
+    edges,
+    columns,
+    placement,
+    neighboursByKey,
+    degreeByKey,
+    height: HEADER_HEIGHT + tallest * ROW_HEIGHT + 8,
+    width: columns.length * COLUMN_WIDTH + GUTTER,
+  };
+}
+
+export function DependencyMap({ model }: { readonly model: ProjectModel }) {
+  const nav = useEntityNav();
+  const [asList, setAsList] = useState(false);
+  const [hover, setHover] = useState<string | null>(null);
+  const { inGraph, edges, columns, placement, neighboursByKey, degreeByKey, height, width } =
+    useMemo(() => buildLayout(model), [model]);
+
+  const neighbours = hover ? neighboursByKey.get(hover) : undefined;
+  const dimmed = (key: string) => hover !== null && !neighbours?.has(key);
 
   return (
     <div>
@@ -329,8 +370,7 @@ export function DependencyMap({ model }: { readonly model: ProjectModel }) {
             {[...placement.entries()].map(([key, spot]) => {
               const stream = model.streamByKey.get(key);
               if (!stream) return null;
-              const incoming = edges.filter((edge) => edge.to === key).length;
-              const outgoing = edges.filter((edge) => edge.from === key).length;
+              const degree = degreeByKey.get(key) ?? { incoming: 0, outgoing: 0 };
               return (
                 <button
                   key={key}
@@ -338,7 +378,7 @@ export function DependencyMap({ model }: { readonly model: ProjectModel }) {
                   onClick={() => nav.inspect(key)}
                   onMouseEnter={() => setHover(key)}
                   onFocus={() => setHover(key)}
-                  title={`${key} — ${String(incoming)} in, ${String(outgoing)} out`}
+                  title={`${key} — ${String(degree.incoming)} in, ${String(degree.outgoing)} out`}
                   className={cn(
                     "focus-visible:ring-ring absolute flex flex-col justify-center gap-0.5 rounded-sm border px-2 text-left outline-none transition-opacity focus-visible:ring-2",
                     "border-border-strong bg-background hover:bg-muted",

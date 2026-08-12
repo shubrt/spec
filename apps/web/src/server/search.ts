@@ -30,13 +30,16 @@ export const searchProject = createServerFn({ method: "GET" })
 
     const api = createApiClient(sessionToken);
     try {
-      const projectsResponse = await api.workspace.projects.get();
-      if (projectsResponse.error) return EMPTY;
-      const selected = selectProject(projectsResponse.data.projects, data.projectId);
-      if (!selected) return EMPTY;
+      let projectId = data.projectId;
+      if (!projectId) {
+        const projectsResponse = await api.workspace.projects.get();
+        if (projectsResponse.error) return EMPTY;
+        projectId = selectProject(projectsResponse.data.projects, undefined)?.id;
+      }
+      if (!projectId) return EMPTY;
 
       const response = await api.workspace
-        .projects({ projectId: selected.id })
+        .projects({ projectId })
         .search.get({ query: { q: data.q, limit: data.limit ?? 60 } });
       return response.error ? EMPTY : response.data;
     } catch {

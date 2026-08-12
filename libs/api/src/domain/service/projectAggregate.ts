@@ -3,13 +3,14 @@ import type { LinkableEntityType, RelationshipType } from "../enums";
 import { entityLinkRepository } from "../repository/entityLink";
 import { type Epic, epicRepository } from "../repository/epic";
 import { type Milestone, milestoneRepository } from "../repository/milestone";
+import { projectFragmentRepository } from "../repository/projectFragment";
 import { type Rule, ruleRepository } from "../repository/rule";
 import { type Stream, streamRepository } from "../repository/stream";
 import { type Task, taskRepository } from "../repository/task";
 import { type Project, workspaceRepository } from "../repository/workspace";
 
 /**
- * The whole readable project model, in a fixed six queries.
+ * The whole readable project model, in a fixed eight queries.
  *
  * ## Why an aggregate at all
  *
@@ -20,7 +21,7 @@ import { type Project, workspaceRepository } from "../repository/workspace";
  *
  * ## The query count is part of the design
  *
- * **Six queries for a project that exists, one for a project that does not.**
+ * **Eight queries for a project that exists, one for a project that does not.**
  * Never a function of the tree's size.
  *
  * The naive version reads epics, then streams per epic, tasks per stream, and
@@ -29,7 +30,7 @@ import { type Project, workspaceRepository } from "../repository/workspace";
  * the E→S→T ownership tree and the parallel roadmap in memory.
  *
  * The project row is read first and on its own, so a project that does not exist
- * — or belongs to another tenant — costs one query and not six.
+ * — or belongs to another tenant — costs one query and not eight.
  *
  * ## Tenancy
  *
@@ -91,6 +92,7 @@ export type ProjectLink = {
 
 export type ProjectAggregate = {
   readonly project: Project;
+  readonly fragmentCount: number;
   readonly epics: readonly EpicNode[];
   readonly milestones: readonly MilestoneNode[];
   readonly rules: readonly Rule[];
@@ -129,13 +131,14 @@ export async function loadProjectAggregate(
   // The entity reads do not depend on one another — each filters on
   // `(workspace_id, project_id)` directly — so they go out together and cost one
   // round trip's latency rather than six.
-  const [epics, streams, tasks, milestones, rules, links] = await Promise.all([
+  const [epics, streams, tasks, milestones, rules, links, fragmentCount] = await Promise.all([
     epicRepository.listByProject(scope, projectId),
     streamRepository.listByProject(scope, projectId),
     taskRepository.listByProject(scope, projectId),
     milestoneRepository.listByProject(scope, projectId),
     ruleRepository.listByProject(scope, projectId),
     entityLinkRepository.listByProject(scope, projectId),
+    projectFragmentRepository.countByProject(scope, projectId),
   ]);
 
   const streamsByEpic = groupBy(streams, (row) => row.epicId);
@@ -182,6 +185,7 @@ export async function loadProjectAggregate(
 
   return {
     project,
+    fragmentCount,
     rules,
     links: links.flatMap((row) => {
       const sourceKey = keyById.get(row.sourceId);

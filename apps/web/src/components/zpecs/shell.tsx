@@ -8,6 +8,15 @@ import { createProject } from "~/server/project";
 import type { ProjectModel } from "~/lib/model";
 import { cn } from "~/lib/utils";
 
+// These routes have server-side collection loaders. Loading them on a passing
+// pointer hover performs real database work the user may never navigate to.
+const EXPLICIT_NAVIGATION_PRELOAD = new Set<string>([
+  "/changes",
+  "/criteria",
+  "/roadmap",
+  "/trace",
+]);
+
 /**
  * The frame: a sidebar, a context bar, and the switchers in it.
  *
@@ -227,6 +236,7 @@ export function AppSidebar({
                 <Link
                   to={entry.to}
                   search={carry}
+                  preload={EXPLICIT_NAVIGATION_PRELOAD.has(entry.to) ? false : undefined}
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
                     "text-ledger flex h-[30px] w-full items-center gap-2 overflow-hidden rounded-sm px-2 text-left outline-none transition-colors",

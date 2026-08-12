@@ -542,6 +542,23 @@ export function readFragments(
   );
 }
 
+/** One searchable line of a fragment, assembled exactly as the UI reads it. */
+export function fragmentText(fragment: SpecFragmentModel): string {
+  const { shape } = fragment;
+  switch (shape.kind) {
+    case "statement":
+      return shape.text;
+    case "criterion":
+      return `Given ${shape.given} · When ${shape.when} · Then ${shape.then}`;
+    case "condition":
+      return `${shape.condition} → ${shape.outcome}`;
+    case "transition":
+      return `${shape.from} → ${shape.to}`;
+    case "workflow":
+      return shape.steps.map((step) => step.action).join(" · ");
+  }
+}
+
 /** Groups fragments by section, keeping {@link SECTION_ORDER} and dropping empties. */
 export function groupFragments(
   fragments: readonly SpecFragmentModel[],

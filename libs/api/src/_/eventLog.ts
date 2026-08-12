@@ -63,3 +63,29 @@ export function recordToolEvent(tool: string, outcome?: "ok" | "error"): void {
     ...(outcome ? { toolOutcome: outcome } : {}),
   });
 }
+
+type ReadPerformanceEvent = {
+  operation:
+    | "project.aggregate"
+    | "project.entity_detail"
+    | "project.fragments"
+    | "project.revisions"
+    | "project.search";
+  outcome: "ok" | "not_found" | "error";
+  elapsedMs: number;
+  resultCount?: number;
+  totalCount?: number;
+  corpusCount?: number;
+};
+
+/** Adds bounded read metrics only; request selectors and returned content stay out. */
+export function recordReadPerformanceEvent(event: ReadPerformanceEvent): void {
+  enrich({
+    readOperation: event.operation,
+    readOutcome: event.outcome,
+    readElapsedMs: Math.round(Math.max(0, event.elapsedMs) * 100) / 100,
+    ...(event.resultCount === undefined ? {} : { readResultCount: event.resultCount }),
+    ...(event.totalCount === undefined ? {} : { readTotalCount: event.totalCount }),
+    ...(event.corpusCount === undefined ? {} : { readCorpusCount: event.corpusCount }),
+  });
+}

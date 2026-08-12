@@ -97,13 +97,15 @@ export const Route = createFileRoute("/focus")({
   // Only the questions tab needs fragments, so only it asks — and it asks for that
   // one section rather than for the project's documents.
   loader: ({ deps }) =>
-    getFragments({
-      data: {
-        projectId: deps.projectId,
-        section: "open_questions",
-        limit: deps.tab === "questions" ? 200 : 1,
-      },
-    }),
+    deps.tab === "questions"
+      ? getFragments({
+          data: {
+            projectId: deps.projectId,
+            section: "open_questions",
+            limit: 200,
+          },
+        })
+      : null,
   component: FocusPage,
 });
 
@@ -145,7 +147,7 @@ function FocusScreen({ model }: { readonly model: ProjectModel }) {
   // Open questions are a page of the fragment endpoint, filtered to that section —
   // the one tab that needs fragments asks for them, and only when it is open.
   const questionPage = Route.useLoaderData();
-  const questions = questionPage.fragments.map(
+  const questions = (questionPage?.fragments ?? []).map(
     (fragment): QuestionRow => ({
       key: fragment.anchor,
       owner: fragment.owner,
@@ -158,13 +160,15 @@ function FocusScreen({ model }: { readonly model: ProjectModel }) {
     .sort((left, right) => right.updatedAt.localeCompare(left.updatedAt))
     .slice(0, 15);
 
-  const counts: Record<TabId, number> = {
+  const counts: Record<TabId, number | undefined> = {
     continue: continuing.length,
     ready: ready.length,
     decompose: decompose.length,
     blocked: blocked.length,
     parallel: parallel.length,
-    questions: questionPage.total,
+    // The aggregate deliberately carries only the total fragment count. Avoid an
+    // otherwise unused project-wide document scan just to decorate an inactive tab.
+    questions: questionPage?.total,
     revisions: recent.length,
   };
 
@@ -295,7 +299,7 @@ function FocusScreen({ model }: { readonly model: ProjectModel }) {
             items={[
               { value: questions.length, label: "open questions across the Project" },
               {
-                value: questionPage.total,
+                value: questionPage?.total ?? questions.length,
                 label: "recorded across the Project",
                 hint: "Counted by the API over every Epic, Stream, Task and Milestone document. An open question is how an author records what is known to be unknown instead of inventing an answer.",
               },

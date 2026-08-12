@@ -173,29 +173,33 @@ export function SearchOverlay({
 
   useEffect(() => {
     const trimmed = query.trim();
-    if (trimmed.length === 0) {
+    if (!open || trimmed.length === 0) {
       setRemote(null);
       setPending(false);
       return undefined;
     }
+
+    // This flag belongs to the effect, not the timeout callback. Its cleanup
+    // therefore covers both a request that has not started and one already in
+    // flight when the query, Project or open state changes.
+    let active = true;
     setPending(true);
     const timer = setTimeout(() => {
-      let cancelled = false;
       void searchProject({ data: { projectId: model.projectId, q: trimmed } })
         .then((result) => {
           // A stale response must never overwrite a newer one; the query it was for
           // is carried so a slow answer to an old prefix is simply dropped.
-          if (!cancelled) setRemote({ ...result, forQuery: trimmed });
+          if (active) setRemote({ ...result, forQuery: trimmed });
         })
         .finally(() => {
-          if (!cancelled) setPending(false);
+          if (active) setPending(false);
         });
-      return () => {
-        cancelled = true;
-      };
     }, DEBOUNCE_MS);
-    return () => clearTimeout(timer);
-  }, [query, model.projectId]);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [open, query, model.projectId]);
 
   if (!open) return null;
 

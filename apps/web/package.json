@@ -7,6 +7,7 @@
     "clean": "git clean -xdf .cache .vite .output dist node_modules",
     "dev": "bun --env-file=../../.env run vite dev",
     "build": "bun --env-file=../../.env run vite build",
+    "perf:model": "bun run scripts/model-performance.ts",
     "start": "bun --env-file=../../.env run node .output/server/index.mjs",
     "typecheck": "tsc --noEmit"
   },

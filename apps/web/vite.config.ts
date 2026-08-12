@@ -16,6 +16,10 @@ export default defineConfig({
     tanstackStart(),
     // react's vite plugin must come after start's vite plugin
     viteReact(),
-    nitro(),
+    nitro({
+      // Railway terminates TLS but serves Nitro's public assets unchanged. Build
+      // both variants so Nitro can negotiate a compressed response at runtime.
+      compressPublicAssets: { gzip: true, brotli: true },
+    }),
   ],
 });
