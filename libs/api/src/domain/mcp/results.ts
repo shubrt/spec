@@ -5,7 +5,7 @@ import type { DocumentIssue } from "../schema/rules";
  * The machine-readable codes a `tools/call` can fail with at this layer.
  *
  * These are *tool* errors — `isError: true` inside a 200 response — not JSON-RPC
- * errors. The three boundaries zpecs renders an error across (JSON-RPC error,
+ * errors. The three boundaries spec renders an error across (JSON-RPC error,
  * `isError` tool result, HTTP JSON body) stay deliberately distinct, so nothing
  * here leaks into the other two.
  *
@@ -43,9 +43,9 @@ export type ToolErrorCode = (typeof TOOL_ERROR_CODE)[keyof typeof TOOL_ERROR_COD
  */
 export const NO_WORKSPACE_REMEDIATION =
   "Your access token is valid, but it is not scoped to an organization, so there is no " +
-  "zpecs workspace to read or write. Tell the user, in these terms: create or join an " +
-  "organization in the zpecs web app, then reconnect this MCP server so a new token is " +
-  "issued that carries the organization. Until then no zpecs tool can return data. Do not " +
+  "spec workspace to read or write. Tell the user, in these terms: create or join an " +
+  "organization in the spec web app, then reconnect this MCP server so a new token is " +
+  "issued that carries the organization. Until then no spec tool can return data. Do not " +
   "retry — every retry with this token fails the same way.";
 
 /**

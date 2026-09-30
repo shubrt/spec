@@ -76,7 +76,7 @@ export function AbsentBox({ label = "none" }: { readonly label?: string }) {
 
 /**
  * A value this system genuinely does not hold, as opposed to one that is unset.
- * Used for the fields Clerk owns: zpecs stores no name, email or password.
+ * Used for the fields Clerk owns: spec stores no name, email or password.
  */
 export function NotStoredBox({
   label = "not stored",
@@ -86,7 +86,7 @@ export function NotStoredBox({
   readonly title?: string;
 }) {
   return (
-    <Box tone="absent" title={title ?? "zpecs does not store this value"}>
+    <Box tone="absent" title={title ?? "spec does not store this value"}>
       {label}
     </Box>
   );

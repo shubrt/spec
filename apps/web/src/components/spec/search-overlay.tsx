@@ -28,7 +28,7 @@ import { ExternalLinkIcon, InfoHint } from "./parts";
  * Two destinations because they answer different questions, and the second is how a
  * result stays findable after the drawer is closed.
  *
- * No recents and no pins. Both need a per-user marker zpecs does not store, and a
+ * No recents and no pins. Both need a per-user marker spec does not store, and a
  * remembered list that is wrong is worse than none.
  */
 
@@ -325,7 +325,7 @@ export function SearchOverlay({
                 ))}
               </div>
               <p className="text-muted-foreground mt-3 max-w-[620px] text-xs leading-[17px]">
-                No recents and no pins. Both would need a per-user marker that zpecs does not store,
+                No recents and no pins. Both would need a per-user marker that spec does not store,
                 and a remembered list that is wrong is worse than none.
               </p>
             </div>

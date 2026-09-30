@@ -20,7 +20,7 @@ import { createApiClient } from "./api";
 
 const UNREACHABLE = {
   status: "unavailable",
-  message: "The zpecs API could not complete the request.",
+  message: "The spec API could not complete the request.",
   apiReachable: false,
 } satisfies ApiFailure;
 

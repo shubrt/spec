@@ -24,7 +24,7 @@ const getContextInput = z.strictObject({
  *
  * `document` and `bundle` are declared as objects and not spelled out, because the
  * document's real shape is 8–10 KB of generated JSON Schema per entity type. That
- * belongs in `get_entity_schema` and `zpecs://schema/{entity}`, served on demand, not
+ * belongs in `get_entity_schema` and `spec://schema/{entity}`, served on demand, not
  * in a `tools/list` payload that is re-sent every turn under a 12 KB budget. The
  * fields below are the ones a caller needs *without* knowing the entity type —
  * above all `revision`, which every subsequent write has to send back.

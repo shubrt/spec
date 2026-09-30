@@ -1,4 +1,4 @@
-import { app as coreApp, configureRequestEventLogger } from "@zpecs/api";
+import { app as coreApp, configureRequestEventLogger } from "@spec/api";
 import Elysia from "elysia";
 import { type DrainFn, initLogger, type RedactConfig } from "evlog";
 import { createAxiomDrain } from "evlog/axiom";
@@ -52,7 +52,7 @@ export function createRuntimeApp(options: RuntimeAppOptions = {}) {
 
   initLogger({
     enabled: true,
-    env: { service: "zpecs-api" },
+    env: { service: "spec-api" },
     pretty: false,
     stringify: true,
     silent: options.silent ?? false,
@@ -62,7 +62,7 @@ export function createRuntimeApp(options: RuntimeAppOptions = {}) {
 
   if (!drain && options.announceConsoleFallback !== false) {
     console.info(
-      "[zpecs-api] ZPECS_AXIOM_DATASET / ZPECS_AXIOM_TOKEN (or deployment AXIOM_DATASET / AXIOM_TOKEN) not set — structured request events use the console.",
+      "[spec-api] SPEC_AXIOM_DATASET / SPEC_AXIOM_TOKEN (or deployment AXIOM_DATASET / AXIOM_TOKEN) not set — structured request events use the console.",
     );
   }
 

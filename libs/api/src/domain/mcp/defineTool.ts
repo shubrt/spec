@@ -30,7 +30,7 @@ export type ToolContext<TInput> = {
  * reachable through `tools/list` on a real server, so re-exposing them here would
  * be a second copy of the wire contract that could disagree with it.
  */
-export type ZpecsTool = {
+export type SpecTool = {
   readonly name: ToolName;
   register(server: McpServer): void;
 };
@@ -79,7 +79,7 @@ type ToolSpec<TInput extends z.ZodObject> = {
  * client-approval annotation, and it is now only that. A tool that needs a gate
  * enforces it where it knows what is at stake.
  */
-export function defineTool<TInput extends z.ZodObject>(spec: ToolSpec<TInput>): ZpecsTool {
+export function defineTool<TInput extends z.ZodObject>(spec: ToolSpec<TInput>): SpecTool {
   const description = TOOL_DESCRIPTIONS[spec.name];
 
   return {

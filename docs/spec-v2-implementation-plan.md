@@ -1,8 +1,8 @@
-# Zpecs v2 implementation plan
+# Spec v2 implementation plan
 
 ## Objective
 
-Zpecs v2 removes the structural dead ends and high-token write patterns found during real project use. The release is a coordinated cutover: implementation can proceed incrementally, but current documents are migrated once and only v2 is read or written afterwards.
+Spec v2 removes the structural dead ends and high-token write patterns found during real project use. The release is a coordinated cutover: implementation can proceed incrementally, but current documents are migrated once and only v2 is read or written afterwards.
 
 The current v1 revision snapshots remain byte-identical as raw history. The current planning state is preserved as a new v2 baseline revision; there is no dual-read or dual-write compatibility layer.
 
@@ -158,11 +158,11 @@ The current v1 revision snapshots remain byte-identical as raw history. The curr
 - Validate counters, indexes, reverse references, entity/link/revision counts, and all current v2 documents before atomic cutover.
 - After cutover, reject v1 writes and old public key prefixes.
 
-Current state: production cutover is complete. The command remains intentionally bound to the reviewed baseline and is expected to reject a retry against the migrated database; see `docs/zpecs-v2-migration.md` for the manifest and safety semantics.
+Current state: production cutover is complete. The command remains intentionally bound to the reviewed baseline and is expected to reject a retry against the migrated database; see `docs/spec-v2-migration.md` for the manifest and safety semantics.
 
 ### 8. Static verification and release
 
-- Run `vp check`, `vp run sherif`, `vp run typecheck`, `vp run -F @zpecs/api schema:check`, `vp run build`, and focused offline migration/query/tool-size benchmarks.
+- Run `vp check`, `vp run sherif`, `vp run typecheck`, `vp run -F @spec/api schema:check`, `vp run build`, and focused offline migration/query/tool-size benchmarks.
 - Do not add or run an automated test suite unless separately requested.
 - Keep serialized MCP tool schemas within the existing budget and avoid union expansion/N+1 reads.
 - Update generated schemas, MCP descriptions/resources, documentation, errors, UI labels, and key examples together.

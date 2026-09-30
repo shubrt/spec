@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useLoaderData } from "@tanstack/react-router";
-import { AbsentBox, Box } from "~/components/zpecs/box";
+import { AbsentBox, Box } from "~/components/spec/box";
 import {
   CommandLine,
   ContextBlock,
@@ -7,7 +7,7 @@ import {
   DocSection,
   NotOffered,
   PageHead,
-} from "~/components/zpecs/parts";
+} from "~/components/spec/parts";
 import { useMcpEndpoint } from "~/lib/boardState";
 import { connectionWorkspaceChecks, mcpClientSetups } from "~/lib/connection";
 import { carry } from "~/lib/search";
@@ -61,7 +61,7 @@ function ConnectionPage() {
             {endpoint.isLocal ? (
               <p className="text-muted-foreground mt-2 text-xs leading-[17px]">
                 This is a loopback address. It works on this machine and nowhere else — pasted into
-                a colleague's client it fails in a way that looks like a bug in zpecs.
+                a colleague's client it fails in a way that looks like a bug in spec.
               </p>
             ) : null}
           </DocSection>

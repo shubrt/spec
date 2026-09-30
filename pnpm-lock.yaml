@@ -74,7 +74,7 @@ importers:
       '@tanstack/react-start':
         specifier: ^1.168.7
         version: 1.168.40(crossws@0.4.10(srvx@0.11.22))(esbuild@0.28.1)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)(rolldown@1.2.3)(vite@8.2.1(@types/node@25.9.5)(esbuild@0.28.1)(jiti@2.7.0)(tsx@4.23.11))
-      '@zpecs/api':
+      '@spec/api':
         specifier: workspace:*
         version: link:../../libs/api
       class-variance-authority:

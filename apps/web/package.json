@@ -1,5 +1,5 @@
 {
-  "name": "@zpecs/web",
+  "name": "@spec/web",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -20,10 +20,10 @@
     "@radix-ui/react-select": "^2.1.6",
     "@radix-ui/react-separator": "^1.1.2",
     "@radix-ui/react-slot": "^1.1.2",
+    "@spec/api": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "@tanstack/react-router": "^1.170.5",
     "@tanstack/react-start": "^1.168.7",
-    "@zpecs/api": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "elysia": "^1.4.18",

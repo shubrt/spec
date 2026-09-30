@@ -1,19 +1,19 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
 import { useMemo } from "react";
-import { Box } from "~/components/zpecs/box";
-import { HistoricStatus } from "~/components/zpecs/historic-status";
+import { Box } from "~/components/spec/box";
+import { HistoricStatus } from "~/components/spec/historic-status";
 import {
   ClearFilters,
   DateField,
   FilterBar,
   PlainSelect,
   SearchSelect,
-} from "~/components/zpecs/controls";
-import { EntityTable, type Column } from "~/components/zpecs/entity-table";
-import { Inspector } from "~/components/zpecs/inspector";
-import { PageHead } from "~/components/zpecs/parts";
-import { revisionKindLabel, revisionKindTone } from "~/components/zpecs/revision-diff";
-import { Screen } from "~/components/zpecs/screen";
+} from "~/components/spec/controls";
+import { EntityTable, type Column } from "~/components/spec/entity-table";
+import { Inspector } from "~/components/spec/inspector";
+import { PageHead } from "~/components/spec/parts";
+import { revisionKindLabel, revisionKindTone } from "~/components/spec/revision-diff";
+import { Screen } from "~/components/spec/screen";
 import { revisionRef, useEntityNav } from "~/lib/entityNav";
 import type { ProjectModel } from "~/lib/model";
 import { toRevisionEntries, type RevisionEntry } from "~/lib/revisions";
@@ -286,7 +286,7 @@ function revisionColumns(): readonly Column<RevisionEntry>[] {
       cellClass: "text-muted-foreground font-mono text-[11px]",
       sort: (row) => row.changedBy,
       render: (row) => <span className="truncate">{row.changedBy}</span>,
-      hint: "The actor id stored on the revision. It is the only identity zpecs has ever written down — names and emails live in Clerk.",
+      hint: "The actor id stored on the revision. It is the only identity spec has ever written down — names and emails live in Clerk.",
     },
     {
       id: "revision",

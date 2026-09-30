@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { Absent, AbsentBox, Box, DependencyCell, StatusCell } from "~/components/zpecs/box";
-import { colKey, colPriority, colTitle } from "~/components/zpecs/columns";
-import { DependencyMap } from "~/components/zpecs/dependency-map";
-import { EntityTable, fractionCell, type Column } from "~/components/zpecs/entity-table";
+import { Absent, AbsentBox, Box, DependencyCell, StatusCell } from "~/components/spec/box";
+import { colKey, colPriority, colTitle } from "~/components/spec/columns";
+import { DependencyMap } from "~/components/spec/dependency-map";
+import { EntityTable, fractionCell, type Column } from "~/components/spec/entity-table";
 import {
   EmptyState,
   MetricGrid,
@@ -12,9 +12,9 @@ import {
   SubHead,
   TableNote,
   Tabs,
-} from "~/components/zpecs/parts";
-import { Screen } from "~/components/zpecs/screen";
-import { SpecFragment } from "~/components/zpecs/spec-fragment";
+} from "~/components/spec/parts";
+import { Screen } from "~/components/spec/screen";
+import { SpecFragment } from "~/components/spec/spec-fragment";
 import { useEntityNav, type EntityNav } from "~/lib/entityNav";
 import type { MilestoneRow, ProjectModel, StreamRow } from "~/lib/model";
 import type { RootSearch } from "~/lib/search";

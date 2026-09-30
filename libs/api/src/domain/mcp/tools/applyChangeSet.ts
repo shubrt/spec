@@ -3,7 +3,7 @@ import { defineTool } from "../defineTool";
 import { runChangeSetTool } from "./validateChangeSet";
 
 /**
- * The write path. The *only* write path — nothing else in zpecs mutates these
+ * The write path. The *only* write path — nothing else in spec mutates these
  * tables.
  *
  * Identical input and identical pipeline to `validate_change_set`, down to

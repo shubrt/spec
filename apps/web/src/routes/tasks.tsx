@@ -1,15 +1,15 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { openColumn, taskColumns } from "~/components/zpecs/columns";
+import { openColumn, taskColumns } from "~/components/spec/columns";
 import {
   ClearFilters,
   FilterBar,
   FilterToggle,
   PlainSelect,
   SearchSelect,
-} from "~/components/zpecs/controls";
-import { EntityTable } from "~/components/zpecs/entity-table";
-import { PageHead } from "~/components/zpecs/parts";
-import { Screen } from "~/components/zpecs/screen";
+} from "~/components/spec/controls";
+import { EntityTable } from "~/components/spec/entity-table";
+import { PageHead } from "~/components/spec/parts";
+import { Screen } from "~/components/spec/screen";
 import { useEntityNav } from "~/lib/entityNav";
 import type { ProjectModel, TaskRow } from "~/lib/model";
 import { carry, type RootSearch } from "~/lib/search";

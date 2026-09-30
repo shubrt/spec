@@ -8,7 +8,7 @@ import { CONFIRM_RULE } from "./fragments";
  * **≤ 12 KB**. The lower bound is
  * there because a one-line description is how a tool gets called wrongly; the
  * upper bound is there because seven long descriptions are paid for on every
- * `tools/list`. A description that will not fit belongs in a `zpecs://guide/`
+ * `tools/list`. A description that will not fit belongs in a `spec://guide/`
  * resource with a pointer from here.
  *
  * Shared cross-tool policy still comes from `fragments.ts`; tool-specific prose

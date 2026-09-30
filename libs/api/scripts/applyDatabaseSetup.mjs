@@ -8,10 +8,10 @@ if (phase !== "before" && phase !== "after") {
   throw new Error("Usage: node applyDatabaseSetup.mjs <before|after>");
 }
 
-const connectionString = process.env.ZPECS_DATABASE_URL || process.env.DATABASE_URL;
+const connectionString = process.env.SPEC_DATABASE_URL || process.env.DATABASE_URL;
 
 if (!connectionString) {
-  throw new Error("Missing ZPECS_DATABASE_URL or DATABASE_URL");
+  throw new Error("Missing SPEC_DATABASE_URL or DATABASE_URL");
 }
 
 const sql =
@@ -29,7 +29,7 @@ try {
   await client.query("BEGIN");
   await client.query(sql);
   await client.query("COMMIT");
-  process.stdout.write(`Applied ${phase}-push Zpecs database setup.\n`);
+  process.stdout.write(`Applied ${phase}-push Spec database setup.\n`);
 } catch (error) {
   await client.query("ROLLBACK").catch(() => undefined);
   throw error;

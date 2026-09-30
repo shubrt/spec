@@ -27,7 +27,7 @@ CREATE EXTENSION IF NOT EXISTS pg_trgm;
 -- six-rank contract while trigram indexes handle the much more common substring
 -- branch. This function examines entity titles and projected fragment text;
 -- source documents never cross the database boundary for fuzzy fallback.
-CREATE OR REPLACE FUNCTION zpecs_tight_subsequence(haystack text, needle text)
+CREATE OR REPLACE FUNCTION spec_tight_subsequence(haystack text, needle text)
 RETURNS boolean
 LANGUAGE plpgsql
 IMMUTABLE

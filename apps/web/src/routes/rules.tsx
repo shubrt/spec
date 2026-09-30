@@ -1,9 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AbsentBox, Box, StatusCell } from "~/components/zpecs/box";
-import { ClearFilters, FilterBar, PlainSelect, SearchField } from "~/components/zpecs/controls";
-import { EntityTable, countCell, type Column } from "~/components/zpecs/entity-table";
-import { Chip, DefRow, EntityKey, PageHead } from "~/components/zpecs/parts";
-import { Screen } from "~/components/zpecs/screen";
+import { AbsentBox, Box, StatusCell } from "~/components/spec/box";
+import { ClearFilters, FilterBar, PlainSelect, SearchField } from "~/components/spec/controls";
+import { EntityTable, countCell, type Column } from "~/components/spec/entity-table";
+import { Chip, DefRow, EntityKey, PageHead } from "~/components/spec/parts";
+import { Screen } from "~/components/spec/screen";
 import { useEntityNav, type EntityNav } from "~/lib/entityNav";
 import type { ProjectModel, RuleRow } from "~/lib/model";
 import { carry, type RootSearch } from "~/lib/search";

@@ -1,5 +1,5 @@
 import { treaty } from "@elysiajs/eden";
-import { runtimeApp } from "./zpecsRuntime.server";
+import { runtimeApp } from "./specRuntime.server";
 
 /**
  * A Treaty client bound to one session.

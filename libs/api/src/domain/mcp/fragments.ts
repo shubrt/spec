@@ -73,7 +73,7 @@ export const VALIDATE_FIRST =
 /** Why guessing a document shape is never necessary. */
 export const SCHEMA_ON_DEMAND =
   "Never write a document from memory of these descriptions — call get_entity_schema, or read " +
-  "the zpecs://schema/ resources.";
+  "the spec://schema/ resources.";
 
 /** Both lists derive from domain/enums.ts, so a new value cannot go unmentioned. */
 export const STREAM_TYPES_LINE = `Stream types: ${STREAM_TYPE.join(", ")}.`;

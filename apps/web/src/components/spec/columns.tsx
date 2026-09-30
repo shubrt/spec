@@ -392,7 +392,7 @@ export function taskColumns(
       cellClass: "font-mono text-xs tabular-nums",
       sort: (row) => row.verificationCount,
       render: (row) => `${String(row.verificationCount)} of ${String(row.doneWhenCount)}`,
-      hint: "Verifications over done-when statements. Both are contained by the Task; neither is linked to an Acceptance criterion, because zpecs stores no such edge.",
+      hint: "Verifications over done-when statements. Both are contained by the Task; neither is linked to an Acceptance criterion, because spec stores no such edge.",
     },
     colRevision<TaskRow>(),
   );

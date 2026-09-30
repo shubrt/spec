@@ -71,7 +71,7 @@ const checkSchemas = (): void => {
 
     const generated = documentJsonSchema(target, source);
     if (!isDeepStrictEqual(committed, generated)) {
-      errors.push(`${name}: stale; run \`vp run -F @zpecs/api schema:generate\``);
+      errors.push(`${name}: stale; run \`vp run -F @spec/api schema:generate\``);
     }
   }
 

@@ -62,7 +62,7 @@ export const env = createEnv({
     DATABASE_URL: z.url(),
     // The one externally visible origin used in OAuth resource identifiers and
     // discovery URLs. It must never be inferred from proxy-controlled headers.
-    ZPECS_PUBLIC_URL: publicUrlSchema,
+    SPEC_PUBLIC_URL: publicUrlSchema,
     // The only Clerk variable the `.well-known` handlers need (api/mcp/wellKnown.ts).
     // Clerk's Frontend API domain is never configured directly — it is derived
     // from this key the same way Clerk's own (uninstallable here, see
@@ -88,7 +88,7 @@ export const env = createEnv({
   },
   runtimeEnv: {
     ...process.env,
-    DATABASE_URL: process.env.ZPECS_DATABASE_URL || process.env.DATABASE_URL,
+    DATABASE_URL: process.env.SPEC_DATABASE_URL || process.env.DATABASE_URL,
     CLERK_PUBLISHABLE_KEY: genericPublishableKey ?? vitePublishableKey,
   },
   emptyStringAsUndefined: true,

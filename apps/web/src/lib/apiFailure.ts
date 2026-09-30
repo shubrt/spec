@@ -39,7 +39,7 @@ export function toApiFailure(
   if (!error) {
     return {
       status: "unavailable",
-      message: "The zpecs API could not complete the request.",
+      message: "The spec API could not complete the request.",
       apiReachable: false,
     };
   }
@@ -60,7 +60,7 @@ export function toApiFailure(
     default:
       return {
         status: "unavailable",
-        message: messageFrom(error.value, `The zpecs API answered ${String(error.status)}.`),
+        message: messageFrom(error.value, `The spec API answered ${String(error.status)}.`),
         apiReachable: true,
       };
   }

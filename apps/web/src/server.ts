@@ -1,10 +1,10 @@
 import handler, { createServerEntry } from "@tanstack/react-start/server-entry";
-import { runtimeApp } from "~/server/zpecsRuntime.server";
+import { runtimeApp } from "~/server/specRuntime.server";
 
 // Only the MCP transport and its OAuth discovery documents are public Elysia
 // endpoints. Workspace routes remain available to server functions through
 // direct Treaty calls, but cannot be reached over the web origin.
-const PUBLIC_ZPECS_PATHS = new Set([
+const PUBLIC_SPEC_PATHS = new Set([
   "/mcp",
   "/mcp/",
   "/.well-known/oauth-protected-resource/mcp",
@@ -20,6 +20,6 @@ export default createServerEntry({
 
     // Preserve the original Request. In particular, the MCP transport must be
     // the first consumer of its body stream.
-    return PUBLIC_ZPECS_PATHS.has(pathname) ? runtimeApp.fetch(request) : handler.fetch(...args);
+    return PUBLIC_SPEC_PATHS.has(pathname) ? runtimeApp.fetch(request) : handler.fetch(...args);
   },
 });

@@ -1,6 +1,6 @@
 import { SignIn } from "@clerk/tanstack-react-start";
 import { createFileRoute } from "@tanstack/react-router";
-import { SignedOutFrame } from "~/components/zpecs/states";
+import { SignedOutFrame } from "~/components/spec/states";
 
 /**
  * The signed-out surface.
@@ -10,7 +10,7 @@ import { SignedOutFrame } from "~/components/zpecs/states";
  * non-splat route would 404 the moment a sign-in needs a second factor.
  *
  * The frame around it is the product's, and the box inside it is Clerk's. That
- * split is the honest one: signing in is a Clerk call, and zpecs stores no session
+ * split is the honest one: signing in is a Clerk call, and spec stores no session
  * of its own — it reads the organization id off yours and matches it to a workspace
  * row, which the frame says out loud.
  */

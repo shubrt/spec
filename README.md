@@ -1,6 +1,6 @@
 <div align="center">
 
-  <h1>zpecs</h1>
+  <h1>spec</h1>
 
   <p>
     Keeps project context structured and gives coding agents one safe MCP
@@ -8,13 +8,13 @@
   </p>
 
   <h4>
-    <a href="./docs/zpecs-kontext.md">Project context</a>
+    <a href="./docs/spec-kontext.md">Project context</a>
     <span> · </span>
     <a href="./libs/api/src/integration/clerk/SETUP.md">MCP setup</a>
     <span> · </span>
-    <a href="https://github.com/shubrt/zpecs/issues/">Bug</a>
+    <a href="https://github.com/shubrt/spec/issues/">Bug</a>
     <span> · </span>
-    <a href="https://github.com/shubrt/zpecs/issues/">Feature</a>
+    <a href="https://github.com/shubrt/spec/issues/">Feature</a>
   </h4>
 </div>
 
@@ -38,7 +38,7 @@
 
 ## :star2: About the Project
 
-Zpecs stores a workspace's planning context as a Project-scoped work tree
+Spec stores a workspace's planning context as a Project-scoped work tree
 (Epic `E-*` → Stream `S-*` → Task `T-*`), a canonical Rule catalogue (`R-*`),
 and an advisory Milestone roadmap (`M-*`). Coding agents discover and read that
 context through focused MCP tools; all versioned-entity writes pass through the
@@ -48,10 +48,10 @@ instructions.
 
 Two workspaces make up one deployable service:
 
-| Package      | Path       | What it is                                                        |
-| ------------ | ---------- | ----------------------------------------------------------------- |
-| `@zpecs/web` | `apps/web` | TanStack Start web app and the unified Elysia/MCP production host |
-| `@zpecs/api` | `libs/api` | Domain, repositories, auth, schemas, Elysia routes, and MCP tools |
+| Package     | Path       | What it is                                                        |
+| ----------- | ---------- | ----------------------------------------------------------------- |
+| `@spec/web` | `apps/web` | TanStack Start web app and the unified Elysia/MCP production host |
+| `@spec/api` | `libs/api` | Domain, repositories, auth, schemas, Elysia routes, and MCP tools |
 
 ### :building_construction: Architecture
 
@@ -60,7 +60,7 @@ the shared Elysia app in-process through Eden Treaty, so there is no separate
 API application, internal URL, or service-to-service hop. Only `/mcp` and its
 OAuth discovery endpoints are exposed from Elysia on the public web origin.
 
-Clerk Organizations are Zpecs workspaces. The active organization scopes both
+Clerk Organizations are Spec workspaces. The active organization scopes both
 the web session and the MCP access token, while PostgreSQL remains the source of
 truth for projects and their immutable revision history.
 
@@ -91,14 +91,14 @@ cp .env.example .env
 
 | Variable                     | Required | Purpose                                                       |
 | ---------------------------- | -------- | ------------------------------------------------------------- |
-| `ZPECS_DATABASE_URL`         | yes      | PostgreSQL connection; deployments may use `DATABASE_URL`     |
-| `ZPECS_PUBLIC_URL`           | yes      | Canonical public origin used by MCP and OAuth discovery       |
+| `SPEC_DATABASE_URL`          | yes      | PostgreSQL connection; deployments may use `DATABASE_URL`     |
+| `SPEC_PUBLIC_URL`            | yes      | Canonical public origin used by MCP and OAuth discovery       |
 | `VITE_CLERK_PUBLISHABLE_KEY` | yes      | Clerk tenant used by the browser and shared API runtime       |
 | `CLERK_SECRET_KEY`           | yes      | Server-only Clerk credential                                  |
-| `ZPECS_AXIOM_DATASET`        | no       | Optional structured-event dataset; `AXIOM_DATASET` also works |
-| `ZPECS_AXIOM_TOKEN`          | no       | Optional structured-event token; `AXIOM_TOKEN` also works     |
+| `SPEC_AXIOM_DATASET`         | no       | Optional structured-event dataset; `AXIOM_DATASET` also works |
+| `SPEC_AXIOM_TOKEN`           | no       | Optional structured-event token; `AXIOM_TOKEN` also works     |
 
-`ZPECS_PUBLIC_URL` must be an origin without a path or trailing slash. Local
+`SPEC_PUBLIC_URL` must be an origin without a path or trailing slash. Local
 loopback development may use HTTP; deployed instances must use HTTPS.
 
 ### :card_file_box: Database Setup
@@ -171,6 +171,6 @@ The default local origin is `http://localhost:3005`; its MCP endpoint is
 | `vp run qa`        | Run static checks, workspace checks, and schema drift |
 | `vp run clean`     | Remove generated package and toolchain output         |
 
-`railway.json` builds and starts only `@zpecs/web`, applies the API library's
+`railway.json` builds and starts only `@spec/web`, applies the API library's
 complete database setup before deployment, and watches both workspaces plus the
 shared toolchain configuration.

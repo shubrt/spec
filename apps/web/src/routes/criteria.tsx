@@ -1,10 +1,10 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { Absent } from "~/components/zpecs/box";
-import { ChipFilter, ClearFilters, FilterBar, SearchField } from "~/components/zpecs/controls";
-import { EntityTable, type Column } from "~/components/zpecs/entity-table";
-import { EntityKey, PageHead } from "~/components/zpecs/parts";
-import { Screen } from "~/components/zpecs/screen";
+import { Absent } from "~/components/spec/box";
+import { ChipFilter, ClearFilters, FilterBar, SearchField } from "~/components/spec/controls";
+import { EntityTable, type Column } from "~/components/spec/entity-table";
+import { EntityKey, PageHead } from "~/components/spec/parts";
+import { Screen } from "~/components/spec/screen";
 import { useEntityNav, type EntityNav } from "~/lib/entityNav";
 import { SECTION_ORDER, fragmentText, isTargetable, sectionLabel } from "~/lib/fragments";
 import { carry, type RootSearch } from "~/lib/search";

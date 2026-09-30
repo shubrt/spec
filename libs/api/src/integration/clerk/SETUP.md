@@ -1,8 +1,8 @@
 # Canonical Clerk instance — setup and live verification
 
-The Clerk tenant configured in the repository-root `.env` is zpecs's canonical
+The Clerk tenant configured in the repository-root `.env` is spec's canonical
 authorization server for both Claude Code and OpenAI Codex. The shared
-`@zpecs/api` Elysia app runs inside that TanStack Start service. zpecs does
+`@spec/api` Elysia app runs inside that TanStack Start service. spec does
 not run an OpenAI model and needs neither an OpenAI SDK nor an OpenAI API key:
 both clients connect to the same client-neutral MCP endpoint on the web origin.
 
@@ -22,15 +22,15 @@ source of truth.
 
 ## 1. Configure the public web origin and Clerk instance
 
-Set the mandatory server-side `ZPECS_PUBLIC_URL` in the sole `apps/web`
+Set the mandatory server-side `SPEC_PUBLIC_URL` in the sole `apps/web`
 deployment:
 
 ```dotenv
 # Local development
-ZPECS_PUBLIC_URL="http://localhost:3005"
+SPEC_PUBLIC_URL="http://localhost:3005"
 
 # Production (use the existing canonical web origin)
-ZPECS_PUBLIC_URL="https://zpecs.example.com"
+SPEC_PUBLIC_URL="https://spec.example.com"
 ```
 
 The value is an origin only: no path, query, fragment, credentials, or trailing
@@ -41,15 +41,15 @@ invalid.
 The Elysia runtime publishes these values from that origin, never from `Host`,
 `Forwarded`, `X-Forwarded-*`, or the incoming request URL:
 
-- MCP resource: `${ZPECS_PUBLIC_URL}/mcp`
+- MCP resource: `${SPEC_PUBLIC_URL}/mcp`
 - protected-resource metadata:
-  `${ZPECS_PUBLIC_URL}/.well-known/oauth-protected-resource/mcp`
+  `${SPEC_PUBLIC_URL}/.well-known/oauth-protected-resource/mcp`
 
 Only `/mcp` and the OAuth discovery endpoints are exposed through the TanStack
 server entry. `/workspace*` is not a public REST surface: TanStack server
 functions call the shared Elysia app in-process through Eden Treaty. There is no
-`ZPECS_API_URL` or second service-to-service hop. The MCP address copied from the
-Connection page is built exclusively from `ZPECS_PUBLIC_URL`.
+`SPEC_API_URL` or second service-to-service hop. The MCP address copied from the
+Connection page is built exclusively from `SPEC_PUBLIC_URL`.
 
 Configure the Clerk key pair in the repository-root `.env`:
 
@@ -64,12 +64,12 @@ tenant.
 ## 2. Configure Organizations, DCR, PKCE, JWTs, and scopes
 
 1. In **Clerk Dashboard → Organizations**, enable Organizations and turn
-   **Allow personal accounts** off. zpecs scopes every request to an
+   **Allow personal accounts** off. spec scopes every request to an
    organization; a personal account has no workspace-bearing `org_id`.
 
 2. In **Clerk Dashboard → OAuth applications**, enable **Dynamic Client
    Registration (DCR)**. Claude Code and Codex register themselves during
-   connection; zpecs does not configure their client IDs, client secrets, or
+   connection; spec does not configure their client IDs, client secrets, or
    callback ports.
 
 3. Confirm that the DCR authorization-code flow supports PKCE. The MCP clients
@@ -92,20 +92,20 @@ tenant.
 
    `user:org:read` makes organization selection part of consent and allows the
    issued token to carry the selected `org_id`. `openid`, `profile`, and
-   `email` are also required by zpecs; a valid token missing any one of the four
+   `email` are also required by spec; a valid token missing any one of the four
    scopes receives `403 insufficient_scope`.
 
 6. Create a test user and a dedicated test organization, and make the user a
    member. Also exercise a user without an organization: Clerk should route
    that user to organization setup. At the Elysia auth boundary, a valid
-   full-scope token without `org_id` remains authenticated and follows zpecs's
+   full-scope token without `org_id` remains authenticated and follows spec's
    existing `no_workspace` remediation instead of restarting OAuth.
 
 7. Remove any old statically configured OAuth client with a fixed callback
    port, or label it as an optional manual test client. It is not part of the
-   product flow. Do not add its credentials to the zpecs web app.
+   product flow. Do not add its credentials to the spec web app.
 
-Under DCR there are no additional zpecs OAuth environment variables. Redirect
+Under DCR there are no additional spec OAuth environment variables. Redirect
 URI, client registration, and PKCE exchange are negotiated by the MCP client
 and Clerk.
 
@@ -117,27 +117,27 @@ of `VITE_CLERK_PUBLISHABLE_KEY` to the operator script under its
 
 ```bash
 CLERK_PUBLISHABLE_KEY=pk_test_... \
-ZPECS_BASE_URL=http://localhost:3005 \
-ZPECS_ACCESS_TOKEN=... \
+SPEC_BASE_URL=http://localhost:3005 \
+SPEC_ACCESS_TOKEN=... \
   libs/api/src/integration/clerk/verify.sh
 ```
 
-For production, set `ZPECS_BASE_URL` to the exact canonical web
-`ZPECS_PUBLIC_URL`. It must be an origin with no trailing slash.
-`ZPECS_ACCESS_TOKEN` is optional, so discovery and the unauthenticated challenge
+For production, set `SPEC_BASE_URL` to the exact canonical web
+`SPEC_PUBLIC_URL`. It must be an origin with no trailing slash.
+`SPEC_ACCESS_TOKEN` is optional, so discovery and the unauthenticated challenge
 can be checked first.
 
 The script requires all of the following:
 
 - Clerk authorization-server metadata advertises DCR and all four scopes.
-- zpecs protected-resource metadata has `resource` exactly equal to
-  `${ZPECS_BASE_URL}/mcp` and advertises exactly the four required scopes.
+- spec protected-resource metadata has `resource` exactly equal to
+  `${SPEC_BASE_URL}/mcp` and advertises exactly the four required scopes.
 - Any non-loopback resource uses HTTPS.
 - An unauthenticated `POST /mcp` returns `401` and a `WWW-Authenticate` Bearer
   challenge whose `resource_metadata` is exactly
-  `${ZPECS_BASE_URL}/.well-known/oauth-protected-resource/mcp` and whose `scope`
+  `${SPEC_BASE_URL}/.well-known/oauth-protected-resource/mcp` and whose `scope`
   contains all four required scopes.
-- zpecs's authorization-server passthrough still exposes DCR and the scopes.
+- spec's authorization-server passthrough still exposes DCR and the scopes.
 - When supplied, the access token is a JWT with a non-empty `org_id`.
 
 The script never prints the access token, its payload, or individual claim
@@ -170,14 +170,14 @@ commands are:
 ### Claude Code
 
 ```bash
-claude mcp add --transport http zpecs http://localhost:3005/mcp
+claude mcp add --transport http spec http://localhost:3005/mcp
 ```
 
 Complete consent and select an organization. To clear an old token or change
 the selected organization:
 
 ```bash
-claude mcp logout zpecs
+claude mcp logout spec
 ```
 
 Then reconnect in Claude Code and complete consent again. The add command and
@@ -188,24 +188,24 @@ endpoint stay on the web origin.
 Add the server, then start OAuth explicitly:
 
 ```bash
-codex mcp add zpecs --url http://localhost:3005/mcp
-codex mcp login zpecs
+codex mcp add spec --url http://localhost:3005/mcp
+codex mcp login spec
 ```
 
 For reauthentication or a workspace change:
 
 ```bash
-codex mcp logout zpecs
-codex mcp login zpecs
+codex mcp logout spec
+codex mcp login spec
 ```
 
-When migrating from the former API origin, remove the existing `zpecs` MCP entry
+When migrating from the former API origin, remove the existing `spec` MCP entry
 from each client, add it again with the web-origin URL, and complete OAuth
 again. Configuration and tokens for the former origin are not carried forward.
 
 The organization selected during consent is bound to the issued MCP token as
 `org_id`. The first authenticated request JIT-provisions that organization's
-zpecs workspace. Switching the web `OrganizationSwitcher` does not rewrite an
+spec workspace. Switching the web `OrganizationSwitcher` does not rewrite an
 existing Claude or Codex token; use the client-specific logout/login flow and
 select the other organization during consent.
 
@@ -226,14 +226,14 @@ exclusive to MCP change sets.
 
 Use the dedicated test organization and the production HTTPS URL:
 
-1. Run `codex mcp add zpecs --url https://…/mcp`.
-2. Run `codex mcp login zpecs`, finish browser login, and select the test
+1. Run `codex mcp add spec --url https://…/mcp`.
+2. Run `codex mcp login spec`, finish browser login, and select the test
    organization.
-3. Start a new Codex session and use `/mcp` to confirm that `zpecs` is active.
-4. Confirm that Codex discovers exactly the existing six zpecs tools.
+3. Start a new Codex session and use `/mcp` to confirm that `spec` is active.
+4. Confirm that Codex discovers exactly the existing six spec tools.
 5. Call the read-only `get_entity_schema` tool with `entity: "task"`.
 6. Restart Codex and confirm that configuration and OAuth credentials persist.
-7. Run `codex mcp logout zpecs`, then `codex mcp login zpecs`, and confirm the
+7. Run `codex mcp logout spec`, then `codex mcp login spec`, and confirm the
    reauthentication path.
 
 Do not call `apply_change_set`. Expected persistent effects are limited to the
@@ -244,9 +244,9 @@ the selected test workspace.
 
 1. Pause automatic deployments of the former API service while leaving its
    current deployment available for rollback during the release check.
-2. Configure the web service with `ZPECS_DATABASE_URL`, the Clerk variables,
-   optional `ZPECS_AXIOM_DATASET` and `ZPECS_AXIOM_TOKEN`, and the exact canonical
-   HTTPS web origin as `ZPECS_PUBLIC_URL`. Deployments may use the generic
+2. Configure the web service with `SPEC_DATABASE_URL`, the Clerk variables,
+   optional `SPEC_AXIOM_DATASET` and `SPEC_AXIOM_TOKEN`, and the exact canonical
+   HTTPS web origin as `SPEC_PUBLIC_URL`. Deployments may use the generic
    `DATABASE_URL`, `AXIOM_DATASET`, and `AXIOM_TOKEN` fallback names.
 3. Deploy the combined TanStack service. Verify the protected-resource
    metadata, the `401` challenge, the `403 insufficient_scope` contract, the
@@ -257,7 +257,7 @@ the selected test workspace.
    treat Clerk's `azp` claim as a resource audience; it identifies the OAuth
    client/authorization party instead.
 5. Publish the new Connection-page URL and operator guidance, then stop and
-   remove the former API service in the same release. Remove `ZPECS_API_URL` and
+   remove the former API service in the same release. Remove `SPEC_API_URL` and
    the obsolete service configuration from the deployment environment.
 6. Monitor HTTP 401/403 and coarse auth-status events. Do not log access tokens
    or claims.

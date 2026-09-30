@@ -1,4 +1,4 @@
-import type { SectionId, SpecFragmentModel } from "@zpecs/api/read";
+import type { SectionId, SpecFragmentModel } from "@spec/api/read";
 
 /**
  * The presentation half of a specification fragment.
@@ -18,7 +18,7 @@ import type { SectionId, SpecFragmentModel } from "@zpecs/api/read";
  * than breaking — a section the API gains before this file names it still reads.
  */
 
-export type { SectionId, SpecFragmentModel, SpecShape, SpecMarks } from "@zpecs/api/read";
+export type { SectionId, SpecFragmentModel, SpecShape, SpecMarks } from "@spec/api/read";
 
 /**
  * Section labels, and the order sections read in.

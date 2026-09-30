@@ -2,14 +2,14 @@ import type { WorkspaceScope } from "../auth/workspaceScope";
 import { parseVersionedKey } from "../keys";
 import type { DbExecutor } from "../repository/entity";
 import { type RuleRevisionPin, ruleRepository } from "../repository/rule";
-import { type ZpecsDocument, parseDocument } from "../schema/document";
+import { type SpecDocument, parseDocument } from "../schema/document";
 import {
   deriveSourceFreshness,
   relevantSources,
   type SourceFreshness,
 } from "../schema/sourceFreshness";
 
-type ParsedRule = Extract<ZpecsDocument, { entity: "rule" }>;
+type ParsedRule = Extract<SpecDocument, { entity: "rule" }>;
 
 type ContextEvidence = {
   readonly basis: "stated" | "verified" | "inferred" | "assumed";

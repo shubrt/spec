@@ -205,7 +205,7 @@ export function AppSidebar({
   return (
     <div className="bg-sidebar text-sidebar-foreground border-sidebar-border flex h-full w-56 flex-none flex-col border-r">
       <div className="border-sidebar-border flex h-12 flex-none items-center border-b px-4">
-        <span className="font-mono text-sm font-semibold tracking-tight">zpecs</span>
+        <span className="font-mono text-sm font-semibold tracking-tight">spec</span>
       </div>
 
       <nav className="flex min-h-0 flex-1 flex-col overflow-auto p-2">
@@ -266,7 +266,7 @@ export function AppSidebar({
  *
  * Sign out arms a confirmation first — it drops you out of the product, and a menu
  * item you can hit by accident should not do that. Profile & preferences opens
- * Settings · Account, which is where the identity zpecs actually holds is written
+ * Settings · Account, which is where the identity spec actually holds is written
  * down; a profile belongs on a screen rather than in a popover.
  */
 function UserBlock({
@@ -314,7 +314,7 @@ function UserBlock({
           search={(previous) => ({ ...carry(previous), tab: "account" as const })}
           onClick={close}
           role="menuitem"
-          title="The identity zpecs holds, and what it does not"
+          title="The identity spec holds, and what it does not"
           className="hover:bg-muted focus-visible:bg-muted flex w-full items-center rounded-sm px-2 py-1.5 text-left text-xs outline-none"
         >
           Profile &amp; preferences
@@ -322,7 +322,7 @@ function UserBlock({
 
         {confirming ? (
           <div className="px-2 py-1.5">
-            <p className="text-ledger">Sign out of zpecs?</p>
+            <p className="text-ledger">Sign out of spec?</p>
             <div className="mt-1.5 flex items-center gap-1.5">
               <button
                 type="button"
@@ -350,8 +350,8 @@ function UserBlock({
         )}
 
         <MenuNote>
-          zpecs stores no user row and no session. The actor id on a revision is the only identity
-          it has ever recorded; name, email and password live in Clerk.
+          spec stores no user row and no session. The actor id on a revision is the only identity it
+          has ever recorded; name, email and password live in Clerk.
         </MenuNote>
       </Popover>
     </div>
@@ -395,7 +395,7 @@ function OrgSwitcher({ orgId }: { readonly orgId: string | null }) {
           Create organization
         </MenuItem>
         <MenuNote>
-          zpecs stores one workspace row carrying a Clerk organization id and no display name. The
+          spec stores one workspace row carrying a Clerk organization id and no display name. The
           readable name and the list you belong to both live in Clerk.
         </MenuNote>
       </Popover>

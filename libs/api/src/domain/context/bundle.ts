@@ -7,7 +7,7 @@ import { type MilestoneStream, milestoneRepository } from "../repository/milesto
 import { type EntityRelation, relationRepository } from "../repository/relation";
 import { type RuleConsumer, ruleRepository } from "../repository/rule";
 import { streamRepository } from "../repository/stream";
-import { type ZpecsDocument, parseDocument } from "../schema/document";
+import { type SpecDocument, parseDocument } from "../schema/document";
 import {
   deriveSourceFreshness,
   relevantSources,
@@ -118,17 +118,17 @@ export type BundleSubject = BundleSubjectBase &
    and acceptance criteria, so `in` is how both the types and the values are got. */
 
 /**
- * The parsed documents, addressed through `ZpecsDocument` rather than through the
+ * The parsed documents, addressed through `SpecDocument` rather than through the
  * stored-tier aliases. `parseDocument` returns the union of both tiers whatever
  * `source` was asked for, and the two tiers differ only in `meta` — the content
  * types are the same objects — so narrowing on `entity` is enough to reach every
  * section this file reads.
  */
-type ParsedEpic = Extract<ZpecsDocument, { entity: "epic" }>;
-type ParsedStream = Extract<ZpecsDocument, { entity: "stream" }>;
-type ParsedTask = Extract<ZpecsDocument, { entity: "task" }>;
-type ParsedRule = Extract<ZpecsDocument, { entity: "rule" }>;
-type ParsedMilestone = Extract<ZpecsDocument, { entity: "milestone" }>;
+type ParsedEpic = Extract<SpecDocument, { entity: "epic" }>;
+type ParsedStream = Extract<SpecDocument, { entity: "stream" }>;
+type ParsedTask = Extract<SpecDocument, { entity: "task" }>;
+type ParsedRule = Extract<SpecDocument, { entity: "rule" }>;
+type ParsedMilestone = Extract<SpecDocument, { entity: "milestone" }>;
 type ParsedVersioned = ParsedEpic | ParsedStream | ParsedTask | ParsedRule | ParsedMilestone;
 type ProvenanceSource = NonNullable<ParsedVersioned["provenance"]["sources"]>[number];
 type ProjectedSource = ProvenanceSource & { readonly freshness: SourceFreshness };

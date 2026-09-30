@@ -51,7 +51,7 @@ export const project = pgTable(
   },
   (t) => [
     // The name is how an agent addresses a project in natural language
-    // ("add an epic to zpecs"), so it has to resolve to exactly one row.
+    // ("add an epic to spec"), so it has to resolve to exactly one row.
     uniqueIndex("project_workspace_name_uniq").on(t.workspaceId, t.name),
     // Keep the exact index above during rollout. This expression index is the
     // stronger invariant used by self-service creation: spelling case cannot

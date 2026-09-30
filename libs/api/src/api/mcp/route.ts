@@ -3,11 +3,11 @@ import Elysia from "elysia";
 import { recordToolEvent } from "../../_/eventLog";
 import { MCP_OAUTH_SCOPES } from "../../domain/auth/mcpOAuth";
 import { resolveMcpAuth } from "../../domain/auth/resolveMcpAuth";
-import { zpecsTools } from "../../domain/mcp/registry";
+import { specTools } from "../../domain/mcp/registry";
 import { createMcpServer } from "../../domain/mcp/server";
 import { MCP_RESOURCE_URL, PROTECTED_RESOURCE_METADATA_URL } from "./publicUrl";
 
-const ZPECS_TOOL_NAMES = new Set<string>(zpecsTools.map(({ name }) => name));
+const SPEC_TOOL_NAMES = new Set<string>(specTools.map(({ name }) => name));
 const MCP_OAUTH_SCOPE = MCP_OAUTH_SCOPES.join(" ");
 
 /**
@@ -25,7 +25,7 @@ async function recordRequestedTool(request: Request): Promise<void> {
     const params = message.params;
     if (typeof params !== "object" || params === null || !("name" in params)) return;
     const name = params.name;
-    const tool = typeof name === "string" && ZPECS_TOOL_NAMES.has(name) ? name : "unknown";
+    const tool = typeof name === "string" && SPEC_TOOL_NAMES.has(name) ? name : "unknown";
 
     // Error is the safe default: a valid callback overwrites it with the real
     // outcome, while SDK-level rejections never reach that callback.
@@ -70,7 +70,7 @@ function unauthorized(reason: string): Response {
   );
 }
 
-/** A valid token that needs renewed consent for zpecs's complete scope set. */
+/** A valid token that needs renewed consent for spec's complete scope set. */
 function insufficientScope(): Response {
   return Response.json(
     {

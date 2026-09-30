@@ -27,7 +27,7 @@ import { RELATIONSHIP_TYPE, VERSIONED_ENTITY_TYPE } from "../enums";
  * dropped by `z.toJSONSchema()`, so a structural rule that a model never sees is
  * worse than no structural rule at all. Those constraints live in
  * `changeSet/plan.ts`, which reports them as issues an agent can act on, and in
- * the compact operation summary plus `zpecs://guide/change-sets`. Per-field prose
+ * the compact operation summary plus `spec://guide/change-sets`. Per-field prose
  * is deliberately absent because this schema is paid for twice in `tools/list`.
  *
  * ## Why `confirm` is per operation and not per call
@@ -136,7 +136,7 @@ const changeSetOperation = z.strictObject({
 /**
  * Which fields belong to which operation. One source for three consumers: the
  * per-field descriptions above, `plan.ts`'s "that field is not used by this
- * operation" check, and the `zpecs://guide/change-sets` documentation.
+ * operation" check, and the `spec://guide/change-sets` documentation.
  *
  * Required-ness is not modelled here. `plan.ts` guards each required field
  * individually because it needs the narrowed type anyway, and a second list of
@@ -175,7 +175,7 @@ export const changeSetSchema = z.strictObject({
     .describe(
       "Atomic and ordered. create(entity,parent?,data); update(key,expected_revision,data/items/rebase?); " +
         "link/unlink(source,target,relationship); archive/delete/move(key,expected_revision,confirm); " +
-        "schedule(key,expected_revision,milestone/roadmap fields). Full rules: zpecs://guide/change-sets.",
+        "schedule(key,expected_revision,milestone/roadmap fields). Full rules: spec://guide/change-sets.",
     ),
 });
 

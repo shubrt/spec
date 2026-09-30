@@ -1,4 +1,4 @@
-# Zpecs v2 migration command
+# Spec v2 migration command
 
 The migration command implements both a deterministic read-only preflight and the reviewed,
 one-off v1-to-v2 baseline writer.
@@ -6,7 +6,7 @@ one-off v1-to-v2 baseline writer.
 Run a preflight from the repository root and capture its canonical JSON report explicitly:
 
 ```sh
-corepack pnpm --filter @zpecs/api migrate:v2 -- --preflight > zpecs-v2-preflight.json
+corepack pnpm --filter @spec/api migrate:v2 -- --preflight > spec-v2-preflight.json
 ```
 
 `--preflight` is the default. It reads one mutually consistent PostgreSQL snapshot using
@@ -31,8 +31,8 @@ The preflight reports, per Project:
 Apply always requires the explicit confirmation flag:
 
 ```sh
-corepack pnpm --filter @zpecs/api migrate:v2 -- --apply --confirm-apply \
-  > zpecs-v2-apply-manifest.json
+corepack pnpm --filter @spec/api migrate:v2 -- --apply --confirm-apply \
+  > spec-v2-apply-manifest.json
 ```
 
 The writer is deliberately bound to the production baseline reviewed on 2026-08-10. It is not a
