@@ -3,10 +3,10 @@ import { hasWorkspace } from "../../domain/auth/authContext";
 import { resolveSessionAuth } from "../../domain/auth/resolveSessionAuth";
 
 /**
- * ── ADR: zpecs takes exactly ONE Elysia lifecycle hook, and this is it ──────────
+ * ── ADR: spec takes exactly ONE Elysia lifecycle hook, and this is it ──────────
  *
  * A handler normally reads its own inputs, so what a route does is readable from
- * the route. This file is the one deliberate departure, because in Zpecs a
+ * the route. This file is the one deliberate departure, because in Spec a
  * forgotten guard can produce a cross-workspace leak. That failure mode, not
  * convenience, is what buys a hook here and nowhere else.
  *
@@ -30,19 +30,19 @@ import { resolveSessionAuth } from "../../domain/auth/resolveSessionAuth";
  *
  * ── Two things this ADR forbids ───────────────────────────────────────────────
  *
- * 1. **`onError` stays off.** zpecs renders an error across three boundaries and
+ * 1. **`onError` stays off.** spec renders an error across three boundaries and
  *    they need three distinct shapes: a JSON-RPC error object (protocol-level
  *    failure on `/mcp`), an `isError` tool result inside HTTP 200 (a tool ran and
  *    refused — the text is what a model reads), and an HTTP JSON error body (this
  *    file). A global error hook would flatten all three into one envelope and
  *    break at least two of them. Do not add one "for consistency".
  *
- * 2. **This is the only zpecs-owned domain/auth lifecycle hook.** Not the only
+ * 2. **This is the only spec-owned domain/auth lifecycle hook.** Not the only
  *    `resolve` — the only hook allowed to affect request semantics. The
  *    executable runtime wraps the core app with evlog, whose internal hooks are
  *    a strictly observing exception: they may add/emit metadata but may never
  *    parse bodies, authorize requests, or transform an error response. A second
- *    zpecs-owned hook still needs a new ADR and a new reason.
+ *    spec-owned hook still needs a new ADR and a new reason.
  *
  * ──────────────────────────────────────────────────────────────────────────────
  *
@@ -85,7 +85,7 @@ export const authScope = new Elysia().resolve({ as: "scoped" }, async ({ request
       error: "no_workspace" as const,
       message:
         "You are signed in, but this session is not scoped to an organization, so there is " +
-        "no zpecs workspace to read. Create or join an organization, then reload.",
+        "no spec workspace to read. Create or join an organization, then reload.",
     });
   }
 

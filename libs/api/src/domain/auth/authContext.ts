@@ -1,7 +1,7 @@
 import type { AuthInfo } from "@modelcontextprotocol/sdk/server/auth/types.js";
 import type { WorkspaceScope } from "./workspaceScope";
 
-/** Which door the request came through. Not a permission — zpecs has no role gating. */
+/** Which door the request came through. Not a permission — spec has no role gating. */
 export type Principal = "mcp" | "session";
 
 /**
@@ -43,14 +43,14 @@ export function hasWorkspace(auth: AuthContext): auth is WorkspaceAuthContext {
 }
 
 /**
- * The key zpecs's `AuthContext` travels under inside the MCP SDK's `AuthInfo`.
+ * The key spec's `AuthContext` travels under inside the MCP SDK's `AuthInfo`.
  *
  * The SDK's `AuthInfo` is the only channel from an HTTP request into a tool
  * handler: `transport.handleRequest(request, { authInfo })` puts it on every
  * `RequestHandlerExtra`. `extra` is the SDK's sanctioned place for
  * application-specific data. Namespaced so a future SDK field cannot collide.
  */
-const AUTH_CONTEXT_KEY = "zpecs/authContext";
+const AUTH_CONTEXT_KEY = "spec/authContext";
 
 /** Packs an `AuthContext` into the SDK's `AuthInfo`, ready for `handleRequest`. */
 export function toAuthInfo(

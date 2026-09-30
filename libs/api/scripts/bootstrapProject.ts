@@ -58,7 +58,7 @@ export async function bootstrapProject(
   const workspace = await workspaceRepository.findByClerkOrgId(validated.clerkOrgId);
   if (!workspace) {
     throw new Error(
-      `No local workspace exists for Clerk organization ${JSON.stringify(validated.clerkOrgId)}. Send an authenticated request for that organization first so zpecs can JIT-provision it.`,
+      `No local workspace exists for Clerk organization ${JSON.stringify(validated.clerkOrgId)}. Send an authenticated request for that organization first so spec can JIT-provision it.`,
     );
   }
 

@@ -1,7 +1,7 @@
 import { ClerkProvider, useClerk } from "@clerk/tanstack-react-start";
 import { createRootRoute, HeadContent, Outlet, redirect, Scripts } from "@tanstack/react-router";
 import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
-import { AppSidebar, ContextBar } from "~/components/zpecs/shell";
+import { AppSidebar, ContextBar } from "~/components/spec/shell";
 import { BoardStateProvider, useBoardState } from "~/lib/boardState";
 import { validateRootSearch } from "~/lib/search";
 import { fetchAuthState } from "~/server/auth";
@@ -14,12 +14,12 @@ import appCss from "../styles.css?url";
 const SIGN_IN_PREFIX = "/sign-in";
 
 const Inspector = lazy(() =>
-  import("~/components/zpecs/inspector").then(({ Inspector: component }) => ({
+  import("~/components/spec/inspector").then(({ Inspector: component }) => ({
     default: component,
   })),
 );
 const SearchOverlay = lazy(() =>
-  import("~/components/zpecs/search-overlay").then(({ SearchOverlay: component }) => ({
+  import("~/components/spec/search-overlay").then(({ SearchOverlay: component }) => ({
     default: component,
   })),
 );
@@ -29,7 +29,7 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "zpecs · Operational Ledger" },
+      { title: "spec · Operational Ledger" },
     ],
     links: [
       { rel: "preconnect", href: "https://fonts.googleapis.com" },

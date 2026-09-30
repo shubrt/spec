@@ -1,13 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { StatusCell } from "~/components/zpecs/box";
-import { Screen } from "~/components/zpecs/screen";
-import {
-  ContextBlock,
-  DocSection,
-  MetricGrid,
-  PageHead,
-  TableNote,
-} from "~/components/zpecs/parts";
+import { StatusCell } from "~/components/spec/box";
+import { Screen } from "~/components/spec/screen";
+import { ContextBlock, DocSection, MetricGrid, PageHead, TableNote } from "~/components/spec/parts";
 import { carry } from "~/lib/search";
 import type { ProjectModel } from "~/lib/model";
 import {

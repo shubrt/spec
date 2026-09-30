@@ -18,20 +18,20 @@ export function mcpClientSetups(endpointUrl: string) {
   return [
     {
       id: "claude-code",
-      title: "Add zpecs to Claude Code",
+      title: "Add spec to Claude Code",
       description:
         "Run this once. The client then discovers the authorization server and signs you in through your browser.",
-      commands: [`claude mcp add --transport http zpecs ${endpointUrl}`],
-      logoutCommand: "claude mcp logout zpecs",
+      commands: [`claude mcp add --transport http spec ${endpointUrl}`],
+      logoutCommand: "claude mcp logout spec",
     },
     {
       id: "codex",
-      title: "Add zpecs to OpenAI Codex",
+      title: "Add spec to OpenAI Codex",
       description:
         "Run these commands in order. Codex adds the endpoint first, then starts browser-based sign-in.",
-      commands: [`codex mcp add zpecs --url ${endpointUrl}`, "codex mcp login zpecs"],
-      logoutCommand: "codex mcp logout zpecs",
-      loginCommand: "codex mcp login zpecs",
+      commands: [`codex mcp add spec --url ${endpointUrl}`, "codex mcp login spec"],
+      logoutCommand: "codex mcp logout spec",
+      loginCommand: "codex mcp login spec",
     },
   ] as const satisfies readonly McpClientSetup[];
 }
@@ -42,7 +42,7 @@ export type ConnectionWorkspaceChecks = {
 };
 
 /**
- * Separates what Clerk knows from what the last zpecs API read confirmed.
+ * Separates what Clerk knows from what the last spec API read confirmed.
  *
  * An API failure must not be rendered as proof that the session has no
  * organization: 404/500/invocation failures say nothing about `org_id`. Keeping
@@ -67,12 +67,12 @@ export function connectionWorkspaceChecks(input: {
     workspace: {
       ok: workspaceConfirmed,
       detail: workspaceConfirmed
-        ? `${input.workspaceName} — the zpecs API confirmed this local workspace for the current web session.`
+        ? `${input.workspaceName} — the spec API confirmed this local workspace for the current web session.`
         : input.failureStatus === "no_workspace"
-          ? "The zpecs API confirmed that this session has no organization-scoped workspace. Create or join an organization, then reload."
+          ? "The spec API confirmed that this session has no organization-scoped workspace. Create or join an organization, then reload."
           : organizationSelected
-            ? `An organization is selected, but the last API read could not confirm its local zpecs workspace.${input.failureMessage ? ` ${input.failureMessage}` : ""}`
-            : "No local zpecs workspace can be confirmed until a Clerk organization is active.",
+            ? `An organization is selected, but the last API read could not confirm its local spec workspace.${input.failureMessage ? ` ${input.failureMessage}` : ""}`
+            : "No local spec workspace can be confirmed until a Clerk organization is active.",
     },
   };
 }

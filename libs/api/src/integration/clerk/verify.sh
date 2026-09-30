@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Captures live evidence for the canonical Clerk instance and the combined
-# zpecs TanStack web service (see SETUP.md). Run it only as an explicit live
+# spec TanStack web service (see SETUP.md). Run it only as an explicit live
 # operator check because it talks to external services. Every required check
 # either proves the real configuration or fails loudly; it never substitutes
 # fixture data.
 #
 # Usage:
 #   CLERK_PUBLISHABLE_KEY=pk_live_... \
-#   ZPECS_BASE_URL=http://localhost:3003 \
-#   ZPECS_ACCESS_TOKEN=eyJ... \
+#   SPEC_BASE_URL=http://localhost:3003 \
+#   SPEC_ACCESS_TOKEN=eyJ... \
 #     libs/api/src/integration/clerk/verify.sh
 #
-# CLERK_PUBLISHABLE_KEY is required. ZPECS_BASE_URL defaults to
-# http://localhost:3003 (apps/web's default port). ZPECS_ACCESS_TOKEN is
+# CLERK_PUBLISHABLE_KEY is required. SPEC_BASE_URL defaults to
+# http://localhost:3003 (apps/web's default port). SPEC_ACCESS_TOKEN is
 # optional — omit it to skip section 5 (safe token-shape inspection); every
 # other section still runs. The token and its complete payload are never
 # printed, nor are individual claim values.
@@ -41,32 +41,32 @@ case "${CLERK_PUBLISHABLE_KEY}" in
   *) fail "CLERK_PUBLISHABLE_KEY does not start with pk_test_ or pk_live_ — got a value that is not a Clerk publishable key." ;;
 esac
 
-ZPECS_BASE_URL="${ZPECS_BASE_URL:-http://localhost:3003}"
+SPEC_BASE_URL="${SPEC_BASE_URL:-http://localhost:3003}"
 readonly EXPECTED_SCOPES_JSON='["openid","profile","email","user:org:read"]'
 readonly EXPECTED_SCOPES_TEXT="openid profile email user:org:read"
-readonly EXPECTED_RESOURCE="${ZPECS_BASE_URL}/mcp"
-readonly EXPECTED_RESOURCE_METADATA="${ZPECS_BASE_URL}/.well-known/oauth-protected-resource/mcp"
-export EXPECTED_SCOPES_JSON EXPECTED_SCOPES_TEXT EXPECTED_RESOURCE EXPECTED_RESOURCE_METADATA ZPECS_BASE_URL
+readonly EXPECTED_RESOURCE="${SPEC_BASE_URL}/mcp"
+readonly EXPECTED_RESOURCE_METADATA="${SPEC_BASE_URL}/.well-known/oauth-protected-resource/mcp"
+export EXPECTED_SCOPES_JSON EXPECTED_SCOPES_TEXT EXPECTED_RESOURCE EXPECTED_RESOURCE_METADATA SPEC_BASE_URL
 
 validate_base_url() {
   bun -e '
-    const raw = process.env.ZPECS_BASE_URL;
+    const raw = process.env.SPEC_BASE_URL;
     let url;
     try {
       url = new URL(raw);
     } catch {
-      console.error("FAIL: ZPECS_BASE_URL is not a valid absolute URL.");
+      console.error("FAIL: SPEC_BASE_URL is not a valid absolute URL.");
       process.exit(1);
     }
 
     if (url.origin !== raw || url.username || url.password) {
       console.error(
-        "FAIL: ZPECS_BASE_URL must be an origin only, with no credentials, path, query, fragment, or trailing slash.",
+        "FAIL: SPEC_BASE_URL must be an origin only, with no credentials, path, query, fragment, or trailing slash.",
       );
       process.exit(1);
     }
     if (url.protocol !== "http:" && url.protocol !== "https:") {
-      console.error("FAIL: ZPECS_BASE_URL must use HTTP or HTTPS.");
+      console.error("FAIL: SPEC_BASE_URL must use HTTP or HTTPS.");
       process.exit(1);
     }
 
@@ -77,13 +77,13 @@ validate_base_url() {
       hostname === "[::1]" ||
       /^127(?:\.[0-9]{1,3}){3}$/.test(hostname);
     if (!loopback && url.protocol !== "https:") {
-      console.error("FAIL: Non-loopback ZPECS_BASE_URL values must use HTTPS.");
+      console.error("FAIL: Non-loopback SPEC_BASE_URL values must use HTTPS.");
       process.exit(1);
     }
   '
 }
 
-validate_base_url || fail "ZPECS_BASE_URL does not satisfy the canonical public-origin contract."
+validate_base_url || fail "SPEC_BASE_URL does not satisfy the canonical public-origin contract."
 
 check_authorization_server_metadata() {
   local source_name="$1"
@@ -118,7 +118,7 @@ check_authorization_server_metadata() {
       );
       if (missingScopes.length > 0) {
         console.error(
-          `FAIL: ${process.env.METADATA_SOURCE} does not support required zpecs scope(s): ${missingScopes.join(", ")}.`,
+          `FAIL: ${process.env.METADATA_SOURCE} does not support required spec scope(s): ${missingScopes.join(", ")}.`,
         );
         process.exit(1);
       }
@@ -126,7 +126,7 @@ check_authorization_server_metadata() {
       console.log(JSON.stringify(metadata, null, 2));
       console.log();
       console.log(`DCR registration endpoint present: ${registrationEndpoint}`);
-      console.log(`All required zpecs scopes supported: ${expectedScopes.join(" ")}`);
+      console.log(`All required spec scopes supported: ${expectedScopes.join(" ")}`);
     });
   '
 }
@@ -140,14 +140,14 @@ check_protected_resource_metadata() {
       try {
         metadata = JSON.parse(input);
       } catch {
-        console.error("FAIL: zpecs protected-resource metadata did not return JSON.");
+        console.error("FAIL: spec protected-resource metadata did not return JSON.");
         process.exit(1);
       }
 
       const expectedScopes = JSON.parse(process.env.EXPECTED_SCOPES_JSON);
       if (metadata.resource !== process.env.EXPECTED_RESOURCE) {
         console.error(
-          `FAIL: zpecs metadata.resource must be exactly ${process.env.EXPECTED_RESOURCE}; received ${JSON.stringify(metadata.resource)}.`,
+          `FAIL: spec metadata.resource must be exactly ${process.env.EXPECTED_RESOURCE}; received ${JSON.stringify(metadata.resource)}.`,
         );
         process.exit(1);
       }
@@ -169,15 +169,15 @@ check_protected_resource_metadata() {
         JSON.stringify(metadata.scopes_supported) !== JSON.stringify(expectedScopes)
       ) {
         console.error(
-          `FAIL: zpecs scopes_supported must be exactly ${JSON.stringify(expectedScopes)} in that order.`,
+          `FAIL: spec scopes_supported must be exactly ${JSON.stringify(expectedScopes)} in that order.`,
         );
         process.exit(1);
       }
 
       console.log(JSON.stringify(metadata, null, 2));
       console.log();
-      console.log(`zpecs resource exactly matches: ${process.env.EXPECTED_RESOURCE}`);
-      console.log(`zpecs advertises exactly its four required scopes: ${expectedScopes.join(" ")}`);
+      console.log(`spec resource exactly matches: ${process.env.EXPECTED_RESOURCE}`);
+      console.log(`spec advertises exactly its four required scopes: ${expectedScopes.join(" ")}`);
     });
   '
 }
@@ -251,7 +251,7 @@ check_unauthenticated_challenge() {
 
       console.log("Unauthenticated POST /mcp returns HTTP 401 with a Bearer challenge.");
       console.log(`Challenge metadata URL exactly matches: ${process.env.EXPECTED_RESOURCE_METADATA}`);
-      console.log(`Challenge carries all required zpecs scopes: ${scope}`);
+      console.log(`Challenge carries all required spec scopes: ${scope}`);
     });
   '
 }
@@ -271,49 +271,49 @@ echo "== 1. Clerk instance's real authorization-server metadata =="
 echo "GET ${FAPI_URL}/.well-known/oauth-authorization-server"
 curl -sS -f "${FAPI_URL}/.well-known/oauth-authorization-server" \
   | check_authorization_server_metadata "Clerk authorization-server metadata" \
-  || fail "Clerk metadata did not prove DCR and all four required zpecs scopes. Check SETUP.md and the Clerk Dashboard."
+  || fail "Clerk metadata did not prove DCR and all four required spec scopes. Check SETUP.md and the Clerk Dashboard."
 echo
 
-echo "== 2. zpecs's protected-resource metadata (RFC 9728) =="
-echo "GET ${ZPECS_BASE_URL}/.well-known/oauth-protected-resource/mcp"
-curl -sS -f "${ZPECS_BASE_URL}/.well-known/oauth-protected-resource/mcp" \
+echo "== 2. spec's protected-resource metadata (RFC 9728) =="
+echo "GET ${SPEC_BASE_URL}/.well-known/oauth-protected-resource/mcp"
+curl -sS -f "${SPEC_BASE_URL}/.well-known/oauth-protected-resource/mcp" \
   | check_protected_resource_metadata \
-  || fail "zpecs's protected-resource metadata is unavailable or its scopes differ from the required four. Is apps/web running at ${ZPECS_BASE_URL}?"
+  || fail "spec's protected-resource metadata is unavailable or its scopes differ from the required four. Is apps/web running at ${SPEC_BASE_URL}?"
 echo
 
-echo "== 3. zpecs's unauthenticated MCP challenge =="
+echo "== 3. spec's unauthenticated MCP challenge =="
 echo "POST ${EXPECTED_RESOURCE}"
 curl -sS -o /dev/null -D - \
   -X POST \
   -H "Accept: application/json, text/event-stream" \
   -H "Content-Type: application/json" \
-  --data-binary '{"jsonrpc":"2.0","id":"verify-auth-challenge","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"zpecs-verify","version":"1"}}}' \
+  --data-binary '{"jsonrpc":"2.0","id":"verify-auth-challenge","method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"spec-verify","version":"1"}}}' \
   "${EXPECTED_RESOURCE}" \
   | check_unauthenticated_challenge \
-  || fail "zpecs's unauthenticated MCP response did not provide the canonical 401 challenge. Is apps/web running at ${ZPECS_BASE_URL}?"
+  || fail "spec's unauthenticated MCP response did not provide the canonical 401 challenge. Is apps/web running at ${SPEC_BASE_URL}?"
 echo
 
-echo "== 4. zpecs's authorization-server passthrough =="
-echo "GET ${ZPECS_BASE_URL}/.well-known/oauth-authorization-server"
-curl -sS -f "${ZPECS_BASE_URL}/.well-known/oauth-authorization-server" \
-  | check_authorization_server_metadata "zpecs authorization-server passthrough" \
-  || fail "zpecs's authorization-server passthrough did not prove DCR and all four required scopes. Is apps/web running at ${ZPECS_BASE_URL}?"
+echo "== 4. spec's authorization-server passthrough =="
+echo "GET ${SPEC_BASE_URL}/.well-known/oauth-authorization-server"
+curl -sS -f "${SPEC_BASE_URL}/.well-known/oauth-authorization-server" \
+  | check_authorization_server_metadata "spec authorization-server passthrough" \
+  || fail "spec's authorization-server passthrough did not prove DCR and all four required scopes. Is apps/web running at ${SPEC_BASE_URL}?"
 echo
 
 echo "== 5. Safe access-token organization-claim check =="
-if [ -z "${ZPECS_ACCESS_TOKEN:-}" ]; then
-  echo "SKIPPED: ZPECS_ACCESS_TOKEN is not set. This step needs a real access token"
+if [ -z "${SPEC_ACCESS_TOKEN:-}" ]; then
+  echo "SKIPPED: SPEC_ACCESS_TOKEN is not set. This step needs a real access token"
   echo "issued by completing the OAuth flow with an MCP client. Re-run with"
-  echo "ZPECS_ACCESS_TOKEN=<token> after completing that flow once."
+  echo "SPEC_ACCESS_TOKEN=<token> after completing that flow once."
 else
   bun -e '
-    const token = process.env.ZPECS_ACCESS_TOKEN;
+    const token = process.env.SPEC_ACCESS_TOKEN;
     const parts = token.split(".");
     if (parts.length !== 3) {
       console.log("Token present: yes");
       console.log("Token format: opaque");
       console.error(
-        "FAIL: The verified access token is opaque, so zpecs cannot read org_id through its current direct-claim path. Implement the documented userinfo fallback before accepting the live flow.",
+        "FAIL: The verified access token is opaque, so spec cannot read org_id through its current direct-claim path. Implement the documented userinfo fallback before accepting the live flow.",
       );
       process.exit(1);
     }
@@ -322,11 +322,11 @@ else
     try {
       payload = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
     } catch {
-      console.error("FAIL: ZPECS_ACCESS_TOKEN has three segments but no readable JSON payload.");
+      console.error("FAIL: SPEC_ACCESS_TOKEN has three segments but no readable JSON payload.");
       process.exit(1);
     }
     if (typeof payload !== "object" || payload === null || Array.isArray(payload)) {
-      console.error("FAIL: ZPECS_ACCESS_TOKEN payload is not a JSON object.");
+      console.error("FAIL: SPEC_ACCESS_TOKEN payload is not a JSON object.");
       process.exit(1);
     }
 

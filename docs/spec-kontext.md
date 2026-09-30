@@ -1,18 +1,18 @@
-# Zpecs v2 – fachlicher und technischer Kontext
+# Spec v2 – fachlicher und technischer Kontext
 
 **Stand:** 09.08.2026
 **Status:** kanonische v2-Referenz für Maintainer und Implementierungsagenten
 
-Dieses Dokument beschreibt das aktuelle Zielmodell von Zpecs. Beispiele in
+Dieses Dokument beschreibt das aktuelle Zielmodell von Spec. Beispiele in
 älteren Diskussionen oder Revisionen mit anderen Keys, inline definierten
 Regeltexten oder dokumentweiter Herkunftsmarkierung beschreiben v1 und sind
 nicht mehr schreibbar. Der v2-Cutover ist bewusst ohne Dual-Read oder
 Abwärtskompatibilität angelegt; Details zur Transformation stehen in
-[`zpecs-v2-migration.md`](./zpecs-v2-migration.md).
+[`spec-v2-migration.md`](./spec-v2-migration.md).
 
 ## 1. Ziel des Systems
 
-Zpecs ist ein cloudbasierter, strukturierter Projektkontext für Menschen und
+Spec ist ein cloudbasierter, strukturierter Projektkontext für Menschen und
 MCP-kompatible Agenten. Ein Nutzer kann natürliche Sprache verwenden, zum
 Beispiel:
 
@@ -23,7 +23,7 @@ Beispiel:
 - „Implementiere Task T-23.“
 
 Der Agent liest zuerst den vorhandenen Kontext, ordnet die Eingabe ein und
-schreibt nur belegte oder ausdrücklich als Annahme markierte Aussagen. Zpecs
+schreibt nur belegte oder ausdrücklich als Annahme markierte Aussagen. Spec
 soll dabei:
 
 - fachliches Was und Warum von technischer Ausführung trennen;
@@ -41,7 +41,7 @@ soll dabei:
 Lokaler Nutzer
 └── MCP-kompatibler Agent
     └── HTTPS / Streamable HTTP
-        └── Zpecs MCP-Server
+        └── Spec MCP-Server
             └── Domain Services und Validierung
                 └── PostgreSQL
 ```
@@ -543,7 +543,7 @@ abgelehnt.
 
 ## 11. MCP-Werkzeuge
 
-Zpecs exponiert eine kleine Werkzeugfläche:
+Spec exponiert eine kleine Werkzeugfläche:
 
 ```text
 list_context

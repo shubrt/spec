@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { AbsentBox, StatusCell } from "~/components/zpecs/box";
-import { openColumn, streamColumns } from "~/components/zpecs/columns";
-import { DetailHead, DetailLayout } from "~/components/zpecs/detail-head";
-import { EntityTable } from "~/components/zpecs/entity-table";
+import { AbsentBox, StatusCell } from "~/components/spec/box";
+import { openColumn, streamColumns } from "~/components/spec/columns";
+import { DetailHead, DetailLayout } from "~/components/spec/detail-head";
+import { EntityTable } from "~/components/spec/entity-table";
 import {
   Chip,
   ContextBlock,
@@ -13,9 +13,9 @@ import {
   MetricGrid,
   PageHead,
   Tabs,
-} from "~/components/zpecs/parts";
-import { Screen } from "~/components/zpecs/screen";
-import { SpecFragment } from "~/components/zpecs/spec-fragment";
+} from "~/components/spec/parts";
+import { Screen } from "~/components/spec/screen";
+import { SpecFragment } from "~/components/spec/spec-fragment";
 import { useEntityNav } from "~/lib/entityNav";
 import { groupFragments, sectionLabel } from "~/lib/fragments";
 import type { EpicRow, ProjectModel, StreamRow } from "~/lib/model";

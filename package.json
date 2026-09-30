@@ -1,18 +1,18 @@
 {
-  "name": "zpecs",
+  "name": "spec",
   "private": true,
   "scripts": {
     "build": "vp run -r build",
     "dev": "vp run -r --parallel dev",
     "start": "vp run -r --parallel start",
     "typecheck": "vp run -r typecheck",
-    "db:deploy": "vp run --filter @zpecs/api db:deploy",
+    "db:deploy": "vp run --filter @spec/api db:deploy",
     "db:push": "vp run -r db:push",
     "clean": "vp run -r clean && git clean -xdf node_modules .vite",
     "check": "vp check",
     "fix": "vp check --fix",
     "sherif": "vp exec sherif",
-    "qa": "vp check && vp run sherif && vp run typecheck && vp run -F @zpecs/api schema:check",
+    "qa": "vp check && vp run sherif && vp run typecheck && vp run -F @spec/api schema:check",
     "prepare": "test -z \"$CI\" && vp config || true",
     "commitlint": "commitlint --edit"
   },

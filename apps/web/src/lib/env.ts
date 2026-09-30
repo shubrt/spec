@@ -47,7 +47,7 @@ export const env = createEnv({
     DATABASE_URL: z.url(),
     // Canonical origin of the unified process. It is used for MCP resource and
     // discovery URLs and must never be inferred from proxy-controlled headers.
-    ZPECS_PUBLIC_URL: publicOrigin,
+    SPEC_PUBLIC_URL: publicOrigin,
     // Canonical Clerk publishable key for this app. The shared API maps this to
     // its compatibility name when it builds OAuth discovery metadata.
     VITE_CLERK_PUBLISHABLE_KEY: z
@@ -63,9 +63,9 @@ export const env = createEnv({
   },
   runtimeEnv: {
     ...process.env,
-    DATABASE_URL: process.env.ZPECS_DATABASE_URL || process.env.DATABASE_URL,
-    AXIOM_DATASET: process.env.ZPECS_AXIOM_DATASET || process.env.AXIOM_DATASET,
-    AXIOM_TOKEN: process.env.ZPECS_AXIOM_TOKEN || process.env.AXIOM_TOKEN,
+    DATABASE_URL: process.env.SPEC_DATABASE_URL || process.env.DATABASE_URL,
+    AXIOM_DATASET: process.env.SPEC_AXIOM_DATASET || process.env.AXIOM_DATASET,
+    AXIOM_TOKEN: process.env.SPEC_AXIOM_TOKEN || process.env.AXIOM_TOKEN,
   },
   emptyStringAsUndefined: true,
 });

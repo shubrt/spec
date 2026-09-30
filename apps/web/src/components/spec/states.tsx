@@ -34,7 +34,7 @@ export function EmptyProject({
     <div>
       <PageHead
         title={model.projectName}
-        hint="A Project row with no content. zpecs mints keys per Project, so this one starts at E-1 again — a key is never shared between Projects and never reused inside one."
+        hint="A Project row with no content. spec mints keys per Project, so this one starts at E-1 again — a key is never shared between Projects and never reused inside one."
       />
 
       <div className="flex flex-wrap gap-8 pt-1">
@@ -74,7 +74,7 @@ export function EmptyProject({
             {mcpEndpoint ? (
               <>
                 <CommandLine command={mcpEndpoint} />
-                <CommandLine command={`claude mcp add --transport http zpecs ${mcpEndpoint}`} />
+                <CommandLine command={`claude mcp add --transport http spec ${mcpEndpoint}`} />
               </>
             ) : (
               <p className="text-muted-foreground py-2 text-xs">
@@ -172,7 +172,7 @@ export function NoProject({ workspaceName }: { readonly workspaceName: string })
 const REMEDY: Readonly<Record<ApiFailure["status"], string>> = {
   signed_out: "Sign in to continue.",
   no_workspace:
-    "Create or join an organization from the switcher in the context bar, then reload. The organization is the workspace: zpecs reads its id off your session and matches it to a workspace row.",
+    "Create or join an organization from the switcher in the context bar, then reload. The organization is the workspace: spec reads its id off your session and matches it to a workspace row.",
   unavailable: "Nothing is lost — this surface only reads. Try again in a moment.",
 };
 
@@ -222,18 +222,18 @@ export function SignedOutFrame({ children }: { readonly children: ReactNode }) {
       <div className="w-[440px]">
         <div className="border-border-strong rounded-md border px-6 py-8">
           <div className="text-muted-foreground text-micro mb-3 text-center font-mono font-semibold uppercase tracking-wider">
-            zpecs
+            spec
           </div>
           <h1 className="text-center text-[19px] font-medium leading-6">You are signed out.</h1>
           <p className="text-muted-foreground text-ledger mt-2 text-center leading-[19px]">
-            zpecs is available by invitation only. Sign in with the account that was invited to this
+            spec is available by invitation only. Sign in with the account that was invited to this
             organization.
           </p>
           <div className="mt-5 flex justify-center">{children}</div>
         </div>
 
         <p className="text-muted-foreground mt-3 px-1 text-xs leading-[17px]">
-          Signing in and out is a Clerk call. zpecs stores no session of its own: it reads the
+          Signing in and out is a Clerk call. spec stores no session of its own: it reads the
           organization id off your session and matches it to a workspace row, and the only identity
           it has ever written down is the actor id on a revision.
         </p>

@@ -47,7 +47,7 @@ type Rule = {
  * Snake-case semantic ids rather than opaque numbers: the id travels to the
  * model inside an error message and inside a tool description, and
  * `ready_task_needs_definition_of_done` is self-explaining there in a way that
- * `ZPECS-R07` is not.
+ * `SPEC-R07` is not.
  */
 export const RULES = {
   /* ---------------------------------------------------------------- zod */

@@ -1,5 +1,5 @@
 import { createRouter } from "@tanstack/react-router";
-import { NotFound } from "~/components/zpecs/not-found";
+import { NotFound } from "~/components/spec/not-found";
 import { routeTree } from "./routeTree.gen";
 
 // TanStack Start calls getRouter() to build a fresh router instance per request.

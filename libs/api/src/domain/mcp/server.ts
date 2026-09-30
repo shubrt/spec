@@ -1,13 +1,13 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { SERVER_INSTRUCTIONS } from "./instructions";
-import { zpecsTools } from "./registry";
-import { registerZpecsResources } from "./resources";
+import { specTools } from "./registry";
+import { registerSpecResources } from "./resources";
 
 /**
  * Reported as `serverInfo.name` in the `initialize` result. The MCP client keys
  * its connection entry off this, so it is part of the wire contract.
  */
-export const MCP_SERVER_NAME = "zpecs";
+export const MCP_SERVER_NAME = "spec";
 export const MCP_SERVER_VERSION = "0.1.0";
 
 /**
@@ -27,10 +27,10 @@ export function createMcpServer(): McpServer {
     { instructions: SERVER_INSTRUCTIONS },
   );
 
-  for (const tool of zpecsTools) {
+  for (const tool of specTools) {
     tool.register(server);
   }
-  registerZpecsResources(server);
+  registerSpecResources(server);
 
   return server;
 }

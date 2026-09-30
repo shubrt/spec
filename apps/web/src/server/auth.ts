@@ -4,7 +4,7 @@ import { createServerFn } from "@tanstack/react-start";
 /**
  * The session state the root route's guard and loader branch on.
  *
- * `orgId` is the active Clerk organization, which in zpecs *is* the workspace:
+ * `orgId` is the active Clerk organization, which in spec *is* the workspace:
  * the session token carries `org_id`, and the API derives the tenant scope from
  * it. A session with no active organization is a legitimate, renderable state,
  * not a failure — hence a nullable field rather than an error.
@@ -13,7 +13,7 @@ export interface AuthState {
   readonly isAuthenticated: boolean;
   readonly orgId: string | null;
   /**
-   * The Clerk user id — the one identity zpecs ever writes down, as the actor on a
+   * The Clerk user id — the one identity spec ever writes down, as the actor on a
    * revision. Resolved here rather than from Clerk's client hook so it is server
    * rendered: that hook is null during SSR, which made every surface showing it
    * paint a dash first and swap in the real id on hydration.

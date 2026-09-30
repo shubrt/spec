@@ -1,6 +1,6 @@
 import { useClerk } from "@clerk/tanstack-react-start";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AbsentBox, Box, NotStoredBox } from "~/components/zpecs/box";
+import { AbsentBox, Box, NotStoredBox } from "~/components/spec/box";
 import {
   CommandLine,
   ContextBlock,
@@ -10,8 +10,8 @@ import {
   NotOffered,
   PageHead,
   Tabs,
-} from "~/components/zpecs/parts";
-import { Screen } from "~/components/zpecs/screen";
+} from "~/components/spec/parts";
+import { Screen } from "~/components/spec/screen";
 import { useMcpEndpoint } from "~/lib/boardState";
 import type { ProjectModel } from "~/lib/model";
 import type { RootSearch } from "~/lib/search";
@@ -26,7 +26,7 @@ import { formatRevisionTime } from "~/lib/vocabulary";
  *
  * ## What this screen refuses to draw
  *
- * zpecs stores no user row, no membership and no role. Every one of those is named
+ * spec stores no user row, no membership and no role. Every one of those is named
  * here and pointed at Clerk rather than drawn as a form that would save nowhere — a
  * settings screen full of controls that silently do nothing is worse than one that
  * says which system owns the value.
@@ -70,7 +70,7 @@ function SettingsScreen({ model }: { readonly model: ProjectModel }) {
     <div>
       <PageHead
         title="Settings"
-        hint="Members, roles and invitations are a target capability: zpecs stores none of them, identity lives in Clerk and the workspace row holds only the organization id. Project, Integrations and Account read real data."
+        hint="Members, roles and invitations are a target capability: spec stores none of them, identity lives in Clerk and the workspace row holds only the organization id. Project, Integrations and Account read real data."
       />
       <Tabs
         tabs={TABS.map((entry) => ({ id: entry.id, label: entry.label }))}
@@ -104,12 +104,12 @@ function MembersTab({ model }: { readonly model: ProjectModel }) {
       <div className="w-[664px] shrink-0">
         <DocSection
           label="Organization"
-          hint="zpecs stores only the Clerk organization id on its workspace row. The display name, the member list and every invitation live in Clerk, which is why this block links there instead of duplicating them."
+          hint="spec stores only the Clerk organization id on its workspace row. The display name, the member list and every invitation live in Clerk, which is why this block links there instead of duplicating them."
         >
           <DefRow label="Workspace">{model.workspaceName}</DefRow>
           <DefRow label="Display name">
             <span className="flex items-center gap-2">
-              <NotStoredBox title="Held by Clerk, not by zpecs" />
+              <NotStoredBox title="Held by Clerk, not by spec" />
               <span className="text-muted-foreground text-xs">held by Clerk</span>
             </span>
           </DefRow>
@@ -117,7 +117,7 @@ function MembersTab({ model }: { readonly model: ProjectModel }) {
 
         <DocSection
           label="Members and invitations"
-          hint="zpecs stores no membership record and no role. Authorization is enforced by the service from the session's organization id; there is nothing on this page that could grant or revoke access."
+          hint="spec stores no membership record and no role. Authorization is enforced by the service from the session's organization id; there is nothing on this page that could grant or revoke access."
         >
           <p className="text-muted-foreground py-2 text-xs leading-[17px]">
             The member list, invitations and role changes are Clerk's. Managing them here would mean
@@ -136,7 +136,7 @@ function MembersTab({ model }: { readonly model: ProjectModel }) {
       <div className="w-[304px] shrink-0">
         <ContextBlock
           label="Roles"
-          hint="The target shape. zpecs stores no role today, and authorization would be enforced by the service rather than by this page."
+          hint="The target shape. spec stores no role today, and authorization would be enforced by the service rather than by this page."
         >
           {ROLES.map(([name, description]) => (
             <div key={name} className="border-border border-b py-2 last:border-0">
@@ -250,8 +250,8 @@ function IntegrationsTab() {
       state: "ready" as const,
       description:
         "Run this once. The client then discovers the authorization server and signs you in through your browser.",
-      commands: [`claude mcp add --transport http zpecs ${mcp.url}`],
-      logout: "claude mcp logout zpecs",
+      commands: [`claude mcp add --transport http spec ${mcp.url}`],
+      logout: "claude mcp logout spec",
     },
     {
       id: "codex",
@@ -259,8 +259,8 @@ function IntegrationsTab() {
       state: "ready" as const,
       description:
         "Run these in order. Codex adds the endpoint first, then starts browser-based sign-in.",
-      commands: [`codex mcp add zpecs --url ${mcp.url}`, "codex mcp login zpecs"],
-      logout: "codex mcp logout zpecs",
+      commands: [`codex mcp add spec --url ${mcp.url}`, "codex mcp login spec"],
+      logout: "codex mcp logout spec",
     },
     {
       id: "other",
@@ -284,7 +284,7 @@ function IntegrationsTab() {
           {mcp.isLocal ? (
             <p className="text-muted-foreground mt-2 text-xs leading-[17px]">
               This is a loopback address. It works on this machine and nowhere else — pasted into a
-              colleague's client it will fail in a way that looks like a bug in zpecs.
+              colleague's client it will fail in a way that looks like a bug in spec.
             </p>
           ) : null}
         </DocSection>
@@ -371,7 +371,7 @@ function AccountTab({ model }: { readonly model: ProjectModel }) {
       <div className="w-[664px] shrink-0">
         <DocSection
           label="Identity"
-          hint="zpecs stores no user row. Your id appears in exactly one place in the database: the actor column of an Entity Revision. Everything else about you is resolved from your Clerk session at request time and never written down."
+          hint="spec stores no user row. Your id appears in exactly one place in the database: the actor column of an Entity Revision. Everything else about you is resolved from your Clerk session at request time and never written down."
         >
           <DefRow label="Actor id">
             <span className="font-mono text-xs">{userId ?? "—"}</span>
@@ -384,16 +384,16 @@ function AccountTab({ model }: { readonly model: ProjectModel }) {
           hint="Name, email, password and multi-factor settings live in Clerk. They are named here rather than drawn as a form, because a form on this page would save nowhere."
         >
           <DefRow label="Name">
-            <NotStoredBox title="Held by Clerk, not by zpecs" />
+            <NotStoredBox title="Held by Clerk, not by spec" />
           </DefRow>
           <DefRow label="Email">
-            <NotStoredBox title="Held by Clerk, not by zpecs" />
+            <NotStoredBox title="Held by Clerk, not by spec" />
           </DefRow>
           <DefRow label="Password">
-            <NotStoredBox title="Held by Clerk, not by zpecs" />
+            <NotStoredBox title="Held by Clerk, not by spec" />
           </DefRow>
           <DefRow label="Two-factor">
-            <NotStoredBox title="Held by Clerk, not by zpecs" />
+            <NotStoredBox title="Held by Clerk, not by spec" />
           </DefRow>
           <div className="pt-2">
             <button
@@ -434,7 +434,7 @@ function AccountTab({ model }: { readonly model: ProjectModel }) {
       <div className="w-[304px] shrink-0">
         <ContextBlock
           label="What is written down"
-          hint="Counted from the revisions of this Project. The actor column is the whole of the identity zpecs records."
+          hint="Counted from the revisions of this Project. The actor column is the whole of the identity spec records."
         >
           <MetricGrid
             items={[
@@ -446,7 +446,7 @@ function AccountTab({ model }: { readonly model: ProjectModel }) {
 
         <ContextBlock
           label="Not offered"
-          hint="Each needs a user row zpecs does not have, or belongs to Clerk."
+          hint="Each needs a user row spec does not have, or belongs to Clerk."
         >
           <NotOffered
             items={[

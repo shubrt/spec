@@ -73,7 +73,7 @@ const branch = (
   // each `*_web_search_idx` for the common path, while the exact historical fuzzy
   // predicate inspects only titles and excludes rows the first branch found.
   return sql`${substringMatches} union all ${selectWhere(
-    sql`not (${substring}) and ${fuzzyChars} @> string_to_array(${query}, null) and zpecs_tight_subsequence(lower(${title}), ${query})`,
+    sql`not (${substring}) and ${fuzzyChars} @> string_to_array(${query}, null) and spec_tight_subsequence(lower(${title}), ${query})`,
   )}`;
 };
 

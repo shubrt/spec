@@ -187,7 +187,7 @@ const taskDocument = {
 
 /**
  * Every document schema this layer can produce, keyed the way `get_entity_schema`
- * and the `zpecs://schema/*` resources address them.
+ * and the `spec://schema/*` resources address them.
  *
  * This is an **inside-the-layer** export: `jsonSchema.ts` needs the schema
  * objects to convert them, and nothing else does. No call site outside
@@ -222,7 +222,7 @@ export const DOCUMENT_SCHEMA_TARGETS = Object.keys(
  * type: a stored document *has* an id, a key and a revision, and code that reads
  * `document.meta.revision` should not have to null-check it. So the stored types
  * are what the Drizzle `jsonb()` columns are parameterized with, while
- * `ZpecsDocument` — the union `parseDocument` returns — spans both, because what
+ * `SpecDocument` — the union `parseDocument` returns — spans both, because what
  * comes back depends on the `source` the caller asked for.
  */
 export type EpicDocumentInput = z.infer<typeof epicDocument.agent>;
@@ -239,7 +239,7 @@ export type MilestoneDocumentInput = z.infer<typeof milestoneDocument.agent>;
 export type MilestoneDocument = z.infer<typeof milestoneDocument.store>;
 
 /** A validated document as it is stored. Discriminated on `entity`. */
-export type ZpecsStoredDocument =
+export type SpecStoredDocument =
   | EpicDocument
   | StreamDocument
   | TaskDocument
@@ -247,8 +247,8 @@ export type ZpecsStoredDocument =
   | MilestoneDocument;
 
 /** Any validated document, either tier. What `parseDocument` returns. */
-export type ZpecsDocument =
-  | ZpecsStoredDocument
+export type SpecDocument =
+  | SpecStoredDocument
   | EpicDocumentInput
   | StreamDocumentInput
   | TaskDocumentInput
@@ -377,11 +377,11 @@ export type ParseDocumentOptions = {
 };
 
 export type ParseDocumentResult =
-  | { readonly ok: true; readonly document: ZpecsDocument }
+  | { readonly ok: true; readonly document: SpecDocument }
   | { readonly ok: false; readonly issues: readonly DocumentIssue[] };
 
 /**
- * Validates one versioned Zpecs document.
+ * Validates one versioned Spec document.
  *
  * The order is load-bearing: read the discriminators, select the schema, parse
  * the shape, then run the readiness gates. Gates only run on a document that

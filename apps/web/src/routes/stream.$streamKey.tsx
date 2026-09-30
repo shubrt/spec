@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { AbsentBox, Box, DependencyCell, PriorityCell, StatusCell } from "~/components/zpecs/box";
-import { taskColumns } from "~/components/zpecs/columns";
-import { DetailHead, DetailLayout } from "~/components/zpecs/detail-head";
-import { EntityTable, type Column } from "~/components/zpecs/entity-table";
+import { AbsentBox, Box, DependencyCell, PriorityCell, StatusCell } from "~/components/spec/box";
+import { taskColumns } from "~/components/spec/columns";
+import { DetailHead, DetailLayout } from "~/components/spec/detail-head";
+import { EntityTable, type Column } from "~/components/spec/entity-table";
 import {
   Chip,
   ContextBlock,
@@ -15,9 +15,9 @@ import {
   PartHead,
   RuleChip,
   Tabs,
-} from "~/components/zpecs/parts";
-import { Screen } from "~/components/zpecs/screen";
-import { SectionChips, SpecFragment } from "~/components/zpecs/spec-fragment";
+} from "~/components/spec/parts";
+import { Screen } from "~/components/spec/screen";
+import { SectionChips, SpecFragment } from "~/components/spec/spec-fragment";
 import { useEntityNav, type EntityNav } from "~/lib/entityNav";
 import {
   SECTION_ORDER,
@@ -566,7 +566,7 @@ function TraceTab({
       <PartHead
         title="Tasks and their edges"
         count={tasks.length}
-        hint="What each Task claims to carry, and what constrains it. Verifications are counted but never linked to a criterion — zpecs stores no such edge, so no row claims one."
+        hint="What each Task claims to carry, and what constrains it. Verifications are counted but never linked to a criterion — spec stores no such edge, so no row claims one."
       />
       <EntityTable
         label={`Tasks of ${stream.key}`}

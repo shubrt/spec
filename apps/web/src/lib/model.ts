@@ -1,5 +1,5 @@
 import type { Aggregate, LoadedBoard } from "~/server/board";
-import type { DependencyState } from "~/components/zpecs/box";
+import type { DependencyState } from "~/components/spec/box";
 import { asNumber, asText, asTextArray, contentOf, executionOf, metaOf } from "./document";
 import { fragmentAnchor } from "./fragments";
 import {

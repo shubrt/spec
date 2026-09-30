@@ -1,5 +1,5 @@
 {
-  "name": "@zpecs/api",
+  "name": "@spec/api",
   "type": "module",
   "exports": {
     ".": {

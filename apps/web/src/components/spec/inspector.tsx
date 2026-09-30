@@ -502,7 +502,7 @@ function TaskInspector({
 
         <DrawerSection
           label="Verification"
-          hint="Both numbers are contained by the Task. A verification is not linked to an Acceptance criterion — zpecs stores no such edge, so neither count claims one is covered."
+          hint="Both numbers are contained by the Task. A verification is not linked to an Acceptance criterion — spec stores no such edge, so neither count claims one is covered."
         >
           <MetricGrid
             items={[
@@ -647,7 +647,7 @@ function EpicInspector({
  * One revision, as a diff.
  *
  * The siblings block names the other entities written under the same recorded
- * reason. Deliberately not drawn as one change set: zpecs stores no batch, and a
+ * reason. Deliberately not drawn as one change set: spec stores no batch, and a
  * box around them would invent a unit of review that cannot be opened, approved or
  * reverted.
  */
@@ -683,7 +683,7 @@ function RevisionInspector({
           <DefRow label="When">{formatRevisionTime(entry.createdAt)}</DefRow>
           <DefRow
             label="By"
-            hint="The actor id stored on the revision — a Clerk user, or the identity that acted on their behalf. It is the only identity zpecs has ever written down."
+            hint="The actor id stored on the revision — a Clerk user, or the identity that acted on their behalf. It is the only identity spec has ever written down."
           >
             <span className="font-mono text-xs">{entry.changedBy}</span>
           </DefRow>
@@ -720,7 +720,7 @@ function RevisionInspector({
           <DrawerSection
             label="Same reason, other entities"
             count={siblings.length}
-            hint="Written under the same recorded reason. Deliberately not shown as one change set: zpecs stores no batch, and drawing one would invent a unit of review that cannot be opened or reverted."
+            hint="Written under the same recorded reason. Deliberately not shown as one change set: spec stores no batch, and drawing one would invent a unit of review that cannot be opened or reverted."
           >
             <div className="flex flex-wrap gap-1.5">
               {siblings.map((key) => (

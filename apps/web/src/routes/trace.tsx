@@ -1,16 +1,9 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { AbsentBox, Box } from "~/components/zpecs/box";
-import { SearchSelect } from "~/components/zpecs/controls";
-import {
-  Chip,
-  DefRow,
-  DocSection,
-  EmptyState,
-  EntityKey,
-  PageHead,
-} from "~/components/zpecs/parts";
-import { Screen } from "~/components/zpecs/screen";
-import { SpecFragment } from "~/components/zpecs/spec-fragment";
+import { AbsentBox, Box } from "~/components/spec/box";
+import { SearchSelect } from "~/components/spec/controls";
+import { Chip, DefRow, DocSection, EmptyState, EntityKey, PageHead } from "~/components/spec/parts";
+import { Screen } from "~/components/spec/screen";
+import { SpecFragment } from "~/components/spec/spec-fragment";
 import { useEntityNav, type EntityNav } from "~/lib/entityNav";
 import { fragmentText, sectionLabel } from "~/lib/fragments";
 import type { ProjectModel, RuleRow } from "~/lib/model";

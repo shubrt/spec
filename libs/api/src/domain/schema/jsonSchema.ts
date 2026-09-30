@@ -5,7 +5,7 @@ import { DOCUMENT_SCHEMAS, type DocumentSchemaTarget, type DocumentSource } from
  * Zod → JSON Schema, with the two corrections Zod 4.4.3 needs.
  *
  * Everything the model ever sees of this domain is produced here: the MCP tool
- * input schemas, the payload of `get_entity_schema`, the `zpecs://schema/*`
+ * input schemas, the payload of `get_entity_schema`, the `spec://schema/*`
  * resources and the OpenAPI component shapes. That makes this file a *behaviour*
  * surface, not just a serialization detail — schema size is re-sent on every turn
  * and field descriptions are the only place several domain rules exist at all.

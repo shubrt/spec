@@ -1,8 +1,8 @@
 import { createFileRoute, useSearch } from "@tanstack/react-router";
-import { epicColumns, openColumn } from "~/components/zpecs/columns";
-import { EntityTable } from "~/components/zpecs/entity-table";
-import { PageHead } from "~/components/zpecs/parts";
-import { Screen } from "~/components/zpecs/screen";
+import { epicColumns, openColumn } from "~/components/spec/columns";
+import { EntityTable } from "~/components/spec/entity-table";
+import { PageHead } from "~/components/spec/parts";
+import { Screen } from "~/components/spec/screen";
 import { useEntityNav } from "~/lib/entityNav";
 import type { EpicRow } from "~/lib/model";
 

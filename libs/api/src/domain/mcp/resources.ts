@@ -18,7 +18,7 @@ import { CONFIRM_RULE, DECISION_RULE, HIERARCHY, UNKNOWN_RULE, WHAT_VS_HOW } fro
  */
 
 type GuideResource = {
-  /** The last segment of `zpecs://guide/<slug>`. */
+  /** The last segment of `spec://guide/<slug>`. */
   slug: string;
   title: string;
   description: string;
@@ -117,7 +117,7 @@ const GUIDES: readonly GuideResource[] = [
         "move, rebase, id-removing update, or impacting Rule update the user approved. The apply result reports ids, keys " +
         "and new revisions for the entities it touched; its values are authoritative.",
       "Field shapes for `data` are not listed here — call get_entity_schema, or read the " +
-        "zpecs://schema/ resources. Those schemas describe the composed agent document. When " +
+        "spec://schema/ resources. Those schemas describe the composed agent document. When " +
         "forming create/update `data`, omit `entity`, `schema_version` and `links`: create " +
         "derives them from the operation's `entity` and `parent`, while update accepts only the " +
         "sections to replace. The server validates the composed result.",
@@ -156,8 +156,8 @@ const GUIDES: readonly GuideResource[] = [
   },
 ];
 
-const ENTITY_SCHEMA_URI_TEMPLATE = "zpecs://schema/{entity}";
-const STREAM_SCHEMA_URI_TEMPLATE = "zpecs://schema/stream/{streamType}";
+const ENTITY_SCHEMA_URI_TEMPLATE = "spec://schema/{entity}";
+const STREAM_SCHEMA_URI_TEMPLATE = "spec://schema/stream/{streamType}";
 const SCHEMA_MIME_TYPE = "application/schema+json";
 
 type SchemaResource = {
@@ -177,7 +177,7 @@ const schemaResource = (selection: DocumentSchemaSelection): SchemaResource => {
     return {
       selection,
       target,
-      uri: `zpecs://schema/stream/${selection.streamType}`,
+      uri: `spec://schema/stream/${selection.streamType}`,
       name: `schema-stream-${selection.streamType}`,
       title: `JSON Schema for ${selection.streamType} stream`,
       description: `Composed agent-document JSON Schema for a ${selection.streamType} stream, including its type-specific sections. Change-set data omits entity, schema_version and links; parent supplies hierarchy.`,
@@ -188,7 +188,7 @@ const schemaResource = (selection: DocumentSchemaSelection): SchemaResource => {
   return {
     selection,
     target,
-    uri: `zpecs://schema/${selection.entity}`,
+    uri: `spec://schema/${selection.entity}`,
     name: `schema-${selection.entity}`,
     title: `JSON Schema for ${selection.entity}`,
     description: `Composed agent-document JSON Schema for an ${selection.entity}. Change-set data omits entity, schema_version and links; create derives them from the operation.`,
@@ -231,16 +231,16 @@ const readSchemaResource = (uri: URL) => {
 };
 
 /**
- * Registers every zpecs resource on a server.
+ * Registers every spec resource on a server.
  *
  * Called once from `createMcpServer`, like the tool registry, so no resource file
  * registers itself and the set of resources is enumerable in one place.
  */
-export function registerZpecsResources(server: McpServer): void {
+export function registerSpecResources(server: McpServer): void {
   for (const guide of GUIDES) {
     server.registerResource(
       `guide-${guide.slug}`,
-      `zpecs://guide/${guide.slug}`,
+      `spec://guide/${guide.slug}`,
       { title: guide.title, description: guide.description, mimeType: "text/markdown" },
       (uri) => ({
         contents: [{ uri: uri.toString(), mimeType: "text/markdown", text: guide.text }],
@@ -284,8 +284,8 @@ export function registerZpecsResources(server: McpServer): void {
 }
 
 /** The stable resource URIs exposed through the SDK registry. */
-export const ZPECS_RESOURCE_URIS = {
-  guides: GUIDES.map((guide) => `zpecs://guide/${guide.slug}`),
+export const SPEC_RESOURCE_URIS = {
+  guides: GUIDES.map((guide) => `spec://guide/${guide.slug}`),
   schemas: SCHEMA_RESOURCES.map(({ uri }) => uri),
   schemaTemplate: ENTITY_SCHEMA_URI_TEMPLATE,
   streamSchemaTemplate: STREAM_SCHEMA_URI_TEMPLATE,

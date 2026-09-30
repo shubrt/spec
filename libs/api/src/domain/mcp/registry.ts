@@ -1,4 +1,4 @@
-import type { ZpecsTool } from "./defineTool";
+import type { SpecTool } from "./defineTool";
 import { applyChangeSetTool } from "./tools/applyChangeSet";
 import { getContextTool } from "./tools/getContext";
 import { getEntitySchemaTool } from "./tools/getEntitySchema";
@@ -8,7 +8,7 @@ import { searchContextTool } from "./tools/searchContext";
 import { validateChangeSetTool } from "./tools/validateChangeSet";
 
 /**
- * The one list of tools zpecs exposes.
+ * The one list of tools spec exposes.
  *
  * `createMcpServer` iterates exactly this array and nothing else registers a
  * tool, which is what makes `defineTool`'s checks unskippable: a new tool has to
@@ -22,7 +22,7 @@ import { validateChangeSetTool } from "./tools/validateChangeSet";
  * shapes belong in `tools/list`; full entity-document schemas remain on demand
  * through `get_entity_schema`.
  */
-export const zpecsTools: readonly ZpecsTool[] = [
+export const specTools: readonly SpecTool[] = [
   listContextTool,
   searchContextTool,
   getContextTool,

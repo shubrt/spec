@@ -1,22 +1,15 @@
 import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router";
-import { AbsentBox, Box, DependencyCell, StatusCell } from "~/components/zpecs/box";
+import { AbsentBox, Box, DependencyCell, StatusCell } from "~/components/spec/box";
 import {
   colKey,
   colPriority,
   colTitle,
   streamColumns,
   taskColumns,
-} from "~/components/zpecs/columns";
-import { EntityTable, countCell, type Column } from "~/components/zpecs/entity-table";
-import {
-  EmptyState,
-  EntityKey,
-  PageHead,
-  SubHead,
-  TableNote,
-  Tabs,
-} from "~/components/zpecs/parts";
-import { Screen } from "~/components/zpecs/screen";
+} from "~/components/spec/columns";
+import { EntityTable, countCell, type Column } from "~/components/spec/entity-table";
+import { EmptyState, EntityKey, PageHead, SubHead, TableNote, Tabs } from "~/components/spec/parts";
+import { Screen } from "~/components/spec/screen";
 import { useEntityNav, type EntityNav } from "~/lib/entityNav";
 import type { ProjectModel, StreamRow } from "~/lib/model";
 import type { RootSearch } from "~/lib/search";
@@ -79,7 +72,7 @@ const HINT: Record<TabId, string> = {
   questions:
     "Every open question recorded on a Stream or a Task. Each local key is shown with its owner, because a fragment key is only unique inside the entity that holds it.",
   revisions:
-    "The stored revision timestamp, which says when an entity was last rewritten. It is not a due date — zpecs stores no dates of any other kind.",
+    "The stored revision timestamp, which says when an entity was last rewritten. It is not a due date — spec stores no dates of any other kind.",
 };
 
 interface FocusSearch extends RootSearch {
@@ -425,7 +418,7 @@ function recentColumns(nav: EntityNav): readonly Column<StreamRow>[] {
       cellClass: "text-muted-foreground font-mono text-xs tabular-nums",
       sort: (row) => row.updatedAt,
       render: (row) => formatRevisionTime(row.updatedAt),
-      hint: "The stored revision timestamp. It says when the entity was last rewritten — it is not a due date, and zpecs stores no dates of any other kind.",
+      hint: "The stored revision timestamp. It says when the entity was last rewritten — it is not a due date, and spec stores no dates of any other kind.",
     },
     {
       id: "revision",

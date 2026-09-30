@@ -6,9 +6,9 @@ import {
   ExecutorCell,
   PriorityCell,
   StatusCell,
-} from "~/components/zpecs/box";
-import { DetailHead, DetailLayout } from "~/components/zpecs/detail-head";
-import { EntityTable, type Column } from "~/components/zpecs/entity-table";
+} from "~/components/spec/box";
+import { DetailHead, DetailLayout } from "~/components/spec/detail-head";
+import { EntityTable, type Column } from "~/components/spec/entity-table";
 import {
   Chip,
   ContextBlock,
@@ -20,9 +20,9 @@ import {
   PageHead,
   RuleChip,
   Tabs,
-} from "~/components/zpecs/parts";
-import { Screen } from "~/components/zpecs/screen";
-import { SpecFragment } from "~/components/zpecs/spec-fragment";
+} from "~/components/spec/parts";
+import { Screen } from "~/components/spec/screen";
+import { SpecFragment } from "~/components/spec/spec-fragment";
 import { useEntityNav, type EntityNav } from "~/lib/entityNav";
 import { sectionLabel } from "~/lib/fragments";
 import type { ProjectModel, TaskRow, TaskTarget } from "~/lib/model";

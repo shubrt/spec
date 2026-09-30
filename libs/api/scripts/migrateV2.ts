@@ -15,7 +15,7 @@ export type MigrateV2Arguments = {
 };
 
 const USAGE =
-  "Usage: pnpm --filter @zpecs/api migrate:v2 -- [--preflight | --apply --confirm-apply]";
+  "Usage: pnpm --filter @spec/api migrate:v2 -- [--preflight | --apply --confirm-apply]";
 
 /** Strict parsing keeps a misspelled safety flag from degrading into an apply. */
 export function parseMigrateV2Args(args: readonly string[]): MigrateV2Arguments {

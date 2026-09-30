@@ -16,18 +16,18 @@ import {
  * Budget: **3000 characters**. It is
  * a real cost, paid on every turn of every session, which is why the two other
  * tiers exist — per-tool `description` for what a tool needs at call time, and
- * the `zpecs://guide/` resources for the long form. If this text no longer fits,
+ * the `spec://guide/` resources for the long form. If this text no longer fits,
  * the content belongs in a resource; the budget is not the thing to change.
  *
  * Contents are fixed by the plan: the Epic/Stream/Task glossary (§3), the
  * what/why vs how split with both "belongs in" lists (§4), the stream and task
  * types (§3.2/§3.3), the unknown-marking rule (§14), the decision rule (§13),
  * and the confirm rule. The two "belongs in" lists are the compressed form; the
- * full lists are `zpecs://guide/separation`, which is what paid for the decision
+ * full lists are `spec://guide/separation`, which is what paid for the decision
  * rule's place here.
  */
 export const SERVER_INSTRUCTIONS = [
-  "zpecs is the project-management system for this workspace. Epics, Streams, Tasks, Rules, " +
+  "spec is the project-management system for this workspace. Epics, Streams, Tasks, Rules, " +
     "and Milestones live here as validated, versioned documents; this server is their only " +
     "write path.",
 
