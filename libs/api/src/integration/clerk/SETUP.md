@@ -26,7 +26,8 @@ Set the mandatory server-side `SPEC_PUBLIC_URL` in the sole `apps/web`
 deployment:
 
 ```dotenv
-# Local development
+# Local development without portless (`PORTLESS=0 vp run dev`). Under plain
+# `vp run dev` portless supplies the origin, e.g. https://spec.localhost
 SPEC_PUBLIC_URL="http://localhost:3005"
 
 # Production (use the existing canonical web origin)
@@ -117,7 +118,7 @@ of `VITE_CLERK_PUBLISHABLE_KEY` to the operator script under its
 
 ```bash
 CLERK_PUBLISHABLE_KEY=pk_test_... \
-SPEC_BASE_URL=http://localhost:3005 \
+SPEC_BASE_URL=https://spec.localhost \
 SPEC_ACCESS_TOKEN=... \
   libs/api/src/integration/clerk/verify.sh
 ```
@@ -170,7 +171,7 @@ commands are:
 ### Claude Code
 
 ```bash
-claude mcp add --transport http spec http://localhost:3005/mcp
+claude mcp add --transport http spec https://spec.localhost/mcp
 ```
 
 Complete consent and select an organization. To clear an old token or change
@@ -188,7 +189,7 @@ endpoint stay on the web origin.
 Add the server, then start OAuth explicitly:
 
 ```bash
-codex mcp add spec --url http://localhost:3005/mcp
+codex mcp add spec --url https://spec.localhost/mcp
 codex mcp login spec
 ```
 

@@ -99,7 +99,9 @@ cp .env.example .env
 | `SPEC_AXIOM_TOKEN`           | no       | Optional structured-event token; `AXIOM_TOKEN` also works     |
 
 `SPEC_PUBLIC_URL` must be an origin without a path or trailing slash. Local
-loopback development may use HTTP; deployed instances must use HTTPS.
+loopback development may use HTTP; deployed instances must use HTTPS. Under
+`vp run dev` portless supplies it, so the value in `.env` only applies to
+`PORTLESS=0` and production builds.
 
 ### :card_file_box: Database Setup
 
@@ -138,6 +140,9 @@ irm https://vite.plus/ps1 | iex
 `vp` drives the package manager pinned in `package.json` (`pnpm@11.1.1`). The
 workspace expects Node.js 22 or newer and Bun 1.3.10 or newer.
 
+The dev server runs through [portless](https://github.com/vercel-labs/portless)
+(`npm i -g portless`, `portless doctor` checks it).
+
 ### :running: Run Locally
 
 Install dependencies, create the root environment file, and start the unified
@@ -149,8 +154,9 @@ cp .env.example .env
 vp run dev
 ```
 
-The default local origin is `http://localhost:3005`; its MCP endpoint is
-`http://localhost:3005/mcp`.
+The local origin is `https://spec.localhost`, in a git worktree
+`https://<branch>.spec.localhost`; the MCP endpoint is `<origin>/mcp`.
+`PORTLESS=0 vp run dev` skips the proxy and serves `http://localhost:3005`.
 
 <!-- Usage -->
 
