@@ -193,10 +193,12 @@ function NavBadge({ value }: { readonly value: number }) {
 export function AppSidebar({
   model,
   actorId,
+  email,
   onSignOut,
 }: {
   readonly model: ProjectModel | null;
   readonly actorId: string | null;
+  readonly email: string | null;
   readonly onSignOut: () => void;
 }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -256,7 +258,7 @@ export function AppSidebar({
         </ul>
       </nav>
 
-      <UserBlock actorId={actorId} onSignOut={onSignOut} />
+      <UserBlock actorId={actorId} email={email} onSignOut={onSignOut} />
     </div>
   );
 }
@@ -271,13 +273,16 @@ export function AppSidebar({
  */
 function UserBlock({
   actorId,
+  email,
   onSignOut,
 }: {
   readonly actorId: string | null;
+  readonly email: string | null;
   readonly onSignOut: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const label = email ?? actorId;
   const close = () => {
     setOpen(false);
     setConfirming(false);
@@ -299,10 +304,12 @@ function UserBlock({
         )}
       >
         <span className="border-border-strong text-muted-foreground flex size-6 shrink-0 items-center justify-center rounded-full border font-mono text-[10px]">
-          u
+          {label?.[0]?.toLowerCase() ?? "u"}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate font-mono text-[11px]">{actorId ?? "—"}</span>
+          <span className="block truncate font-mono text-[11px]" title={actorId ?? undefined}>
+            {label ?? "—"}
+          </span>
           <span className="text-muted-foreground block text-[10px]">Signed in</span>
         </span>
         <ChevronPair />
@@ -360,21 +367,28 @@ function UserBlock({
 
 /* ----------------------------------------------------------- context bar -- */
 
-function OrgSwitcher({ orgId }: { readonly orgId: string | null }) {
+function OrgSwitcher({
+  orgId,
+  orgName,
+}: {
+  readonly orgId: string | null;
+  readonly orgName: string | null;
+}) {
   const { openOrganizationProfile, openCreateOrganization } = useClerk();
   const [open, setOpen] = useState(false);
+  const label = orgName ?? orgId ?? "no organization";
 
   return (
     <span className="relative inline-flex">
       <SwitcherButton
-        label={orgId ?? "no organization"}
+        label={label}
         open={open}
-        title="Organization — stored on the workspace row as a Clerk id"
+        title={orgId ? `Organization ${orgId}` : "No active organization"}
         onClick={() => setOpen(!open)}
       />
       <Popover open={open} onClose={() => setOpen(false)} width={340}>
         <MenuItem active onClick={() => setOpen(false)}>
-          {orgId ?? "no organization"}
+          {label}
         </MenuItem>
         <div className="bg-border my-1 h-px" />
         <MenuItem
@@ -582,12 +596,14 @@ function Crumb({ crumb }: { readonly crumb: import("~/lib/navigation").Crumb }) 
 
 export function ContextBar({
   orgId,
+  orgName,
   projects,
   currentProjectId,
   currentProjectName,
   onOpenSearch,
 }: {
   readonly orgId: string | null;
+  readonly orgName: string | null;
   readonly projects: readonly ProjectOption[];
   readonly currentProjectId: string | undefined;
   readonly currentProjectName: string;
@@ -598,7 +614,7 @@ export function ContextBar({
 
   return (
     <div className="border-border flex h-12 flex-none items-center gap-1.5 border-b px-4">
-      <OrgSwitcher orgId={orgId} />
+      <OrgSwitcher orgId={orgId} orgName={orgName} />
       <span className="text-border">/</span>
       <ProjectSwitcher
         projects={projects}
