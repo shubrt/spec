@@ -7,7 +7,7 @@ import tsConfigPaths from "vite-tsconfig-paths";
 
 export default defineConfig({
   server: {
-    // The web UI and MCP endpoint share this one local origin.
+    // Only used with PORTLESS=0; portless injects its own --port otherwise.
     port: 3005,
   },
   plugins: [

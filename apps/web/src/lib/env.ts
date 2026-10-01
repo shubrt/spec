@@ -2,7 +2,9 @@ import { createEnv } from "@t3-oss/env-core";
 import { z } from "zod";
 
 export function isLoopbackHostname(hostname: string) {
-  if (hostname === "localhost" || hostname === "[::1]") return true;
+  if (hostname === "localhost" || hostname.endsWith(".localhost") || hostname === "[::1]") {
+    return true;
+  }
 
   const octets = hostname.split(".");
   return (
@@ -64,6 +66,8 @@ export const env = createEnv({
   runtimeEnv: {
     ...process.env,
     DATABASE_URL: process.env.SPEC_DATABASE_URL || process.env.DATABASE_URL,
+    // Under `portless run` (local dev) the origin is the per-worktree proxy URL.
+    SPEC_PUBLIC_URL: process.env.PORTLESS_URL || process.env.SPEC_PUBLIC_URL,
     AXIOM_DATASET: process.env.SPEC_AXIOM_DATASET || process.env.AXIOM_DATASET,
     AXIOM_TOKEN: process.env.SPEC_AXIOM_TOKEN || process.env.AXIOM_TOKEN,
   },

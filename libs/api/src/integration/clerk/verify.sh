@@ -7,12 +7,12 @@
 #
 # Usage:
 #   CLERK_PUBLISHABLE_KEY=pk_live_... \
-#   SPEC_BASE_URL=http://localhost:3003 \
+#   SPEC_BASE_URL=https://spec.localhost \
 #   SPEC_ACCESS_TOKEN=eyJ... \
 #     libs/api/src/integration/clerk/verify.sh
 #
 # CLERK_PUBLISHABLE_KEY is required. SPEC_BASE_URL defaults to
-# http://localhost:3003 (apps/web's default port). SPEC_ACCESS_TOKEN is
+# https://spec.localhost (apps/web's portless dev URL). SPEC_ACCESS_TOKEN is
 # optional — omit it to skip section 5 (safe token-shape inspection); every
 # other section still runs. The token and its complete payload are never
 # printed, nor are individual claim values.
@@ -41,7 +41,7 @@ case "${CLERK_PUBLISHABLE_KEY}" in
   *) fail "CLERK_PUBLISHABLE_KEY does not start with pk_test_ or pk_live_ — got a value that is not a Clerk publishable key." ;;
 esac
 
-SPEC_BASE_URL="${SPEC_BASE_URL:-http://localhost:3003}"
+SPEC_BASE_URL="${SPEC_BASE_URL:-https://spec.localhost}"
 readonly EXPECTED_SCOPES_JSON='["openid","profile","email","user:org:read"]'
 readonly EXPECTED_SCOPES_TEXT="openid profile email user:org:read"
 readonly EXPECTED_RESOURCE="${SPEC_BASE_URL}/mcp"
