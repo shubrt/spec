@@ -42,9 +42,9 @@ export const Route = createRootRoute({
     ],
   }),
   beforeLoad: async ({ location }) => {
-    const { isAuthenticated, orgId, userId } = await fetchAuthState();
+    const auth = await fetchAuthState();
 
-    if (!isAuthenticated && !location.pathname.startsWith(SIGN_IN_PREFIX)) {
+    if (!auth.isAuthenticated && !location.pathname.startsWith(SIGN_IN_PREFIX)) {
       throw redirect({ to: "/sign-in/$", params: { _splat: "" } });
     }
 
@@ -53,7 +53,7 @@ export const Route = createRootRoute({
     // in the context bar is how the user fixes it. Sending them back to sign-in
     // would land them in the same session, forever. The API takes the same
     // position, answering that state with 403 no_workspace rather than 401.
-    return { isAuthenticated, orgId, userId };
+    return auth;
   },
   validateSearch: validateRootSearch,
   // `project` selects what is fetched. `workspace` is only a reload discriminator
@@ -104,7 +104,7 @@ function RootComponent() {
  */
 function AppFrame() {
   const { signOut } = useClerk();
-  const { orgId, userId } = Route.useRouteContext();
+  const { orgId, orgName, userId, userEmail } = Route.useRouteContext();
   const board = Route.useLoaderData();
   const { inspect } = Route.useSearch();
   const state = useBoardState();
@@ -126,10 +126,16 @@ function AppFrame() {
 
   return (
     <div className="relative flex h-screen overflow-hidden">
-      <AppSidebar model={model} actorId={userId} onSignOut={() => void signOut()} />
+      <AppSidebar
+        model={model}
+        actorId={userId}
+        email={userEmail}
+        onSignOut={() => void signOut()}
+      />
       <main className="flex min-w-0 flex-1 flex-col">
         <ContextBar
           orgId={orgId}
+          orgName={orgName}
           projects={projects}
           currentProjectId={model?.projectId}
           currentProjectName={model?.projectName ?? "no Project"}
