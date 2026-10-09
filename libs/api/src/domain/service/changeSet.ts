@@ -45,10 +45,12 @@ import { type DocumentIssue, ruleIssue, shapeIssue } from "../schema/rules";
 import { PRE_V2_TRACE_NOT_RECORDED } from "../schema/task/content";
 
 /**
- * The change-set pipeline — the single write path into the whole system.
+ * The change-set pipeline — the single write path for planning content.
  *
  * Every mutation an agent makes arrives here, and nothing outside this file
- * writes `epic`, `stream`, `task`, `entity_link` or `entity_revision`.
+ * writes `epic`, `stream`, `task`, `entity_link` or `entity_revision`, except
+ * `workspaceRepository.deleteProject`, which removes a whole Project with its
+ * contents and their revisions.
  *
  * ## One function, one `mode`
  *

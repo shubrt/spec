@@ -221,7 +221,8 @@ vp run project:bootstrap -- --clerk-org-id org_... --name "Project name"
 Both provisioning paths trim names, enforce 1–120 characters, and share the
 database's case-insensitive per-workspace uniqueness boundary. Project
 containers are unversioned and empty. All Epic, Stream, and Task writes remain
-exclusive to MCP change sets.
+exclusive to MCP change sets; the only other path that removes them is deleting
+the whole Project in the web app's Settings.
 
 ## 6. Capture the Codex end-to-end evidence
 

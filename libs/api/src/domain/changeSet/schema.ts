@@ -2,8 +2,9 @@ import { z } from "zod";
 import { RELATIONSHIP_TYPE, VERSIONED_ENTITY_TYPE } from "../enums";
 
 /**
- * The change set — the single write interface of the whole server (domain spec
- * §12). One reason, a list of operations, applied in order in one transaction.
+ * The change set — the single write interface for planning content (domain spec
+ * §12); deleting a whole Project is the one exception. One reason, a list of
+ * operations, applied in order in one transaction.
  *
  * ## What is deliberately not in here: `actor` and `workspace`
  *

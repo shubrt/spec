@@ -32,10 +32,10 @@ const UNAVAILABLE = {
 /**
  * Creates a project container in the active Clerk organization.
  *
- * This is the web app's one write. The API still owns tenant scope: this
- * function forwards only the trimmed name and a Clerk session token, never a
- * workspace id supplied by the browser. Epic, stream and task writes continue
- * to go exclusively through MCP change sets.
+ * One of the web app's two writes, with {@link deleteProject}. The API still
+ * owns tenant scope: this function forwards only the trimmed name and a Clerk
+ * session token, never a workspace id supplied by the browser. Epic, stream and
+ * task writes continue to go exclusively through MCP change sets.
  */
 export const createProject = createServerFn({ method: "POST" })
   // The parameter annotation is the typed client contract. The return value is
@@ -111,5 +111,95 @@ export const createProject = createServerFn({ method: "POST" })
       }
     } catch {
       return UNAVAILABLE;
+    }
+  });
+
+export interface DeleteProjectInput {
+  readonly projectId: string;
+}
+
+export type DeleteProjectResult =
+  | { readonly ok: true }
+  | {
+      readonly ok: false;
+      readonly error: "project_not_found" | "signed_out" | "no_workspace" | "unavailable";
+      readonly message: string;
+    };
+
+const DELETE_UNAVAILABLE = {
+  ok: false,
+  error: "unavailable",
+  message: "The project could not be deleted. Try again in a moment.",
+} as const satisfies DeleteProjectResult;
+
+const PROJECT_NOT_FOUND = {
+  ok: false,
+  error: "project_not_found",
+  message: "This project no longer exists in this workspace.",
+} as const satisfies DeleteProjectResult;
+
+/**
+ * Permanently deletes a project and everything in it, revisions included.
+ *
+ * The browser has already made the user type the project name. Tenant scope is
+ * the API's, as for {@link createProject}: an id from another workspace is
+ * answered exactly like one that does not exist.
+ */
+export const deleteProject = createServerFn({ method: "POST" })
+  // Same pattern as createProject: typed for callers, unknown-safe for hand-written requests.
+  .validator((input: DeleteProjectInput) => ({
+    projectId:
+      typeof input === "object" && input !== null && typeof input.projectId === "string"
+        ? input.projectId
+        : null,
+  }))
+  .handler(async ({ data }): Promise<DeleteProjectResult> => {
+    if (!data.projectId) return PROJECT_NOT_FOUND;
+
+    let sessionToken: string | null;
+    try {
+      const { getToken } = await auth();
+      sessionToken = await getToken();
+    } catch {
+      return DELETE_UNAVAILABLE;
+    }
+
+    if (!sessionToken) {
+      return {
+        ok: false,
+        error: "signed_out",
+        message: "Your session has expired. Sign in again to delete a project.",
+      };
+    }
+
+    try {
+      const response = await createApiClient(sessionToken)
+        .workspace.projects({ projectId: data.projectId })
+        .delete();
+
+      if (!response.error) return { ok: true };
+
+      switch (response.error.status) {
+        // 422 is an id that is not a uuid, which cannot name a project either.
+        case 404:
+        case 422:
+          return PROJECT_NOT_FOUND;
+        case 401:
+          return {
+            ok: false,
+            error: "signed_out",
+            message: "Your session has expired. Sign in again to delete a project.",
+          };
+        case 403:
+          return {
+            ok: false,
+            error: "no_workspace",
+            message: "Select an organization before deleting a project.",
+          };
+        default:
+          return DELETE_UNAVAILABLE;
+      }
+    } catch {
+      return DELETE_UNAVAILABLE;
     }
   });

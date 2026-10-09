@@ -92,6 +92,14 @@ $$;
 -- hard delete must not be able to erase the audit trail as a side effect. To
 -- remove a tenant on purpose, TRUNCATE the tables or disable this trigger inside
 -- an explicit maintenance transaction.
+--
+-- The one sanctioned row DELETE comes from deleting a Project. Its transaction
+-- names its workspace in the transaction-local
+-- `spec.deleting_project_in_workspace` setting, and only rows of that workspace
+-- whose Project no longer exists may then be deleted;
+-- `workspaceRepository.deleteProject` further limits it to rows whose entity is
+-- gone too. UPDATE stays forbidden in every case, and a revision of an existing
+-- Project can never be deleted.
 -- Count every addressable array at the top two levels of `content`, plus Sources.
 -- This is the same deliberately shallow definition used by the history UI: an
 -- array inside an item belongs to that item rather than becoming a document
@@ -376,6 +384,16 @@ ON CONFLICT (entity_type, entity_id, revision) DO NOTHING;
 CREATE OR REPLACE FUNCTION entity_revision_append_only() RETURNS trigger
 LANGUAGE plpgsql AS $$
 BEGIN
+  -- `current_setting(..., true)` is NULL when the setting was never defined and
+  -- '' after a transaction that set it has ended, so neither can match a uuid.
+  -- The project row is checked by id alone: `project_id` has no foreign key, and
+  -- the delete that removed it ran earlier in this same transaction.
+  IF TG_OP = 'DELETE'
+     AND OLD.workspace_id::text = current_setting('spec.deleting_project_in_workspace', true)
+     AND NOT EXISTS (SELECT 1 FROM project WHERE id = OLD.project_id) THEN
+    RETURN OLD;
+  END IF;
+
   RAISE EXCEPTION
     '% is append-only: % is not allowed (revision % of % %)',
     TG_TABLE_NAME, TG_OP, OLD.revision, OLD.entity_type, OLD.entity_id

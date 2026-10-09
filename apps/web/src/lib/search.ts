@@ -86,7 +86,7 @@ export function projectChangedSearch(
  * first of the list.
  *
  * An unknown or stale id resolves to the default rather than an empty screen: the
- * value comes from a URL, so it can name a project that was archived or that
+ * value comes from a URL, so it can name a project that was deleted or that
  * belongs to a workspace the user has since switched away from, and neither
  * deserves an error state. The list arrives ordered by name, so "first" is stable
  * rather than arbitrary.

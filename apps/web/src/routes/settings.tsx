@@ -1,5 +1,6 @@
 import { useClerk } from "@clerk/tanstack-react-start";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useState } from "react";
 import { AbsentBox, Box, NotStoredBox } from "~/components/spec/box";
 import {
   CommandLine,
@@ -16,6 +17,7 @@ import { useMcpEndpoint } from "~/lib/boardState";
 import type { ProjectModel } from "~/lib/model";
 import type { RootSearch } from "~/lib/search";
 import { formatRevisionTime } from "~/lib/vocabulary";
+import { deleteProject } from "~/server/project";
 
 /**
  * Settings — Members, Project, Integrations and Account.
@@ -197,16 +199,7 @@ function ProjectTab({ model }: { readonly model: ProjectModel }) {
           />
         </DocSection>
 
-        <DocSection
-          label="Deleting a Project"
-          hint="Not offered here. Deleting a Project would remove every Epic, Stream, Task, Milestone, Rule, link and revision it holds, and public keys are project-scoped so every shared link into it would die with it."
-        >
-          <p className="text-muted-foreground py-2 text-xs leading-[17px]">
-            The revision log is append-only and protected by a database trigger, which is what makes
-            it an audit trail rather than a convention. A delete path from a browser would be the
-            one way to erase it as a side effect, so this surface does not have one.
-          </p>
-        </DocSection>
+        <DeleteProjectSection model={model} />
       </div>
 
       <div className="w-[304px] shrink-0">
@@ -236,6 +229,118 @@ function ProjectTab({ model }: { readonly model: ProjectModel }) {
       </div>
     </div>
   );
+}
+
+/**
+ * The one control on this surface that removes data.
+ *
+ * Typing the Project name is the confirmation, because the delete takes every Epic,
+ * Stream, Task, Milestone, Rule and link in it, with their revisions, and cannot be
+ * undone.
+ */
+function DeleteProjectSection({ model }: { readonly model: ProjectModel }) {
+  const [confirming, setConfirming] = useState(false);
+  const [typed, setTyped] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  // Runs of whitespace render as one space, so a name is confirmed as it reads.
+  const confirmed = collapseSpaces(typed) === collapseSpaces(model.projectName);
+
+  const cancel = () => {
+    setConfirming(false);
+    setTyped("");
+    setError(null);
+  };
+
+  const submit = () => {
+    if (!confirmed || busy) return;
+    setBusy(true);
+    setError(null);
+    void deleteProject({ data: { projectId: model.projectId } })
+      .then((result) => {
+        if (!result.ok) {
+          setError(result.message);
+          setBusy(false);
+          return;
+        }
+        // A full document load rather than a router navigation: the router's
+        // cached boards, including the one Back would restore, still hold the
+        // deleted Project. Without `?project` the workspace opens its first one.
+        window.location.assign("/");
+      })
+      .catch(() => {
+        setError("The project could not be deleted. Try again in a moment.");
+        setBusy(false);
+      });
+  };
+
+  return (
+    <DocSection
+      label="Delete Project"
+      hint="Removes every Epic, Stream, Task, Milestone, Rule and link in this Project, with their revisions. An entity moved to another Project keeps the revisions it wrote here."
+    >
+      {confirming ? (
+        <div className="py-2">
+          <label htmlFor="delete-project-name" className="text-muted-foreground mb-1 block text-xs">
+            Type <span className="text-foreground font-mono">{model.projectName}</span> to confirm
+          </label>
+          <input
+            id="delete-project-name"
+            autoFocus
+            autoComplete="off"
+            spellCheck={false}
+            value={typed}
+            onChange={(event) => setTyped(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") submit();
+              if (event.key === "Escape" && !busy) cancel();
+            }}
+            className="border-input focus-visible:ring-ring bg-background h-8 w-[320px] rounded-md border px-2 font-mono text-xs outline-none focus-visible:ring-2"
+          />
+          <div className="mt-1.5 flex items-center gap-1.5">
+            <button
+              type="button"
+              disabled={!confirmed || busy}
+              onClick={submit}
+              className="bg-danger text-primary-foreground hover:bg-danger/90 focus-visible:ring-ring inline-flex h-8 items-center rounded-md px-3 text-xs font-medium outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50"
+            >
+              {busy ? "Deleting…" : "Delete permanently"}
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={cancel}
+              className="hover:bg-accent focus-visible:ring-ring inline-flex h-8 items-center rounded-md px-3 text-xs font-medium outline-none focus-visible:ring-2 disabled:pointer-events-none disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+          {error ? (
+            <p role="alert" className="text-danger mt-1.5 text-xs">
+              {error}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 py-2">
+          <button
+            type="button"
+            onClick={() => setConfirming(true)}
+            className="border-danger/50 text-danger hover:bg-danger-soft focus-visible:ring-ring inline-flex h-8 items-center rounded-md border px-3 text-xs font-medium outline-none focus-visible:ring-2"
+          >
+            Delete Project
+          </button>
+          <span className="text-muted-foreground text-xs">
+            Deletes everything in it. There is no undo.
+          </span>
+        </div>
+      )}
+    </DocSection>
+  );
+}
+
+function collapseSpaces(value: string): string {
+  return value.trim().replace(/\s+/g, " ");
 }
 
 /* ---------------------------------------------------------- Integrations -- */
@@ -343,7 +448,10 @@ function IntegrationsTab() {
           </DefRow>
         </ContextBlock>
 
-        <ContextBlock label="Write path" hint="This entire web surface is read-only by design.">
+        <ContextBlock
+          label="Write path"
+          hint="Planning content is written only through the MCP server. The browser creates and deletes Projects, nothing else."
+        >
           <p className="text-muted-foreground text-xs leading-[17px]">
             Every revision in this workspace was written through the MCP server. None has ever
             originated in a browser, and there is no code path by which one could.

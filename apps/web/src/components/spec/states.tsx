@@ -13,7 +13,7 @@ import { Chip, CommandLine, ContextBlock, DocSection, MetricGrid, PageHead } fro
  * An empty Project is the state every Project starts in, and a control room with
  * nothing in it is the hardest screen to get right: it has to say what is missing,
  * why that is normal, and what the one next move is. None of these invents a way
- * forward — this surface never writes, so the next move is the MCP server.
+ * forward — this surface writes no content, so the next move is the MCP server.
  */
 
 /**
@@ -65,7 +65,7 @@ export function EmptyProject({
 
           <DocSection
             label="Putting something in it"
-            hint="This web surface is read-only by design. Every revision in every Project was written through the MCP server; none has ever originated in a browser."
+            hint="Every revision in every Project was written through the MCP server; none has ever originated in a browser."
           >
             <p className="text-muted-foreground py-2 text-xs leading-[17px]">
               Point an MCP client at the endpoint and create the first Epic from there. The Project
@@ -140,7 +140,7 @@ export function NoProject({ workspaceName }: { readonly workspaceName: string })
     <div>
       <PageHead
         title="No Project yet"
-        hint="A Project is an unversioned container. It has no document and no revision history, which is why creating one is the single write this surface makes — everything inside it enters through the MCP server."
+        hint="A Project is an unversioned container with no document of its own. Creating and deleting one are the only writes this surface makes. Everything inside it enters through the MCP server."
       />
       <div className="w-[664px]">
         <DocSection label="What is missing">
@@ -151,9 +151,8 @@ export function NoProject({ workspaceName }: { readonly workspaceName: string })
         </DocSection>
         <DocSection label="Next move">
           <p className="text-muted-foreground py-2 text-xs leading-[17px]">
-            Create one from the Project switcher in the context bar above. That is the single write
-            this surface makes, and it is safe precisely because a Project has no document to
-            validate and no history to keep.
+            Create one from the Project switcher in the context bar above. A Project has no document
+            to validate, which is why creating one is safe here.
           </p>
           <p className="text-muted-foreground py-1 text-xs leading-[17px]">
             Everything that goes inside it — Epics, Streams, Tasks, Rules, Milestones — is written
@@ -173,7 +172,7 @@ const REMEDY: Readonly<Record<ApiFailure["status"], string>> = {
   signed_out: "Sign in to continue.",
   no_workspace:
     "Create or join an organization from the switcher in the context bar, then reload. The organization is the workspace: spec reads its id off your session and matches it to a workspace row.",
-  unavailable: "Nothing is lost — this surface only reads. Try again in a moment.",
+  unavailable: "Nothing is lost. Try again in a moment.",
 };
 
 /**
