@@ -70,8 +70,8 @@ export const getBoard = createServerFn({ method: "GET" })
     const { projects } = projectsResponse.data;
     const selected = selectProject(projects, projectId);
 
-    // A workspace with no project is a legitimate state, not a failure: nothing
-    // has been created through MCP yet, so there is no aggregate to ask for.
+    // A workspace with no project is a legitimate state, not a failure: none has
+    // been created yet, or the last one was deleted, so there is no aggregate.
     if (!selected) {
       return {
         status: "ok" as const,

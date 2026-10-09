@@ -484,7 +484,7 @@ export function EmptyState({ label, hint }: { readonly label: string; readonly h
 
 /* -------------------------------------------------------------- clipboard -- */
 
-/** Copies a string and says so for a moment. The only "write" on this surface. */
+/** Copies a string and says so for a moment. */
 export function CopyButton({
   text,
   label = "Copy link",

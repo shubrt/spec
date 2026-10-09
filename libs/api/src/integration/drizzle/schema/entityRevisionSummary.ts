@@ -12,7 +12,6 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import type { VersionedEntityType } from "../../../domain/enums";
-import { project } from "./project";
 import { workspace } from "./workspace";
 
 /**
@@ -35,9 +34,8 @@ export const entityRevisionSummary = pgTable(
     workspaceId: uuid()
       .notNull()
       .references(() => workspace.id, { onDelete: "cascade" }),
-    projectId: uuid()
-      .notNull()
-      .references(() => project.id, { onDelete: "cascade" }),
+    /** Copied from the source revision, so like it this has no foreign key. */
+    projectId: uuid().notNull(),
     entityKey: text().notNull(),
     title: text().notNull(),
     status: text().notNull(),
@@ -55,7 +53,8 @@ export const entityRevisionSummary = pgTable(
   (t) => [
     // No composite FK back to `entity_revision`: drizzle-kit re-creates composite
     // primary keys on push, and Postgres cannot do that while a FK depends on one.
-    // The source-row insert trigger is this append-only table's only writer.
+    // The source-row insert trigger is this append-only table's only inserter;
+    // `workspaceRepository.deleteProject` is its only deleter.
     primaryKey({ columns: [t.entityType, t.entityId, t.revision] }),
     check(
       "entity_revision_summary_kind_chk",

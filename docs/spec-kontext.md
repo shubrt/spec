@@ -49,8 +49,9 @@ Lokaler Nutzer
 Lokale Agenten greifen niemals direkt auf die Datenbank zu. Alle Änderungen an
 versionierten Entitäten laufen über validierte, atomare Change-Sets. Die
 Web-Anwendung darf als enge Ausnahme einen leeren, unversionierten
-Project-Container in der aktiven Clerk-Organisation anlegen; sie eröffnet
-keinen zweiten Schreibweg für Fachdokumente.
+Project-Container in der aktiven Clerk-Organisation anlegen und ein ganzes
+Project samt Inhalt löschen; sie eröffnet keinen zweiten Schreibweg für
+Fachdokumente.
 
 ## 3. Entitätsmodell
 
@@ -536,10 +537,14 @@ Updates, Moves, Retirement und Scheduling verlangen die erwartete Revision.
 Bei einem Konflikt meldet der Server die aktuelle Revision zurück; er
 überschreibt niemals stillschweigend neuere Daten.
 
-Die Historie ist append-only. Beim v2-Cutover bleiben alte v1-Snapshots
-byte-identisch als rohe Historie erhalten. Der aktuelle Zustand erhält eine
-neue v2-Baseline; danach werden v1-Schreibvorgänge und alte öffentliche Keys
-abgelehnt.
+Die Historie ist append-only. Einzige Ausnahme: Beim Löschen eines Projects
+werden Revisionen entfernt, deren Project und Entität beide nicht mehr
+existieren. Eine in ein anderes Project verschobene Entität behält ihre ältere
+Historie.
+
+Beim v2-Cutover bleiben alte v1-Snapshots byte-identisch als rohe Historie
+erhalten. Der aktuelle Zustand erhält eine neue v2-Baseline; danach werden
+v1-Schreibvorgänge und alte öffentliche Keys abgelehnt.
 
 ## 11. MCP-Werkzeuge
 

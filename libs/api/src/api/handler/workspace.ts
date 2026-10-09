@@ -9,9 +9,11 @@ import { authScope } from "../plugin/authScope";
  *
  * Epic, stream and task writes still go exclusively through an MCP change-set,
  * which owns document validation, readiness, revision history and destructive
- * confirmation. `POST /workspace/projects` is the one narrow exception: a
- * project is an unversioned container with none of those fields, and the session
- * scope is its only tenant input. It cannot write a planning entity.
+ * confirmation. `POST /workspace/projects` and `DELETE /workspace/projects/:id`
+ * are the two narrow exceptions: a project is an unversioned container with none
+ * of those fields, and the session scope is its only tenant input. Creating one
+ * cannot write a planning entity; deleting one removes everything it holds,
+ * revisions included, and nothing that lives in another project.
  *
  * Three properties hold for every route in this file and are the reason it is
  * safe to make available to server functions:
@@ -63,6 +65,13 @@ const ProjectNameTakenDto = z.strictObject({
   error: z.literal("project_name_taken"),
 });
 
+const DeletedProjectDto = z.strictObject({ project: ProjectDto });
+
+const ProjectNotFoundDto = z.strictObject({
+  error: z.literal("project_not_found"),
+  message: z.string(),
+});
+
 const WorkspaceNotFoundDto = z.strictObject({
   error: z.literal("workspace_not_found"),
   message: z.string(),
@@ -111,5 +120,23 @@ export const workspaceHandler = new Elysia({ prefix: "/workspace" })
     {
       body: CreateProjectBody,
       response: { 201: CreatedProjectDto, 409: ProjectNameTakenDto },
+    },
+  )
+  .delete(
+    "/projects/:projectId",
+    async ({ scope, params, status }) => {
+      const deleted = await workspaceRepository.deleteProject(scope, params.projectId);
+      // Another tenant's id is answered exactly like an id that does not exist.
+      if (!deleted) {
+        return status(404, {
+          error: "project_not_found" as const,
+          message: "No project with that id exists in this workspace.",
+        });
+      }
+      return { project: { id: deleted.id, name: deleted.name } };
+    },
+    {
+      params: z.strictObject({ projectId: z.uuid() }),
+      response: { 200: DeletedProjectDto, 404: ProjectNotFoundDto },
     },
   );

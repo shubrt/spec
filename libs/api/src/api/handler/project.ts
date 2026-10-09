@@ -43,7 +43,8 @@ import { authScope } from "../plugin/authScope";
  *
  * Same three properties as `handler/workspace.ts`, and for the same reasons:
  * this aggregate is read-only (versioned-entity writes remain MCP change-set
- * only; the separate project-container POST cannot alter them), the only tenant
+ * only; the separate project-container routes create an empty project or delete
+ * a whole one and never edit what it holds), the only tenant
  * key is the `scope` `authScope` resolved from a verified session, and every row
  * is mapped through an explicit Zod v4 DTO rather than returned raw.
  *
@@ -569,9 +570,10 @@ export const projectHandler = new Elysia({ prefix: "/workspace/projects" })
    * screen the reader is usually not on.
    *
    * No `404` branch: `loadRevisionLog` filters on `(workspace_id, project_id)`, so
-   * a project that does not exist in this scope has no revisions and answers with
-   * an empty list. That is the same information a 404 would carry, without making
-   * "does this project exist" separately probeable.
+   * a project id from another scope answers with an empty list, without making
+   * "does this project exist" separately probeable. A deleted project of this
+   * scope can still list the revisions its moved-out entities wrote there, which
+   * is why the web resolves `?project=` against the project list first.
    */
   .get(
     "/:projectId/revisions",

@@ -42,7 +42,8 @@ Spec stores a workspace's planning context as a Project-scoped work tree
 (Epic `E-*` → Stream `S-*` → Task `T-*`), a canonical Rule catalogue (`R-*`),
 and an advisory Milestone roadmap (`M-*`). Coding agents discover and read that
 context through focused MCP tools; all versioned-entity writes pass through the
-same validated, atomic change-set pipeline. The web app presents the project
+same validated, atomic change-set pipeline, except that the web app can delete a
+whole Project with its contents. The web app presents the project
 board, entity detail pages, workspace selection, and client connection
 instructions.
 
@@ -109,7 +110,12 @@ The Drizzle schema owns tables, indexes, constraints, and generated search
 columns. Two PostgreSQL details live in
 [`manual.sql`](./libs/api/src/integration/drizzle/setup/manual.sql): enable
 `pg_trgm` before the first schema push, then install the append-only revision
-trigger afterward. The file is intentionally ordered and idempotent.
+trigger afterward. The file is intentionally ordered and idempotent. The trigger
+admits a single kind of row delete: deleting a Project from Settings removes
+every revision whose Project and entity are both gone. An entity moved to
+another Project keeps its older revisions. Revisions no longer have a foreign
+key to `project`; before deploying an older version that declares one, re-add
+it as `NOT VALID`.
 
 ```bash
 vp run db:deploy

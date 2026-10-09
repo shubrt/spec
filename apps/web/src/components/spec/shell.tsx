@@ -486,8 +486,8 @@ function ProjectSwitcher({
             </MenuItem>
             <MenuNote>
               A Project has its own key counters: the first Epic in a new one is E-1 again. Creating
-              the container is the one write this surface makes — everything inside it enters
-              through the MCP server.
+              and deleting the container are the only writes this surface makes. Everything inside
+              it enters through the MCP server.
             </MenuNote>
           </>
         )}
@@ -497,7 +497,7 @@ function ProjectSwitcher({
 }
 
 /**
- * The one write this surface makes.
+ * One of the two writes this surface makes; the other is deleting a Project in Settings.
  *
  * A Project is an unversioned container with no document, no readiness gates and no
  * revision history, which is exactly why creating one is safe here and creating

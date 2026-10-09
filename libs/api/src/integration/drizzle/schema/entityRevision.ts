@@ -9,7 +9,6 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 import type { VersionedEntityType } from "../../../domain/enums";
-import { project } from "./project";
 import { workspace } from "./workspace";
 
 /**
@@ -38,10 +37,26 @@ import { workspace } from "./workspace";
  * `DELETE FROM workspace` fails. The cascade below reaches `entity_revision` as
  * a row-level DELETE and the trigger rejects it, so the whole statement rolls
  * back. That is the correct default — a hard delete must not be able to erase
- * the audit trail as a side effect — and it costs nothing today because the MVP
- * exposes no delete path for a workspace or a project. Wiping a tenant on
- * purpose is `TRUNCATE` (not a row DELETE, so the trigger does not fire), which
- * must remain an explicit operator action.
+ * the audit trail as a side effect. Wiping a tenant on purpose is `TRUNCATE`
+ * (not a row DELETE, so the trigger does not fire), which must remain an
+ * explicit operator action.
+ *
+ * Deleting a Project is the single deliberate exception: its transaction names
+ * the workspace in `spec.deleting_project_in_workspace`, and the trigger then
+ * admits deletes of that workspace's revisions whose Project no longer exists.
+ * See `workspaceRepository.deleteProject`.
+ *
+ * `project_id` is where the revision was written, and it deliberately has no
+ * foreign key. A cross-project move re-revisions only the moved root, so the
+ * descendants' snapshots, including the ones Tasks pin, keep the old project's
+ * id. A cascade from `project` would take that live history with it. Instead a
+ * revision is deleted once both its Project and its entity are gone, so a moved
+ * entity's older revisions outlive the Project they were written in, and go when
+ * the entity does.
+ *
+ * Dropping the former foreign key is one-way: before deploying a version that
+ * still declares it, re-add it as `NOT VALID`, or that version's push fails on
+ * the rows above.
  */
 export const entityRevision = pgTable(
   "entity_revision",
@@ -52,9 +67,8 @@ export const entityRevision = pgTable(
     workspaceId: uuid()
       .notNull()
       .references(() => workspace.id, { onDelete: "cascade" }),
-    projectId: uuid()
-      .notNull()
-      .references(() => project.id, { onDelete: "cascade" }),
+    /** No foreign key on purpose, see above. */
+    projectId: uuid().notNull(),
     document: jsonb().$type<Record<string, unknown>>().notNull(),
     /** Clerk user id of the human, or the agent identity acting on their behalf. */
     changedBy: text().notNull(),

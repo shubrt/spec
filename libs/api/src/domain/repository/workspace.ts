@@ -1,6 +1,14 @@
-import { and, asc, eq, sql } from "drizzle-orm";
+import { type SQL, and, asc, eq, exists, not, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "../../integration/drizzle/client";
+import { entityRevision } from "../../integration/drizzle/schema/entityRevision";
+import { entityRevisionSummary } from "../../integration/drizzle/schema/entityRevisionSummary";
+import { epic } from "../../integration/drizzle/schema/epic";
+import { milestone } from "../../integration/drizzle/schema/milestone";
 import { project } from "../../integration/drizzle/schema/project";
+import { rule } from "../../integration/drizzle/schema/rule";
+import { stream } from "../../integration/drizzle/schema/stream";
+import { task } from "../../integration/drizzle/schema/task";
 import { workspace } from "../../integration/drizzle/schema/workspace";
 import type { WorkspaceScope } from "../auth/workspaceScope";
 import { projectNameSchema } from "../projectName";
@@ -146,6 +154,58 @@ export const workspaceRepository = {
   },
 
   /**
+   * Deletes a project and everything it holds, or returns null when the id is
+   * not a project in this scope.
+   *
+   * Entities, links and fragments cascade from `project_id`. Revisions have no
+   * such foreign key (see `schema/entityRevision.ts`), so they are deleted here
+   * once both their Project and their entity are gone. An entity moved out of
+   * this project keeps the older revisions it wrote here, which its pinned
+   * snapshots still read; they go with whichever later delete removes the
+   * entity. The append-only trigger admits these deletes because
+   * `spec.deleting_project_in_workspace` names the workspace for this
+   * transaction only.
+   *
+   * The workspace lock is the same first lock every change set takes, so a
+   * delete waits for an in-flight change set and a later one sees the project
+   * gone rather than writing into a container that is being removed.
+   */
+  async deleteProject(scope: WorkspaceScope, projectId: string): Promise<Project | null> {
+    return await db.transaction(async (tx) => {
+      await workspaceRepository.lockForChangeSet(scope, tx);
+      const [deleted] = await tx
+        .delete(project)
+        .where(and(eq(project.workspaceId, scope), eq(project.id, projectId)))
+        .returning();
+      if (!deleted) return null;
+
+      // Canonical text, because the trigger compares it with `workspace_id::text`.
+      await tx.execute(
+        sql`select set_config('spec.deleting_project_in_workspace', ${scope}::uuid::text, true)`,
+      );
+      await tx
+        .delete(entityRevision)
+        .where(
+          and(
+            eq(entityRevision.workspaceId, scope),
+            not(projectExists(tx, entityRevision.projectId)),
+            not(entityExists(tx, entityRevision.entityId)),
+          ),
+        );
+      await tx
+        .delete(entityRevisionSummary)
+        .where(
+          and(
+            eq(entityRevisionSummary.workspaceId, scope),
+            not(projectExists(tx, entityRevisionSummary.projectId)),
+            not(entityExists(tx, entityRevisionSummary.entityId)),
+          ),
+        );
+      return deleted;
+    });
+  },
+
+  /**
    * One project by id, inside the scope.
    *
    * The scope is part of the `WHERE`, not an assertion afterwards, so a project
@@ -192,6 +252,18 @@ export const workspaceRepository = {
     return row ?? null;
   },
 };
+
+function projectExists(tx: DbTransaction, projectId: AnyPgColumn): SQL {
+  return exists(tx.select({ id: project.id }).from(project).where(eq(project.id, projectId)));
+}
+
+/** True while a current Epic, Stream, Task, Milestone or Rule row has this id. */
+function entityExists(tx: DbTransaction, entityId: AnyPgColumn): SQL {
+  const checks = [epic, stream, task, milestone, rule].map((table) =>
+    exists(tx.select({ id: table.id }).from(table).where(eq(table.id, entityId))),
+  );
+  return sql`(${sql.join(checks, sql` or `)})`;
+}
 
 /** Same shape `makeScope` checks. A non-uuid reaching a `uuid` column throws. */
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

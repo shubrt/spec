@@ -24,9 +24,9 @@ import { carry } from "~/lib/search";
  * third. An indicator reading "connected" would be decoration over a fact nobody
  * measured.
  *
- * It is also the write path. Everything in this product is created through the MCP
- * server; this surface only reads, which is why the page a reader lands on when a
- * Project is empty points here.
+ * It is also the write path. Everything inside a Project is created through the MCP
+ * server; this surface only creates and deletes Project containers, which is why the
+ * page a reader lands on when a Project is empty points here.
  */
 export const Route = createFileRoute("/connection")({ component: ConnectionPage });
 
@@ -159,7 +159,10 @@ function ConnectionPage() {
             </DefRow>
           </ContextBlock>
 
-          <ContextBlock label="Write path" hint="This entire web surface is read-only by design.">
+          <ContextBlock
+            label="Write path"
+            hint="Planning content is written only through the MCP server. The browser creates and deletes Projects, nothing else."
+          >
             <p className="text-muted-foreground text-xs leading-[17px]">
               Epics, Streams, Tasks, Rules and Milestones are created and changed through the MCP
               server, which owns document validation, readiness gates and the revision history. No
